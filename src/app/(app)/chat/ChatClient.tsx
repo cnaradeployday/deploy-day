@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
-import { Send, Hash, AtSign } from 'lucide-react'
+import { Send, Hash } from 'lucide-react'
+import { renderContent } from './renderContent'
 
 export default function ChatClient({ initialMessages, currentUserId, users, tasks, projects }: {
   initialMessages: any[]
@@ -74,22 +74,21 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
 
   function applySuggestion(s: { type: string; id: string; label: string }) {
     if (!triggerPos) return
+    const cursor = inputRef.current?.selectionStart ?? input.length
     const prefix = input.slice(0, triggerPos.start)
-    const suffix = input.slice(inputRef.current?.selectionStart ?? input.length)
-    const tag = triggerPos.type + s.label + ' '
-    setInput(prefix + tag + suffix)
+    const suffix = input.slice(cursor)
+    setInput(prefix + triggerPos.type + s.label + ' ' + suffix)
     setSuggestions([])
     setTriggerPos(null)
-    inputRef.current?.focus()
+    setTimeout(() => inputRef.current?.focus(), 0)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (suggestions.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestionIdx(i => Math.min(i + 1, suggestions.length - 1)) }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestionIdx(i => Math.max(i - 1, 0)) }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestionIdx(i => Math.min(i + 1, suggestions.length - 1)); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestionIdx(i => Math.max(i - 1, 0)); return }
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applySuggestion(suggestions[suggestionIdx]); return }
-      if (e.key === 'Escape') { setSuggestions([]); setTriggerPos(null) }
-      return
+      if (e.key === 'Escape') { setSuggestions([]); setTriggerPos(null); return }
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
@@ -110,34 +109,6 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
     })
     setInput('')
     setSending(false)
-  }
-
-  function renderContent(msg: any) {
-    const content: string = msg.content ?? ''
-    const parts: React.ReactNode[] = []
-    let last = 0
-    const regex = /@([\w ]+?)(?=\s|$)|#([\w ]+?)(?=\s|$)|\/(.+?)(?=\s|$)/g
-    let match: RegExpExecArray | null
-    while ((match = regex.exec(content)) !== null) {
-      if (match.index > last) parts.push(content.slice(last, match.index))
-      if (match[0].startsWith('@')) {
-        const u = users.find(u => u.full_name === match[1])
-        parts.push(<span key={match.index} className={'font-semibold ' + (u?.id === currentUserId ? 'text-[#1B9BF0]' : 'text-purple-600')}>{match[0]}</span>)
-      } else if (match[0].startsWith('#')) {
-        const p = projects.find(p => p.name === match[2])
-        parts.push(p
-          ? <Link key={match.index} href={'/proyectos/' + p.id} className="font-semibold text-green-600 hover:underline">{match[0]}</Link>
-          : <span key={match.index} className="font-semibold text-green-600">{match[0]}</span>)
-      } else {
-        const t = tasks.find(t => t.title === match[3])
-        parts.push(t
-          ? <Link key={match.index} href={'/tareas/' + t.id} className="font-semibold text-amber-600 hover:underline">{match[0]}</Link>
-          : <span key={match.index} className="font-semibold text-amber-600">{match[0]}</span>)
-      }
-      last = match.index + match[0].length
-    }
-    if (last < content.length) parts.push(content.slice(last))
-    return parts
   }
 
   function groupByDate(msgs: any[]) {
@@ -179,19 +150,19 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
               const sameUser = prev?.user?.id === msg.user?.id &&
                 new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() < 300000
               const own = msg.user?.id === currentUserId
-              const mentioned = msg.mentions?.includes(currentUserId)
+              const mentioned = Array.isArray(msg.mentions) && msg.mentions.includes(currentUserId)
               return (
                 <div key={msg.id} className={'flex gap-3 ' + (own ? 'flex-row-reverse ' : '') + (sameUser ? 'mt-0.5' : 'mt-3')}>
                   {!sameUser && !own && (
                     <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600 shrink-0 mt-0.5">
-                      {msg.user?.full_name?.[0]?.toUpperCase()}
+                      {(msg.user?.full_name ?? '?')[0].toUpperCase()}
                     </div>
                   )}
                   {sameUser && !own && <div className="w-7 shrink-0"/>}
                   <div className={'max-w-[75%] flex flex-col ' + (own ? 'items-end' : 'items-start')}>
                     {!sameUser && (
                       <span className={'text-xs text-gray-400 mb-1 ' + (own ? 'text-right' : '')}>
-                        {own ? 'Tú' : msg.user?.full_name}
+                        {own ? 'Tú' : (msg.user?.full_name ?? '')}
                         <span className="ml-2 text-gray-300">
                           {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -202,12 +173,12 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
                       mentioned ? 'bg-amber-50 border border-amber-200 text-gray-800 rounded-tl-sm' :
                       'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
                     )}>
-                      {renderContent(msg)}
+                      {renderContent(msg, users, projects, tasks, currentUserId)}
                     </div>
                     {(msg.task || msg.project) && (
                       <div className="flex gap-2 mt-1">
-                        {msg.task && <Link href={'/tareas/' + msg.task.id} className="text-xs text-amber-600 hover:underline">→ {msg.task.title}</Link>}
-                        {msg.project && <Link href={'/proyectos/' + msg.project.id} className="text-xs text-green-600 hover:underline">→ {msg.project.name}</Link>}
+                        {msg.task && <a href={'/tareas/' + msg.task.id} className="text-xs text-amber-600 hover:underline">→ {msg.task.title}</a>}
+                        {msg.project && <a href={'/proyectos/' + msg.project.id} className="text-xs text-green-600 hover:underline">→ {msg.project.name}</a>}
                       </div>
                     )}
                   </div>
