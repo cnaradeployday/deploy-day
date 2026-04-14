@@ -13,6 +13,7 @@ const navItems = [
   { href: '/tareas', label: 'Tareas', icon: CheckSquare, roles: ['admin','gerente_operaciones'] },
   { href: '/mis-tareas', label: 'Mis tareas', icon: Clock, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['admin','gerente_operaciones'] },
+  { href: '/solicitudes', label: 'Solicitudes', icon: Clock, roles: ['admin','gerente_operaciones'] },
   { href: '/equipo', label: 'Equipo', icon: UserCircle, roles: ['admin','gerente_operaciones'] },
 ]
 
