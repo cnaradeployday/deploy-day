@@ -60,7 +60,7 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
             project:projects(id, name)`)
           .eq('id', payload.new.id)
           .single()
-        if (data) setMessages(prev => [...prev, data as Message])
+        if (data) setMessages(prev => [...prev, data as unknown as Message])
       })
       .subscribe()
 
