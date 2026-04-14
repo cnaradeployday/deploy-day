@@ -22,7 +22,7 @@ export default function NuevaTareaPage() {
   useEffect(() => {
     const sb = createClient()
     sb.from('projects').select('id, name, client:clients(name)').order('name').then(({ data }) => setProyectos(data ?? []))
-    sb.from('users').select('id, full_name, role').eq('is_active', true).order('full_name').then(({ data }) => setUsuarios(data ?? []))
+    sb.from('users').select('id, full_name').eq('is_active', true).order('full_name').then(({ data }) => setUsuarios(data ?? []))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -30,7 +30,7 @@ export default function NuevaTareaPage() {
     setLoading(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const payload = {
+    const { error } = await supabase.from('tasks').insert({
       project_id: form.project_id,
       title: form.title,
       description: form.description || null,
@@ -40,8 +40,7 @@ export default function NuevaTareaPage() {
       direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
       status: 'creado',
       created_by: user?.id,
-    }
-    const { error } = await supabase.from('tasks').insert(payload)
+    })
     if (!error) router.push('/tareas')
     else { alert('Error al guardar'); setLoading(false) }
   }
@@ -55,90 +54,56 @@ export default function NuevaTareaPage() {
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto *</label>
-          <select value={form.project_id} onChange={e => set('project_id', e.target.value)} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-cat > "src/app/(app)/tareas/[id]/page.tsx" << 'ENDOFFILE'
-import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
-import TaskActions from './TaskActions'
-
-const statusColors: Record<string, string> = {
-  creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
-  en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
-  presentado: 'bg-purple-50 text-purple-600',
-}
-const statusLabels: Record<string, string> = {
-  creado: 'Creado', estimado: 'Estimado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado'
-}
-
-export default async function TareaDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createClient()
-
-  const { data: t } = await supabase
-    .from('tasks')
-    .select(`*, project:projects(id, name, client:clients(name)),
-      direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
-      task_collaborators(id, assigned_hours, user:users(id, full_name)),
-      time_entries(id, hours_logged, entry_date, notes, user:users(full_name))`)
-    .eq('id', id).single()
-  if (!t) notFound()
-
-  const { data: authUser } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('users').select('role').eq('id', authUser.user?.id ?? '').single()
-
-  const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
-  const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
-
-  return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <Link href="/tareas" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
-        <ArrowLeft size={15} /> Tareas
-      </Link>
-
-      <div className="flex items-start justify-between mb-4">
+          <select value={form.project_id} onChange={e => set('project_id', e.target.value)} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+            <option value="">Seleccionar proyecto</option>
+            {proyectos.map(p => (
+              <option key={p.id} value={p.id}>{(p.client as any)?.name} — {p.name}</option>
+            ))}
+          </select>
+        </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">{(t.project as any)?.client?.name} · {(t.project as any)?.name}</p>
-          <h1 className="text-xl font-semibold text-gray-900">{t.title}</h1>
-          {t.description && <p className="text-sm text-gray-500 mt-1">{t.description}</p>}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+          <input type="text" value={form.title} onChange={e => set('title', e.target.value)} required placeholder="Ej: Diseño de homepage" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
         </div>
-        <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 ml-4 ${statusColors[t.status]}`}>{statusLabels[t.status]}</span>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        {[
-          { label: 'Horas estimadas', value: t.estimated_hours ? `${t.estimated_hours}h` : '—' },
-          { label: 'Horas cargadas', value: `${totalLogged}h` },
-          { label: 'Responsable', value: (t.direct_responsible as any)?.full_name ?? '—' },
-          { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—' },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-            <p className="text-xs text-gray-400">{label}</p>
-            <p className="text-sm font-semibold text-gray-900 mt-0.5">{value}</p>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+          <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} placeholder="Detalle de la tarea..." className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black resize-none" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+            <select value={form.priority} onChange={e => set('priority', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+              <option value="baja">Baja</option>
+              <option value="media">Media</option>
+              <option value="alta">Alta</option>
+              <option value="critica">Crítica</option>
+            </select>
           </div>
-        ))}
-      </div>
-
-      {t.estimated_hours && (
-        <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 mb-4">
-          <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-            <span>Progreso de horas</span>
-            <span>{totalLogged}h / {t.estimated_hours}h ({Math.round(pct)}%)</span>
-          </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-green-400'}`} style={{ width: `${pct}%` }} />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha límite *</label>
+            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
           </div>
         </div>
-      )}
-
-      <TaskActions
-        task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
-        userId={authUser.user?.id ?? ''}
-        userRole={profile?.role ?? 'colaborador'}
-        timeEntries={(t.time_entries as any[]) ?? []}
-      />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Responsable directo</label>
+            <select value={form.direct_responsible_id} onChange={e => set('direct_responsible_id', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+              <option value="">Sin asignar</option>
+              {usuarios.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Horas asignadas</label>
+            <input type="number" min="0" step="0.5" value={form.direct_hours} onChange={e => set('direct_hours', e.target.value)} placeholder="8" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+          </div>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <Link href="/tareas" className="flex-1 text-center py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancelar</Link>
+          <button type="submit" disabled={loading} className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
+            {loading ? 'Guardando...' : 'Crear tarea'}
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
