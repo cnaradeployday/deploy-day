@@ -3,7 +3,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { X, ChevronUp, ChevronDown, CheckCircle, Trash2, Clock } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, CheckCircle, Trash2 } from 'lucide-react'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -31,24 +31,24 @@ interface Tarea {
   project: any; direct_responsible: any
 }
 
-export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters }: {
+export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [] }: {
   tareas: Tarea[]
   clientes: { value: string; label: string }[]
   proyectos: { value: string; label: string }[]
   usuarios: { value: string; label: string }[]
   filters: Record<string, string | undefined>
+  hideColumns?: string[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
-  const [sortKey, setSortKey] = useState<string>('due_date')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [sortKey, setSortKey] = useState('due_date')
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null)
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
-    if (value) p.set(key, value)
-    else p.delete(key)
+    if (value) p.set(key, value) else p.delete(key)
     router.push(`${pathname}?${p.toString()}`)
   }, [params, pathname, router])
 
@@ -61,19 +61,18 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   }
 
   const sorted = [...tareas].sort((a, b) => {
-    let va: any = (a as any)[sortKey] ?? ''
-    let vb: any = (b as any)[sortKey] ?? ''
+    let va: any, vb: any
     if (sortKey === 'client') { va = a.project?.client?.name ?? ''; vb = b.project?.client?.name ?? '' }
-    if (sortKey === 'project') { va = a.project?.name ?? ''; vb = b.project?.name ?? '' }
-    if (sortKey === 'responsible') { va = a.direct_responsible?.full_name ?? ''; vb = b.direct_responsible?.full_name ?? '' }
+    else if (sortKey === 'project') { va = a.project?.name ?? ''; vb = b.project?.name ?? '' }
+    else if (sortKey === 'responsible') { va = a.direct_responsible?.full_name ?? ''; vb = b.direct_responsible?.full_name ?? '' }
+    else { va = (a as any)[sortKey] ?? ''; vb = (b as any)[sortKey] ?? '' }
     return sortDir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
   })
 
   async function advanceStatus(taskId: string, currentStatus: string) {
     if (!nextStatus[currentStatus]) return
     setLoading(taskId)
-    const sb = createClient()
-    await sb.from('tasks').update({ status: nextStatus[currentStatus] }).eq('id', taskId)
+    await createClient().from('tasks').update({ status: nextStatus[currentStatus] }).eq('id', taskId)
     router.refresh()
     setLoading(null)
   }
@@ -81,8 +80,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   async function deleteTask(taskId: string) {
     if (!confirm('¿Eliminar esta tarea?')) return
     setLoading(taskId)
-    const sb = createClient()
-    await sb.from('tasks').delete().eq('id', taskId)
+    await createClient().from('tasks').delete().eq('id', taskId)
     router.refresh()
     setLoading(null)
   }
@@ -91,9 +89,23 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     ? (sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/>)
     : <ChevronUp size={12} className="opacity-20"/>
 
+  const show = (col: string) => !hideColumns.includes(col)
+
+  const columns = [
+    { key: 'title', label: 'Tarea', show: true },
+    { key: 'client', label: 'Cliente', show: show('client') },
+    { key: 'project', label: 'Proyecto', show: show('project') },
+    { key: 'responsible', label: 'Responsable', show: show('responsible') },
+    { key: 'estimated_hours', label: 'Est.', show: true },
+    { key: 'hours_logged', label: 'Usado', show: true },
+    { key: 'due_date', label: 'Vence', show: true },
+    { key: 'priority', label: 'Prioridad', show: true },
+    { key: 'status', label: 'Estado', show: true },
+    { key: 'actions', label: '', show: true },
+  ].filter(c => c.show)
+
   return (
     <div>
-      {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div>
@@ -112,30 +124,36 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
               {['baja','media','alta','critica'].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Cliente</label>
-            <select value={filters.cliente ?? ''} onChange={e => update('cliente', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-              <option value="">Todos</option>
-              {clientes.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Proyecto</label>
-            <select value={filters.proyecto ?? ''} onChange={e => update('proyecto', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-              <option value="">Todos</option>
-              {proyectos.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Responsable</label>
-            <select value={filters.responsable ?? ''} onChange={e => update('responsable', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-              <option value="">Todos</option>
-              {usuarios.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
-            </select>
-          </div>
+          {show('client') && clientes.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Cliente</label>
+              <select value={filters.cliente ?? ''} onChange={e => update('cliente', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                <option value="">Todos</option>
+                {clientes.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+            </div>
+          )}
+          {proyectos.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Proyecto</label>
+              <select value={filters.proyecto ?? ''} onChange={e => update('proyecto', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                <option value="">Todos</option>
+                {proyectos.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+          )}
+          {show('responsible') && usuarios.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Responsable</label>
+              <select value={filters.responsable ?? ''} onChange={e => update('responsable', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                <option value="">Todos</option>
+                {usuarios.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+              </select>
+            </div>
+          )}
         </div>
         {hasFilters && (
           <div className="flex justify-end mt-3 pt-3 border-t border-gray-50">
@@ -151,20 +169,9 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-50">
-              {[
-                { key: 'title', label: 'Tarea' },
-                { key: 'client', label: 'Cliente' },
-                { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' },
-                { key: 'estimated_hours', label: 'Est.' },
-                { key: 'hours_logged', label: 'Usado' },
-                { key: 'due_date', label: 'Vence' },
-                { key: 'priority', label: 'Prioridad' },
-                { key: 'status', label: 'Estado' },
-                { key: 'actions', label: '' },
-              ].map(({ key, label }) => (
+              {columns.map(({ key, label }) => (
                 <th key={key} onClick={() => key !== 'actions' && toggleSort(key)}
-                  className={`px-4 py-3 text-left text-xs font-medium text-gray-400 ${key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : ''}`}>
+                  className={`px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap ${key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : ''}`}>
                   <div className="flex items-center gap-1">
                     {label}{key !== 'actions' && <SortIcon k={key}/>}
                   </div>
@@ -174,20 +181,18 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
           </thead>
           <tbody>
             {!sorted.length ? (
-              <tr><td colSpan={10} className="text-center py-12 text-sm text-gray-400">Sin tareas</td></tr>
+              <tr><td colSpan={columns.length} className="text-center py-12 text-sm text-gray-400">Sin tareas</td></tr>
             ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
               const pct = t.estimated_hours ? Math.round((t.hours_logged / t.estimated_hours) * 100) : null
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <Link href={`/tareas/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#1B9BF0] line-clamp-1">
-                      {t.title}
-                    </Link>
+                    <Link href={`/tareas/${t.id}`} className="text-sm font-medium text-gray-900 hover:text-[#1B9BF0] line-clamp-1">{t.title}</Link>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.project?.client?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.project?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.direct_responsible?.full_name ?? '—'}</td>
+                  {show('client') && <td className="px-4 py-3 text-xs text-gray-500">{t.project?.client?.name ?? '—'}</td>}
+                  {show('project') && <td className="px-4 py-3 text-xs text-gray-500">{t.project?.name ?? '—'}</td>}
+                  {show('responsible') && <td className="px-4 py-3 text-xs text-gray-500">{t.direct_responsible?.full_name ?? '—'}</td>}
                   <td className="px-4 py-3 text-xs text-gray-500">{t.estimated_hours ? `${t.estimated_hours}h` : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
@@ -200,7 +205,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                       )}
                     </div>
                   </td>
-                  <td className={`px-4 py-3 text-xs ${isOverdue ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
+                  <td className={`px-4 py-3 text-xs whitespace-nowrap ${isOverdue ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
                     {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
                     {isOverdue && <span className="block text-xs text-red-400">Vencida</span>}
                   </td>
@@ -233,7 +238,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
         </table>
       </div>
 
-      {/* Mobile cards */}
+      {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import TaskActions from './TaskActions'
+import TaskTimer from './TaskTimer'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -24,7 +25,7 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
 
   const { data: t } = await supabase
     .from('tasks')
-    .select(`*, 
+    .select(`*,
       project:projects(id, name, client:clients(name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
       task_collaborators(id, assigned_hours, user:users(id, full_name)),
@@ -38,6 +39,12 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+
+  const canUseTimer = ['estimado','en_proceso'].includes(t.status) && (
+    t.direct_responsible_id === user?.id ||
+    (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id) ||
+    ['admin','gerente_operaciones'].includes(profile?.role ?? '')
+  )
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -60,7 +67,7 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
           { label: 'Horas estimadas', value: t.estimated_hours ? `${t.estimated_hours}h` : '—' },
-          { label: 'Horas cargadas', value: `${totalLogged}h` },
+          { label: 'Horas cargadas', value: `${Math.round(totalLogged * 100) / 100}h` },
           { label: 'Responsable', value: (t.direct_responsible as any)?.full_name ?? '—' },
           { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', alert: isOverdue },
         ].map(({ label, value, alert }) => (
@@ -76,21 +83,50 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
         <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 mb-4">
           <div className="flex justify-between text-xs text-gray-400 mb-1.5">
             <span>Progreso de horas</span>
-            <span>{totalLogged}h / {t.estimated_hours}h ({Math.round(pct)}%)</span>
+            <span>{Math.round(totalLogged * 100) / 100}h / {t.estimated_hours}h ({Math.round(pct)}%)</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]'}`}
-              style={{ width: `${pct}%` }} />
+              style={{ width: `${pct}%` }}/>
           </div>
         </div>
       )}
 
-      <TaskActions
-        task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
-        userId={user?.id ?? ''}
-        userRole={profile?.role ?? 'colaborador'}
-        timeEntries={(t.time_entries as any[]) ?? []}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {canUseTimer && (
+            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status} />
+          )}
+          <TaskActions
+            task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
+            userId={user?.id ?? ''}
+            userRole={profile?.role ?? 'colaborador'}
+            timeEntries={(t.time_entries as any[]) ?? []}
+          />
+        </div>
+
+        <div className="space-y-4">
+          {(t.time_entries as any[])?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-4">
+              <p className="text-sm font-medium text-gray-700 mb-3">Historial de horas</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(t.time_entries as any[]).map((e: any) => (
+                  <div key={e.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <p className="text-xs font-medium text-gray-700">{e.user?.full_name}</p>
+                      {e.notes && <p className="text-xs text-gray-400 mt-0.5">{e.notes}</p>}
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
+                      <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
