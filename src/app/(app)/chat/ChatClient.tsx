@@ -117,7 +117,7 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
     const parts: React.ReactNode[] = []
     let last = 0
     const regex = /@([\w ]+?)(?=\s|$)|#([\w ]+?)(?=\s|$)|\/(.+?)(?=\s|$)/g
-    let match
+    let match: RegExpExecArray | null
     while ((match = regex.exec(content)) !== null) {
       if (match.index > last) parts.push(content.slice(last, match.index))
       if (match[0].startsWith('@')) {
