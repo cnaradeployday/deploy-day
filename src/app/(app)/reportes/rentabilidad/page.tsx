@@ -2,25 +2,31 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import ReportFilters from '@/components/reportes/ReportFilters'
 
-export default async function RentabilidadPage() {
+export default async function RentabilidadPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('users').select('role').eq('id', user?.id ?? '').single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const { data: proyectos } = await supabase
-    .from('projects')
-    .select('id, name, sold_hours, price_per_hour, client:clients(name)')
+  const sp = await searchParams
+  const { from, to, cliente, proyecto } = sp
 
-  const { data: entries } = await supabase
-    .from('time_entries')
-    .select('hours_logged, task:tasks(project_id), user:users(hourly_cost)')
+  const { data: clientes } = await supabase.from('clients').select('id, name').order('name')
+  const { data: proyectosAll } = await supabase.from('projects').select('id, name, client_id, sold_hours, price_per_hour, client:clients(name)').order('name')
 
-  const data = proyectos?.map(p => {
+  const proyectosFiltrados = cliente ? proyectosAll?.filter(p => p.client_id === cliente) : proyectosAll
+  const proyectosTarget = proyecto ? proyectosFiltrados?.filter(p => p.id === proyecto) : proyectosFiltrados
+
+  let entriesQuery = supabase.from('time_entries').select('hours_logged, entry_date, task:tasks(project_id), user:users(hourly_cost)')
+  if (from) entriesQuery = entriesQuery.gte('entry_date', from)
+  if (to) entriesQuery = entriesQuery.lte('entry_date', to)
+  const { data: entries } = await entriesQuery
+
+  const data = proyectosTarget?.map(p => {
     const revenue = (p.sold_hours ?? 0) * (p.price_per_hour ?? 0)
-    const cost = entries
-      ?.filter(e => (e.task as any)?.project_id === p.id)
+    const cost = entries?.filter(e => (e.task as any)?.project_id === p.id)
       .reduce((s, e) => s + e.hours_logged * ((e.user as any)?.hourly_cost ?? 0), 0) ?? 0
     const profit = revenue - cost
     const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : null
@@ -37,11 +43,16 @@ export default async function RentabilidadPage() {
         <ArrowLeft size={15}/> Reportes
       </Link>
       <h1 className="text-xl font-semibold text-gray-900 mb-6">Rentabilidad</h1>
+      <ReportFilters
+        clientes={clientes?.map(c => ({ value: c.id, label: c.name })) ?? []}
+        proyectos={proyectosFiltrados?.map(p => ({ value: p.id, label: p.name })) ?? []}
+        showDateRange={true}
+      />
 
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
-          { label: 'Ingresos totales', value: `$${totalRevenue.toLocaleString()}` },
-          { label: 'Costos totales', value: `$${totalCost.toLocaleString()}` },
+          { label: 'Ingresos', value: `$${totalRevenue.toLocaleString()}` },
+          { label: 'Costos', value: `$${totalCost.toLocaleString()}` },
           { label: 'Ganancia bruta', value: `$${totalProfit.toLocaleString()}`, highlight: true },
         ].map(({ label, value, highlight }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-4">
@@ -56,7 +67,9 @@ export default async function RentabilidadPage() {
           <span className="col-span-2">Proyecto</span>
           <span>Ingresos</span><span>Costos</span><span>Margen</span>
         </div>
-        {data.map((d, i) => (
+        {!data.length ? (
+          <p className="text-sm text-gray-400 text-center py-10">Sin datos para los filtros seleccionados</p>
+        ) : data.map((d, i) => (
           <div key={i} className="grid grid-cols-5 px-5 py-3.5 text-sm border-b border-gray-50 last:border-0 hover:bg-gray-50">
             <div className="col-span-2">
               <p className="font-medium text-gray-900 truncate">{d.name}</p>
