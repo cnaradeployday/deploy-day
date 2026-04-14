@@ -4,6 +4,11 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import TasksChart from './TasksChart'
 
+const STATUS_LABELS: Record<string, string> = {
+  creado: 'Creado', estimado: 'Estimado', en_proceso: 'En proceso',
+  terminado: 'Terminado', presentado: 'Presentado'
+}
+
 export default async function ReporteTareasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -14,8 +19,8 @@ export default async function ReporteTareasPage() {
     .from('tasks')
     .select('status, priority, project:projects(name, client:clients(name))')
 
-  const byStatus = ['creado','estimado','en_proceso','terminado','presentado'].map(s => ({
-    name: { creado:'Creado', estimado:'Estimado', en_proceso:'En proceso', terminado:'Terminado', presentado:'Presentado' }[s],
+  const byStatus = Object.entries(STATUS_LABELS).map(([s, label]) => ({
+    name: label,
     value: tareas?.filter(t => t.status === s).length ?? 0
   }))
 
@@ -29,7 +34,10 @@ export default async function ReporteTareasPage() {
     const name = (t.project as any)?.client?.name ?? 'Sin cliente'
     clientMap[name] = (clientMap[name] ?? 0) + 1
   })
-  const byClient = Object.entries(clientMap).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0, 8)
+  const byClient = Object.entries(clientMap)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
