@@ -9,6 +9,7 @@ export default function NuevaTareaPage() {
   const router = useRouter()
   const params = useSearchParams()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [proyectos, setProyectos] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [form, setForm] = useState({
@@ -28,9 +29,18 @@ export default function NuevaTareaPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setError('')
+    
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('tasks').insert({
+    
+    if (!user) {
+      setError('No hay sesión activa')
+      setLoading(false)
+      return
+    }
+
+    const payload = {
       project_id: form.project_id,
       title: form.title,
       description: form.description || null,
@@ -38,23 +48,38 @@ export default function NuevaTareaPage() {
       due_date: form.due_date,
       direct_responsible_id: form.direct_responsible_id || null,
       direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
-      status: 'creado',
-      created_by: user?.id,
-    })
-    if (!error) router.push('/tareas')
-    else { alert('Error al guardar'); setLoading(false) }
+      status: 'creado' as const,
+      created_by: user.id,
+    }
+
+    console.log('Inserting task:', payload)
+    console.log('User:', user.id)
+
+    const { data, error } = await supabase.from('tasks').insert(payload).select()
+    
+    console.log('Result data:', data)
+    console.log('Result error:', error)
+
+    if (error) {
+      setError(`Error: ${error.message} (${error.code})`)
+      setLoading(false)
+      return
+    }
+
+    router.push('/tareas')
   }
 
   return (
     <div className="p-6 max-w-xl mx-auto">
       <Link href="/tareas" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
-        <ArrowLeft size={15} /> Volver
+        <ArrowLeft size={15}/> Volver
       </Link>
       <h1 className="text-xl font-semibold text-gray-900 mb-6">Nueva tarea</h1>
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto *</label>
-          <select value={form.project_id} onChange={e => set('project_id', e.target.value)} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Proyecto *</label>
+          <select value={form.project_id} onChange={e => set('project_id', e.target.value)} required
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
             <option value="">Seleccionar proyecto</option>
             {proyectos.map(p => (
               <option key={p.id} value={p.id}>{(p.client as any)?.name} — {p.name}</option>
@@ -62,17 +87,22 @@ export default function NuevaTareaPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
-          <input type="text" value={form.title} onChange={e => set('title', e.target.value)} required placeholder="Ej: Diseño de homepage" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Título *</label>
+          <input type="text" value={form.title} onChange={e => set('title', e.target.value)} required
+            placeholder="Ej: Diseño de homepage"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] focus:border-transparent" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-          <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} placeholder="Detalle de la tarea..." className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black resize-none" />
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Descripción</label>
+          <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
+            placeholder="Detalle de la tarea..."
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-            <select value={form.priority} onChange={e => set('priority', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Prioridad</label>
+            <select value={form.priority} onChange={e => set('priority', e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
               <option value="baja">Baja</option>
               <option value="media">Media</option>
               <option value="alta">Alta</option>
@@ -80,26 +110,40 @@ export default function NuevaTareaPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha límite *</label>
-            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha límite *</label>
+            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Responsable directo</label>
-            <select value={form.direct_responsible_id} onChange={e => set('direct_responsible_id', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Responsable directo</label>
+            <select value={form.direct_responsible_id} onChange={e => set('direct_responsible_id', e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
               <option value="">Sin asignar</option>
               {usuarios.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Horas asignadas</label>
-            <input type="number" min="0" step="0.5" value={form.direct_hours} onChange={e => set('direct_hours', e.target.value)} placeholder="8" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Horas asignadas</label>
+            <input type="number" min="0" step="0.5" value={form.direct_hours} onChange={e => set('direct_hours', e.target.value)}
+              placeholder="8"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">
+            {error}
+          </div>
+        )}
+
         <div className="flex gap-3 pt-2">
-          <Link href="/tareas" className="flex-1 text-center py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancelar</Link>
-          <button type="submit" disabled={loading} className="flex-1 bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
+          <Link href="/tareas" className="flex-1 text-center py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+            Cancelar
+          </Link>
+          <button type="submit" disabled={loading}
+            className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
             {loading ? 'Guardando...' : 'Crear tarea'}
           </button>
         </div>
