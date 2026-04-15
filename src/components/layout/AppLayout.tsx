@@ -1,9 +1,8 @@
 'use client'
-
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText } from 'lucide-react'
 import { useState } from 'react'
 import Image from 'next/image'
 
@@ -16,6 +15,8 @@ const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['admin','gerente_operaciones'] },
   { href: '/solicitudes', label: 'Solicitudes', icon: AlertCircle, roles: ['admin','gerente_operaciones'] },
+  { href: '/liquidaciones', label: 'Liquidaciones', icon: Receipt, roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/facturas-clientes', label: 'Facturas clientes', icon: FileText, roles: ['admin'] },
   { href: '/equipo', label: 'Equipo', icon: UserCircle, roles: ['admin','gerente_operaciones'] },
 ]
 
@@ -24,7 +25,7 @@ const bottomNav = [
   { href: '/mis-tareas', label: 'Mis tareas', icon: Clock, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/tareas', label: 'Tareas', icon: CheckSquare, roles: ['admin','gerente_operaciones'] },
   { href: '/chat', label: 'Chat', icon: MessageSquare, roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/proyectos', label: 'Proyectos', icon: FolderKanban, roles: ['admin','gerente_operaciones'] },
+  { href: '/liquidaciones', label: 'Liquid.', icon: Receipt, roles: ['admin','gerente_operaciones','colaborador'] },
 ]
 
 export default function AppLayout({ children, userRole, userName }: {
@@ -48,9 +49,7 @@ export default function AppLayout({ children, userRole, userName }: {
     const active = pathname === href || pathname.startsWith(href + '/')
     return (
       <Link href={href} onClick={onClick}
-        className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${
-          active ? 'bg-[#E8F4FE] text-[#1B9BF0] font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-        }`}>
+        className={'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0] font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')}>
         <Icon size={15} strokeWidth={active ? 2 : 1.5} color={active ? '#1B9BF0' : undefined}/>
         {label}
       </Link>
@@ -105,7 +104,7 @@ export default function AppLayout({ children, userRole, userName }: {
         {visibleBottom.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
-            <Link key={href} href={href} className={`flex-1 flex flex-col items-center py-2.5 text-xs gap-1 transition-colors ${active ? 'text-[#1B9BF0]' : 'text-gray-400'}`}>
+            <Link key={href} href={href} className={'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 transition-colors ' + (active ? 'text-[#1B9BF0]' : 'text-gray-400')}>
               <Icon size={19} strokeWidth={active ? 2 : 1.5}/>
               <span className={active ? 'font-medium' : ''}>{label}</span>
             </Link>
@@ -113,7 +112,7 @@ export default function AppLayout({ children, userRole, userName }: {
         })}
       </nav>
 
-      <main className={`md:ml-56 pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen ${pathname === '/chat' ? 'flex flex-col' : ''}`}>
+      <main className={'md:ml-56 pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen' + (pathname === '/chat' ? ' flex flex-col' : '')}>
         {children}
       </main>
     </div>
