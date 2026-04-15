@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 
 export default function NuevaTareaPage() {
   const router = useRouter()
@@ -12,6 +12,7 @@ export default function NuevaTareaPage() {
   const [error, setError] = useState('')
   const [proyectos, setProyectos] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
+  const [colaboradores, setColaboradores] = useState<string[]>([])
   const [form, setForm] = useState({
     project_id: params.get('proyecto') ?? '',
     title: '', description: '',
@@ -27,6 +28,15 @@ export default function NuevaTareaPage() {
     sb.from('users').select('id, full_name').eq('is_active', true).order('full_name').then(({ data }) => setUsuarios(data ?? []))
   }, [])
 
+  function addColaborador(uid: string) {
+    if (!uid || colaboradores.includes(uid) || uid === form.direct_responsible_id) return
+    setColaboradores(prev => [...prev, uid])
+  }
+
+  function removeColaborador(uid: string) {
+    setColaboradores(prev => prev.filter(id => id !== uid))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -34,7 +44,7 @@ export default function NuevaTareaPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { error: err } = await supabase.from('tasks').insert({
+    const { data: task, error: err } = await supabase.from('tasks').insert({
       project_id: form.project_id,
       title: form.title,
       description: form.description || null,
@@ -45,15 +55,22 @@ export default function NuevaTareaPage() {
       direct_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
       status: 'creado',
       created_by: user?.id,
-    })
+    }).select().single()
 
-    if (err) {
-      setError('Error: ' + err.message)
-      setLoading(false)
-    } else {
-      router.push('/tareas')
+    if (err) { setError('Error: ' + err.message); setLoading(false); return }
+
+    if (colaboradores.length > 0 && task) {
+      await supabase.from('task_collaborators').insert(
+        colaboradores.map(uid => ({ task_id: task.id, user_id: uid }))
+      )
     }
+
+    router.push('/tareas')
   }
+
+  const availableColabs = usuarios.filter(u =>
+    u.id !== form.direct_responsible_id && !colaboradores.includes(u.id)
+  )
 
   return (
     <div className="p-6 max-w-xl mx-auto">
@@ -113,15 +130,34 @@ export default function NuevaTareaPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Horas estimadas</label>
             <input type="number" min="0" step="0.5" value={form.estimated_hours}
-              onChange={e => set('estimated_hours', e.target.value)}
-              placeholder="8"
+              onChange={e => set('estimated_hours', e.target.value)} placeholder="8"
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">{error}</div>
-        )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Colaboradores adicionales</label>
+          {colaboradores.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {colaboradores.map(uid => {
+                const u = usuarios.find(x => x.id === uid)
+                return (
+                  <span key={uid} className="flex items-center gap-1.5 bg-[#E8F4FE] text-[#1B9BF0] text-xs px-2.5 py-1 rounded-full">
+                    {u?.full_name}
+                    <button type="button" onClick={() => removeColaborador(uid)}><X size={11}/></button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+          <select onChange={e => { addColaborador(e.target.value); e.target.value = '' }} defaultValue=""
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            <option value="">+ Agregar colaborador</option>
+            {availableColabs.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+        </div>
+
+        {error && <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">{error}</div>}
 
         <div className="flex gap-3 pt-2">
           <Link href="/tareas" className="flex-1 text-center py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">

@@ -4,18 +4,12 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Clock } from 'lucide-react'
 
-const transitions: Record<string, { next: string; label: string }> = {
-  creado: { next: 'estimado', label: 'Marcar como estimado' },
-  estimado: { next: 'en_proceso', label: 'Iniciar tarea' },
-  en_proceso: { next: 'terminado', label: 'Marcar como terminado' },
-  terminado: { next: 'presentado', label: 'Marcar como presentado' },
-}
-
-export default function TaskActions({ task, userId, userRole, timeEntries }: {
+export default function TaskActions({ task, userId, userRole, timeEntries, isDirectResponsible }: {
   task: { id: string; status: string; estimated_hours: number | null }
   userId: string
   userRole: string
   timeEntries: any[]
+  isDirectResponsible?: boolean
 }) {
   const router = useRouter()
   const [hours, setHours] = useState('')
@@ -27,7 +21,18 @@ export default function TaskActions({ task, userId, userRole, timeEntries }: {
   const isAdmin = userRole === 'admin'
   const isGerente = userRole === 'gerente_operaciones'
   const canManage = isAdmin || isGerente
-  const transition = transitions[task.status]
+
+  // Transiciones válidas según rol
+  const getNextStatus = () => {
+    if (task.status === 'creado' && canManage) return { next: 'estimado', label: 'Marcar como estimado' }
+    if (task.status === 'estimado') return { next: 'en_proceso', label: 'Iniciar tarea' }
+    if (task.status === 'en_proceso') return { next: 'terminado', label: 'Marcar como terminado' }
+    if (task.status === 'terminado' && isDirectResponsible) return { next: 'presentado', label: 'Marcar como presentado' }
+    if (task.status === 'terminado' && canManage) return { next: 'presentado', label: 'Marcar como presentado' }
+    return null
+  }
+
+  const transition = getNextStatus()
 
   async function changeStatus() {
     if (!transition) return
@@ -60,67 +65,54 @@ export default function TaskActions({ task, userId, userRole, timeEntries }: {
 
   return (
     <div className="space-y-4">
-      {/* Cambio de estado */}
-      {transition && (task.status !== 'creado' || canManage) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+      {transition && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-medium text-gray-700 mb-3">Cambiar estado</p>
           {task.status === 'creado' && canManage && (
             <div className="mb-3">
               <label className="block text-xs text-gray-500 mb-1">Horas estimadas *</label>
-              <input type="number" min="0" step="0.5" value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)}
-                placeholder="Ej: 16" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              <input type="number" min="0" step="0.5" value={estimatedHours}
+                onChange={e => setEstimatedHours(e.target.value)} placeholder="Ej: 16"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
             </div>
           )}
+          {task.status === 'terminado' && !isDirectResponsible && !canManage && (
+            <p className="text-xs text-amber-600 mb-3 bg-amber-50 px-3 py-2 rounded-xl">
+              Solo el responsable directo puede marcar como Presentado
+            </p>
+          )}
           <button onClick={changeStatus} disabled={loading}
-            className="w-full bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
+            className="w-full bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
             {loading ? 'Guardando...' : transition.label}
           </button>
         </div>
       )}
 
-      {/* Cargar horas */}
       {task.status === 'en_proceso' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2"><Plus size={14}/>Cargar horas</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+            <Plus size={14}/> Cargar horas
+          </p>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Horas *</label>
-              <input type="number" min="0.5" step="0.5" value={hours} onChange={e => setHours(e.target.value)}
-                placeholder="2" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+              <input type="number" min="0.5" step="0.5" value={hours}
+                onChange={e => setHours(e.target.value)} placeholder="2"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Fecha</label>
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
             </div>
           </div>
-          <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notas (opcional)"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black mb-3" />
+          <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Notas (opcional)"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] mb-3"/>
           <button onClick={logTime} disabled={loading || !hours}
-            className="w-full bg-black text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
+            className="w-full bg-black hover:bg-gray-800 text-white py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
             {loading ? 'Guardando...' : 'Registrar horas'}
           </button>
-        </div>
-      )}
-
-      {/* Historial de horas */}
-      {timeEntries.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2"><Clock size={14}/>Historial de horas</p>
-          <div className="space-y-2">
-            {timeEntries.map((e: any) => (
-              <div key={e.id} className="flex items-center justify-between text-sm py-2 border-b border-gray-50 last:border-0">
-                <div>
-                  <p className="text-gray-700">{e.user?.full_name}</p>
-                  {e.notes && <p className="text-xs text-gray-400">{e.notes}</p>}
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-gray-900">{e.hours_logged}h</p>
-                  <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

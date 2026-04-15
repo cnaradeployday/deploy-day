@@ -40,13 +40,10 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
-
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
   const isDirectResponsible = t.direct_responsible_id === user?.id
   const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
-
-  // Timer SOLO para asignados directos — no para admin/gerente a menos que también estén asignados
   const canUseTimer = ['estimado','en_proceso'].includes(t.status) && isAssigned
 
   const { data: comments } = await supabase
@@ -72,12 +69,23 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
           <span className={'text-xs px-2.5 py-1 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
           {isAdmin && (
             <Link href={'/tareas/' + t.id + '/editar'}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all" title="Editar tarea">
+              className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
               <Pencil size={14}/>
             </Link>
           )}
         </div>
       </div>
+
+      {(t.task_collaborators as any[])?.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <span className="text-xs text-gray-400">Colaboradores:</span>
+          {(t.task_collaborators as any[]).map((c: any) => (
+            <span key={c.id} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              {c.user?.full_name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
@@ -97,11 +105,11 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
       {t.estimated_hours && (
         <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 mb-4">
           <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-            <span>Progreso de horas</span>
+            <span>Progreso</span>
             <span>{Math.round(totalLogged * 100) / 100}h / {t.estimated_hours}h ({Math.round(pct)}%)</span>
           </div>
           <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className={'h-full rounded-full transition-all ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
+            <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
               style={{ width: pct + '%' }}/>
           </div>
         </div>
@@ -117,9 +125,9 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
             userId={user?.id ?? ''}
             userRole={profile?.role ?? 'colaborador'}
             timeEntries={(t.time_entries as any[]) ?? []}
+            isDirectResponsible={isDirectResponsible}
           />
         </div>
-
         {(t.time_entries as any[])?.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 p-4">
             <p className="text-sm font-medium text-gray-700 mb-3">Historial de horas</p>

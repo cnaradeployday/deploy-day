@@ -14,9 +14,22 @@ export default async function EditarUsuarioPage({ params }: { params: Promise<{ 
 
   const { data: historial } = await supabase
     .from('user_rate_history')
-    .select('*, created_by_user:users!user_rate_history_created_by_fkey(full_name)')
+    .select('*')
     .eq('user_id', id)
     .order('created_at', { ascending: false })
 
-  return <EditarUsuarioClient miembro={miembro} historial={historial ?? []} adminId={user?.id ?? ''} />
+  const { data: availability } = await supabase
+    .from('user_availability')
+    .select('*')
+    .eq('user_id', id)
+    .order('desde', { ascending: true })
+
+  return (
+    <EditarUsuarioClient
+      miembro={miembro}
+      historial={historial ?? []}
+      adminId={user?.id ?? ''}
+      availability={availability ?? []}
+    />
+  )
 }

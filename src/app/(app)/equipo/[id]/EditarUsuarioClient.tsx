@@ -3,13 +3,14 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft, Clock, DollarSign, History } from 'lucide-react'
+import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2 } from 'lucide-react'
 import { CURRENCIES, Currency } from '@/lib/utils/currency'
 
-export default function EditarUsuarioClient({ miembro, historial, adminId }: {
+export default function EditarUsuarioClient({ miembro, historial, adminId, availability }: {
   miembro: any
   historial: any[]
   adminId: string
+  availability: any[]
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -18,11 +19,12 @@ export default function EditarUsuarioClient({ miembro, historial, adminId }: {
     email: miembro.email ?? '',
     role: miembro.role ?? 'colaborador',
     is_active: miembro.is_active ?? true,
+    banco: miembro.banco ?? '',
+    cbu: miembro.cbu ?? '',
+    cuenta_nombre: miembro.cuenta_nombre ?? miembro.full_name ?? '',
   })
-  const [rateForm, setRateForm] = useState({
-    hourly_cost: '',
-    currency: (miembro.currency ?? 'ARS') as Currency,
-  })
+  const [rateForm, setRateForm] = useState({ hourly_cost: '', currency: (miembro.currency ?? 'ARS') as Currency })
+  const [availForm, setAvailForm] = useState({ desde: '', hasta: '', horas: '', notas: '' })
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
 
   async function guardarInfo(e: React.FormEvent) {
@@ -40,25 +42,32 @@ export default function EditarUsuarioClient({ miembro, historial, adminId }: {
     setLoading(true)
     const sb = createClient()
     const hoy = new Date().toISOString().split('T')[0]
-    const mes = hoy.slice(0, 7)
-
-    await sb.from('users').update({
-      hourly_cost: parseFloat(rateForm.hourly_cost),
-      currency: rateForm.currency,
-    }).eq('id', miembro.id)
-
+    await sb.from('users').update({ hourly_cost: parseFloat(rateForm.hourly_cost), currency: rateForm.currency }).eq('id', miembro.id)
     await sb.from('user_rate_history').insert({
-      user_id: miembro.id,
-      hourly_cost: parseFloat(rateForm.hourly_cost),
-      currency: rateForm.currency,
-      valid_from: hoy,
-      mes,
-      created_by: adminId,
+      user_id: miembro.id, hourly_cost: parseFloat(rateForm.hourly_cost),
+      currency: rateForm.currency, valid_from: hoy, mes: hoy.slice(0, 7), created_by: adminId,
     })
-
     setRateForm(f => ({ ...f, hourly_cost: '' }))
     router.refresh()
     setLoading(false)
+  }
+
+  async function agregarDisponibilidad(e: React.FormEvent) {
+    e.preventDefault()
+    if (!availForm.desde || !availForm.hasta || !availForm.horas) return
+    setLoading(true)
+    await createClient().from('user_availability').insert({
+      user_id: miembro.id, desde: availForm.desde, hasta: availForm.hasta,
+      horas: parseFloat(availForm.horas), notas: availForm.notas || null, created_by: adminId,
+    })
+    setAvailForm({ desde: '', hasta: '', horas: '', notas: '' })
+    router.refresh()
+    setLoading(false)
+  }
+
+  async function eliminarDisponibilidad(id: string) {
+    await createClient().from('user_availability').delete().eq('id', id)
+    router.refresh()
   }
 
   return (
@@ -82,16 +91,17 @@ export default function EditarUsuarioClient({ miembro, historial, adminId }: {
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <p className="text-sm font-semibold text-gray-700 mb-4">Información personal</p>
           <form onSubmit={guardarInfo} className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Nombre completo</label>
-              <input type="text" value={form.full_name} onChange={e => set('full_name', e.target.value)} required
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Email</label>
-              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-            </div>
+            {[
+              { key: 'full_name', label: 'Nombre completo', placeholder: 'Juan Pérez' },
+              { key: 'email', label: 'Email', placeholder: 'juan@deployday.com', type: 'email' },
+            ].map(({ key, label, placeholder, type }) => (
+              <div key={key}>
+                <label className="block text-xs text-gray-400 mb-1.5">{label}</label>
+                <input type={type ?? 'text'} value={(form as any)[key]} onChange={e => set(key, e.target.value)}
+                  placeholder={placeholder}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              </div>
+            ))}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Rol</label>
@@ -109,6 +119,23 @@ export default function EditarUsuarioClient({ miembro, historial, adminId }: {
                   <option value="true">Activo</option>
                   <option value="false">Inactivo</option>
                 </select>
+              </div>
+            </div>
+            <div className="border-t border-gray-50 pt-3">
+              <p className="text-xs font-medium text-gray-500 mb-3">Datos bancarios</p>
+              <div className="space-y-2">
+                {[
+                  { key: 'banco', label: 'Banco', placeholder: 'Banco Galicia' },
+                  { key: 'cbu', label: 'CBU', placeholder: '0000000000000000000000' },
+                  { key: 'cuenta_nombre', label: 'A nombre de', placeholder: 'Juan Pérez' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label className="block text-xs text-gray-400 mb-1">{label}</label>
+                    <input type="text" value={(form as any)[key]} onChange={e => set(key, e.target.value)}
+                      placeholder={placeholder}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+                  </div>
+                ))}
               </div>
             </div>
             <button type="submit" disabled={loading}
@@ -129,7 +156,6 @@ export default function EditarUsuarioClient({ miembro, historial, adminId }: {
             </span>
           </div>
           <form onSubmit={actualizarTarifa} className="space-y-3">
-            <p className="text-xs text-gray-400">Actualizar para el mes en curso ({new Date().toLocaleString('es-AR', { month: 'long', year: 'numeric' })})</p>
             <div className="flex gap-2">
               <select value={rateForm.currency} onChange={e => setRateForm(f => ({ ...f, currency: e.target.value as Currency }))}
                 className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
@@ -145,32 +171,73 @@ export default function EditarUsuarioClient({ miembro, historial, adminId }: {
               Actualizar tarifa
             </button>
           </form>
+          {historial.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-50">
+              <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1"><History size={12}/> Historial</p>
+              <div className="space-y-1.5">
+                {historial.map(h => (
+                  <div key={h.id} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">{h.currency === 'USD' ? 'USD ' : '$'}{h.hourly_cost}/h</span>
+                    <span className="text-gray-400">{h.mes} · desde {new Date(h.valid_from).toLocaleDateString('es-AR')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Historial de tarifas */}
-        {historial.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <History size={14} className="text-gray-400"/> Historial de tarifas
-            </p>
-            <div className="space-y-2">
-              {historial.map(h => (
-                <div key={h.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+        {/* Disponibilidad */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <Calendar size={14} className="text-[#1B9BF0]"/> Disponibilidad de horas
+          </p>
+          <form onSubmit={agregarDisponibilidad} className="space-y-3 mb-4">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Desde</label>
+                <input type="date" value={availForm.desde} onChange={e => setAvailForm(f => ({ ...f, desde: e.target.value }))} required
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Hasta</label>
+                <input type="date" value={availForm.hasta} onChange={e => setAvailForm(f => ({ ...f, hasta: e.target.value }))} required
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Horas</label>
+                <input type="number" min="0" step="0.5" value={availForm.horas}
+                  onChange={e => setAvailForm(f => ({ ...f, horas: e.target.value }))} placeholder="20" required
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              </div>
+            </div>
+            <input type="text" value={availForm.notas} onChange={e => setAvailForm(f => ({ ...f, notas: e.target.value }))}
+              placeholder="Notas (ej: vacaciones)"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            <button type="submit" disabled={loading}
+              className="w-full py-2 bg-gray-900 hover:bg-gray-700 text-white rounded-xl text-sm font-medium disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+              <Plus size={13}/> Agregar período
+            </button>
+          </form>
+          {availability.length > 0 && (
+            <div className="space-y-2 border-t border-gray-50 pt-3">
+              {availability.map(a => (
+                <div key={a.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                   <div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {h.currency === 'USD' ? 'USD ' : '$'}{h.hourly_cost}/h
-                    </span>
-                    <span className="text-xs text-gray-400 ml-2">desde {new Date(h.valid_from).toLocaleDateString('es-AR')}</span>
+                    <p className="text-xs font-medium text-gray-700">{a.horas}h disponibles</p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(a.desde).toLocaleDateString('es-AR')} → {new Date(a.hasta).toLocaleDateString('es-AR')}
+                      {a.notas && ' · ' + a.notas}
+                    </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400">{h.mes}</p>
-                    <p className="text-xs text-gray-300">{h.created_by_user?.full_name}</p>
-                  </div>
+                  <button onClick={() => eliminarDisponibilidad(a.id)}
+                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                    <Trash2 size={13}/>
+                  </button>
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
