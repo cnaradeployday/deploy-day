@@ -11,8 +11,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
 
   const sp = await searchParams
   const isColaborador = profile.role === 'colaborador'
-  const defaultTab = isColaborador ? 'mis-liquidaciones' : 'resumen'
-  const tab = sp.tab ?? defaultTab
+  const tab = sp.tab ?? (isColaborador ? 'mis-liquidaciones' : 'resumen')
 
   if (isColaborador) {
     const { data: liquidaciones } = await supabase
@@ -21,10 +20,9 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
       .eq('user_id', user?.id)
       .order('mes', { ascending: false })
 
-    const liqData = liquidaciones ?? []
     return (
       <LiquidacionesColaborador
-        liquidaciones={liqData}
+        liquidaciones={liquidaciones ?? []}
         userId={user?.id ?? ''}
         profile={profile}
         tab={tab}
@@ -32,14 +30,16 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
     )
   }
 
+  // Admin / Gerente
   const { data: liquidaciones } = await supabase
     .from('liquidaciones')
     .select('*, user:users(id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre)')
     .order('mes', { ascending: false })
+    .order('estado', { ascending: true })
 
   const { data: allUsers } = await supabase
     .from('users')
-    .select('id, full_name, hourly_cost, currency')
+    .select('id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre')
     .eq('is_active', true)
     .order('full_name')
 
@@ -49,6 +49,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
       allUsers={allUsers ?? []}
       userRole={profile.role}
       currentUserId={user?.id ?? ''}
+      currentUserName={profile.full_name ?? ''}
       tab={tab}
     />
   )

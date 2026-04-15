@@ -10,21 +10,16 @@ export default async function MisHorasPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams
   const mesActual = new Date().toISOString().slice(0, 7)
   const mes = sp.mes ?? mesActual
+  const filterTarea = sp.tarea ?? ''
+  const filterCliente = sp.cliente ?? ''
 
-  // Calcular primer día del mes siguiente correctamente
   const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDiaMes = new Date(anio, mesNum - 1, 1)
-  const primerDiaSiguiente = new Date(anio, mesNum, 1)
-  const desde = primerDiaMes.toISOString().split('T')[0]
-  const hasta = primerDiaSiguiente.toISOString().split('T')[0]
+  const desde = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
+  const hasta = new Date(anio, mesNum, 1).toISOString().split('T')[0]
 
   const { data: entries } = await supabase
     .from('time_entries')
-    .select(`
-      id, hours_logged, entry_date, notes,
-      task:tasks(id, title, status,
-        project:projects(name, client:clients(name)))
-    `)
+    .select('id, hours_logged, entry_date, notes, task:tasks(id, title, status, project:projects(name, client:clients(name)))')
     .eq('user_id', user.id)
     .gte('entry_date', desde)
     .lt('entry_date', hasta)
@@ -43,6 +38,8 @@ export default async function MisHorasPage({ searchParams }: { searchParams: Pro
       mes={mes}
       mesActual={mesActual}
       estadoLiquidacion={liquidacion?.estado ?? null}
+      filterTarea={filterTarea}
+      filterCliente={filterCliente}
     />
   )
 }
