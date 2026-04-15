@@ -50,10 +50,10 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
   async function generarLiquidaciones() {
     setGenerating(true)
     const { data, error } = await createClient().rpc('generar_liquidaciones', { p_mes: selectedMes })
-    if (error) alert('Error: ' + error.message)
-    else alert('Generadas ' + data + ' liquidaciones para ' + selectedMes)
-    router.refresh()
     setGenerating(false)
+    if (error) { alert('Error: ' + error.message); return }
+    router.refresh()
+    setTimeout(() => alert('Generadas ' + data + ' liquidaciones para ' + selectedMes), 100)
   }
 
   async function aprobar(id: string) {
