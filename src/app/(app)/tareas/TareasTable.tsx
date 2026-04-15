@@ -48,8 +48,9 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
-    if (value) p.set(key, value) else p.delete(key)
-    router.push(`${pathname}?${p.toString()}`)
+    if (value) { p.set(key, value) } else { p.delete(key) }
+    const qs = p.toString()
+    router.push(qs ? pathname + '?' + qs : pathname)
   }, [params, pathname, router])
 
   const clear = () => router.push(pathname)
@@ -78,7 +79,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   }
 
   async function deleteTask(taskId: string) {
-    if (!confirm('¿Eliminar esta tarea?')) return
+    if (!confirm('Eliminar esta tarea?')) return
     setLoading(taskId)
     await createClient().from('tasks').delete().eq('id', taskId)
     router.refresh()
@@ -93,7 +94,6 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
 
   return (
     <div>
-      {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div>
@@ -101,7 +101,9 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
             <select value={filters.status ?? ''} onChange={e => update('status', e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
               <option value="">Todos</option>
-              {Object.entries(statusLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {Object.entries(statusLabels).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -109,7 +111,9 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
             <select value={filters.priority ?? ''} onChange={e => update('priority', e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
               <option value="">Todas</option>
-              {['baja','media','alta','critica'].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
+              {['baja','media','alta','critica'].map(p => (
+                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+              ))}
             </select>
           </div>
           {show('client') && clientes.length > 0 && (
@@ -146,13 +150,12 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
         {hasFilters && (
           <div className="flex justify-end mt-3 pt-3 border-t border-gray-50">
             <button onClick={clear} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
-              <X size={12}/> Limpiar filtros
+              <X size={12}/> Limpiar
             </button>
           </div>
         )}
       </div>
 
-      {/* Tabla desktop */}
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <table className="w-full">
           <thead>
@@ -184,7 +187,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
               const pct = t.estimated_hours ? Math.round((t.hours_logged / t.estimated_hours) * 100) : null
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[200px] truncate">{t.title}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-xs truncate">{t.title}</td>
                   {show('client') && <td className="px-4 py-3 text-xs text-gray-500">{t.project?.client?.name ?? '—'}</td>}
                   {show('project') && <td className="px-4 py-3 text-xs text-gray-500">{t.project?.name ?? '—'}</td>}
                   {show('responsible') && <td className="px-4 py-3 text-xs text-gray-500">{t.direct_responsible?.full_name ?? '—'}</td>}
@@ -202,14 +205,13 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                   </td>
                   <td className={'px-4 py-3 text-xs whitespace-nowrap ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
                     {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : '—'}
-                    {isOverdue && <span className="block text-xs text-red-400">Vencida</span>}
                   </td>
                   <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
                   <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <Link href={'/tareas/' + t.id}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all" title="Ver / editar">
+                      <Link href={'/tareas/' + t.id} title="Ver / editar"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                         <Pencil size={13}/>
                       </Link>
                       {nextStatus[t.status] && (
@@ -220,7 +222,6 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                         </button>
                       )}
                       <button onClick={() => deleteTask(t.id)} disabled={loading === t.id}
-                        title="Eliminar"
                         className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
                         <Trash2 size={13}/>
                       </button>
@@ -233,7 +234,6 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
         </table>
       </div>
 
-      {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
@@ -246,7 +246,6 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
               <p className="text-xs text-gray-400 mb-3">{t.project?.client?.name} · {t.project?.name}</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
-                  {t.direct_responsible?.full_name && <span>{t.direct_responsible.full_name}</span>}
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
                   <span>{t.hours_logged}h{t.estimated_hours ? '/' + t.estimated_hours + 'h' : ''}</span>
                 </div>
