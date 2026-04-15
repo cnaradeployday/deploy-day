@@ -14,7 +14,11 @@ export default async function Layout({ children }: { children: React.ReactNode }
     .single()
 
   return (
-    <AppLayout userRole={profile?.role ?? 'colaborador'} userName={profile?.full_name ?? ''}>
+    <AppLayout
+      userRole={profile?.role ?? 'colaborador'}
+      userName={profile?.full_name ?? ''}
+      userId={user.id}
+    >
       {children}
     </AppLayout>
   )

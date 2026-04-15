@@ -19,27 +19,39 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
   const [triggerPos, setTriggerPos] = useState<{ start: number; type: string } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => {
-    const channel = supabase
-      .channel('global-chat')
+    localStorage.setItem('chat_last_read', new Date().toISOString())
+    const sb = supabaseRef.current
+
+    const channel = sb
+      .channel('realtime-chat-' + Math.random())
       .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'messages', filter: 'is_global=eq.true'
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
       }, async (payload) => {
-        const { data } = await supabase
+        if (!payload.new.is_global) return
+        const { data } = await sb
           .from('messages')
-          .select('id, content, created_at, mentions, task_id, project_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
+          .select('id, content, created_at, mentions, task_id, project_id, is_global, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
           .eq('id', payload.new.id)
           .single()
-        if (data) setMessages(prev => [...prev, data])
+        if (data) {
+          setMessages(prev => {
+            if (prev.find(m => m.id === data.id)) return prev
+            return [...prev, data]
+          })
+        }
       })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    return () => { sb.removeChannel(channel) }
   }, [])
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -96,17 +108,27 @@ export default function ChatClient({ initialMessages, currentUserId, users, task
   async function sendMessage() {
     if (!input.trim() || sending) return
     setSending(true)
+    const sb = supabaseRef.current
     const mentionedUsers = users.filter(u => input.includes('@' + u.full_name)).map(u => u.id)
     const mentionedTask = tasks.find(t => input.includes('/' + t.title))
     const mentionedProject = projects.find(p => input.includes('#' + p.name))
-    await supabase.from('messages').insert({
+
+    const { data, error } = await sb.from('messages').insert({
       content: input.trim(),
       user_id: currentUserId,
       is_global: true,
       mentions: mentionedUsers,
       task_id: mentionedTask?.id ?? null,
       project_id: mentionedProject?.id ?? null,
-    })
+    }).select('id, content, created_at, mentions, task_id, project_id, is_global, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)').single()
+
+    if (data) {
+      setMessages(prev => {
+        if (prev.find(m => m.id === data.id)) return prev
+        return [...prev, data]
+      })
+    }
+
     setInput('')
     setSending(false)
   }
