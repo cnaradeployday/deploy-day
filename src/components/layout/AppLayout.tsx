@@ -75,20 +75,23 @@ export default function AppLayout({ children, userRole, userName, userId }: {
 
   const NavLink = ({ href, label, icon: Icon, onClick, badge }: { href: string; label: string; icon: any; onClick?: () => void; badge?: boolean }) => {
     const active = pathname === href || pathname.startsWith(href + '/')
+    const iconColor = active ? '#1B9BF0' : '#6b7280'
+    const showBadge = badge && unreadCount > 0 && !active
+    const badgeText = unreadCount > 9 ? '9+' : String(unreadCount)
     return (
       <Link href={href} onClick={onClick}
         className={'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0] font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')}>
         <div className="relative shrink-0">
-          <Icon size={15} strokeWidth={active ? 2 : 1.5} style={{ color: active ? '#1B9BF0' : undefined }}/>
-          {badge && unreadCount > 0 && !active && (
+          <Icon size={15} strokeWidth={active ? 2 : 1.5} color={iconColor}/>
+          {showBadge && (
             <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {badgeText}
             </span>
           )}
         </div>
         <span className="flex-1">{label}</span>
-        {badge && unreadCount > 0 && !active && (
-          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        {showBadge && (
+          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{badgeText}</span>
         )}
       </Link>
     )
@@ -176,20 +179,23 @@ export default function AppLayout({ children, userRole, userName, userId }: {
 
   const NavLink = ({ href, label, icon: Icon, onClick, badge }: { href: string; label: string; icon: any; onClick?: () => void; badge?: boolean }) => {
     const active = pathname === href || pathname.startsWith(href + '/')
+    const iconColor = active ? '#1B9BF0' : '#6b7280'
+    const showBadge = badge && unreadCount > 0 && !active
+    const badgeText = unreadCount > 9 ? '9+' : String(unreadCount)
     return (
       <Link href={href} onClick={onClick}
         className={'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0] font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')}>
         <div className="relative shrink-0">
-          <Icon size={15} strokeWidth={active ? 2 : 1.5} style={{ color: active ? '#1B9BF0' : undefined }}/>
-          {badge && unreadCount > 0 && !active && (
+          <Icon size={15} strokeWidth={active ? 2 : 1.5} color={iconColor}/>
+          {showBadge && (
             <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {badgeText}
             </span>
           )}
         </div>
         <span className="flex-1">{label}</span>
-        {badge && unreadCount > 0 && !active && (
-          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        {showBadge && (
+          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{badgeText}</span>
         )}
       </Link>
     )
