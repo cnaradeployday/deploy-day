@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const { data: profile } = await serverSupabase.from('users').select('role').eq('id', user.id).single()
     if (profile?.role !== 'admin') return NextResponse.json({ error: 'Solo admins pueden crear usuarios' }, { status: 403 })
 
-    const { email, full_name, role, hourly_cost, password } = await req.json()
+    const { email, full_name, role, hourly_cost, currency, password } = await req.json()
 
     const adminSupabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,18 +19,16 @@ export async function POST(req: Request) {
     )
 
     const { data: newUser, error } = await adminSupabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
+      email, password, email_confirm: true,
       user_metadata: { full_name, role }
     })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     await adminSupabase.from('users').update({
-      full_name,
-      role,
-      hourly_cost: hourly_cost ? parseFloat(hourly_cost) : null
+      full_name, role,
+      hourly_cost: hourly_cost ? parseFloat(hourly_cost) : null,
+      currency: currency ?? 'ARS'
     }).eq('id', newUser.user.id)
 
     return NextResponse.json({ ok: true })

@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
 import Image from 'next/image'
 
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/solicitudes', label: 'Solicitudes', icon: AlertCircle, roles: ['admin','gerente_operaciones'] },
   { href: '/liquidaciones', label: 'Liquidaciones', icon: Receipt, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/facturas-clientes', label: 'Facturas clientes', icon: FileText, roles: ['admin'] },
+  { href: '/cotizaciones', label: 'Cotizaciones USD', icon: TrendingUp, roles: ['admin'] },
   { href: '/equipo', label: 'Equipo', icon: UserCircle, roles: ['admin','gerente_operaciones'] },
 ]
 

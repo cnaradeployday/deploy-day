@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { Currency, CURRENCIES } from '@/lib/utils/currency'
 
 export default function NuevaFacturaClientePage() {
   const router = useRouter()
@@ -13,13 +14,13 @@ export default function NuevaFacturaClientePage() {
   const [form, setForm] = useState({
     client_id: '', project_id: '', numero: '',
     fecha_emision: new Date().toISOString().split('T')[0],
-    fecha_vencimiento: '', importe: '', notas: ''
+    fecha_vencimiento: '', importe: '',
+    currency: 'ARS' as Currency, notas: ''
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   useEffect(() => {
-    const sb = createClient()
-    sb.from('clients').select('id, name').order('name').then(({ data }) => setClientes(data ?? []))
+    createClient().from('clients').select('id, name').order('name').then(({ data }) => setClientes(data ?? []))
   }, [])
 
   useEffect(() => {
@@ -34,9 +35,14 @@ export default function NuevaFacturaClientePage() {
     const sb = createClient()
     const { data: { user } } = await sb.auth.getUser()
     const { error } = await sb.from('facturas_clientes').insert({
-      ...form,
-      importe: parseFloat(form.importe),
+      client_id: form.client_id,
       project_id: form.project_id || null,
+      numero: form.numero,
+      fecha_emision: form.fecha_emision,
+      fecha_vencimiento: form.fecha_vencimiento,
+      importe: parseFloat(form.importe),
+      currency: form.currency,
+      notas: form.notas || null,
       created_by: user?.id,
     })
     if (!error) router.push('/facturas-clientes')
@@ -69,14 +75,14 @@ export default function NuevaFacturaClientePage() {
           </div>
         )}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Número de factura *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Número *</label>
           <input type="text" value={form.numero} onChange={e => set('numero', e.target.value)} required
             placeholder="001-00001"
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha emisión *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Emisión *</label>
             <input type="date" value={form.fecha_emision} onChange={e => set('fecha_emision', e.target.value)} required
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
@@ -88,9 +94,15 @@ export default function NuevaFacturaClientePage() {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe *</label>
-          <input type="number" min="0" step="0.01" value={form.importe} onChange={e => set('importe', e.target.value)} required
-            placeholder="0.00"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          <div className="flex gap-2">
+            <select value={form.currency} onChange={e => set('currency', e.target.value)}
+              className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+              {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            <input type="number" min="0" step="0.01" value={form.importe} onChange={e => set('importe', e.target.value)} required
+              placeholder="0.00"
+              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
