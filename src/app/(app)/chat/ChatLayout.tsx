@@ -86,7 +86,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
 
     if (!isGroup && selectedUsers.length === 1) {
       const existing = conversations.find((cm: any) => {
-        const members = cm.conversation?.conversation_members?.map((m: any) => m.user_id) ?? []
+        const members = cm.members?.map((m: any) => m.user_id) ?? []
         return !cm.conversation?.is_group && members.length === 2 && members.includes(selectedUsers[0])
       })
       if (existing) {
@@ -125,7 +125,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   function getConvName(cm: any) {
     const conv = cm.conversation
     if (conv?.is_group) return conv.name ?? 'Grupo'
-    const other = conv?.conversation_members?.find((m: any) => m.user_id !== currentUserId)
+    const other = (cm.members ?? []).find((m: any) => m.user_id !== currentUserId)
     return other?.user?.full_name ?? 'Chat'
   }
 
