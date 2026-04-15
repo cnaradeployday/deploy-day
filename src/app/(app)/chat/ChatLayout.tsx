@@ -1,8 +1,7 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Hash, Plus, Users, MessageSquare, X, Check, Search } from 'lucide-react'
-import { renderContent } from './renderContent'
+import { Hash, Plus, Users, MessageSquare, X, Check, Search, ArrowLeft, Lock } from 'lucide-react'
 import ChatWindow from './ChatWindow'
 
 export default function ChatLayout({ currentUserId, users, tasks, projects, globalMessages, conversations }: {
@@ -13,7 +12,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   globalMessages: any[]
   conversations: any[]
 }) {
-  const [activeChat, setActiveChat] = useState<{ type: 'global' | 'conversation'; id?: string; name: string }>({ type: 'global', name: 'General' })
+  const [activeChat, setActiveChat] = useState<{ type: 'global' | 'conversation'; id?: string; name: string } | null>(null)
   const [convMessages, setConvMessages] = useState<Record<string, any[]>>({})
   const [showNewChat, setShowNewChat] = useState(false)
   const [newChatSearch, setNewChatSearch] = useState('')
@@ -35,7 +34,6 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
         .limit(100)
       if (data) setConvMessages(prev => ({ ...prev, [convId]: data }))
 
-      // contar no leidos
       if (cm.last_read_at) {
         const { count } = await supabase
           .from('messages')
@@ -49,7 +47,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   }, [])
 
   useEffect(() => {
-    const channel = supabase.channel('private-messages-' + currentUserId)
+    const channel = supabase.channel('private-msgs-' + currentUserId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
         const msg = payload.new
         if (!msg.conversation_id || msg.is_global) return
@@ -63,7 +61,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
           if (existing.find((m: any) => m.id === data.id)) return prev
           return { ...prev, [msg.conversation_id]: [...existing, data] }
         })
-        if (activeChat.id !== msg.conversation_id && msg.user_id !== currentUserId) {
+        if (activeChat?.id !== msg.conversation_id && msg.user_id !== currentUserId) {
           setUnreadCounts(prev => ({ ...prev, [msg.conversation_id]: (prev[msg.conversation_id] ?? 0) + 1 }))
         }
       })
@@ -86,16 +84,13 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
 
     if (!isGroup && selectedUsers.length === 1) {
       const existing = conversations.find((cm: any) => {
-        const members = cm.members?.map((m: any) => m.user_id) ?? []
-        return !cm.conversation?.is_group && members.length === 2 && members.includes(selectedUsers[0])
+        const members = (cm.members ?? []).map((m: any) => m.user_id)
+        return !(cm.conversation?.is_group) && members.length === 2 && members.includes(selectedUsers[0])
       })
       if (existing) {
-        const conv = existing.conversation
-        const otherUser = users.find(u => u.id === selectedUsers[0])
-        setActiveChat({ type: 'conversation', id: conv.id, name: otherUser?.full_name ?? 'Chat' })
-        setShowNewChat(false)
-        setCreating(false)
-        return
+        const name = users.find(u => u.id === selectedUsers[0])?.full_name ?? 'Chat'
+        setActiveChat({ type: 'conversation', id: existing.conversation_id, name })
+        setShowNewChat(false); setCreating(false); return
       }
     }
 
@@ -111,70 +106,67 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
       allMembers.map(uid => ({ conversation_id: conv.id, user_id: uid }))
     )
 
-    const name = isGroup ? (groupName || 'Grupo') :
-      users.find(u => u.id === selectedUsers[0])?.full_name ?? 'Chat'
-
+    const name = isGroup ? (groupName || 'Grupo') : users.find(u => u.id === selectedUsers[0])?.full_name ?? 'Chat'
     setActiveChat({ type: 'conversation', id: conv.id, name })
-    setShowNewChat(false)
-    setSelectedUsers([])
-    setGroupName('')
-    setCreating(false)
+    setConvMessages(prev => ({ ...prev, [conv.id]: [] }))
+    setShowNewChat(false); setSelectedUsers([]); setGroupName(''); setCreating(false)
     window.location.reload()
   }
 
   function getConvName(cm: any) {
-    const conv = cm.conversation
-    if (conv?.is_group) return conv.name ?? 'Grupo'
+    if (cm.conversation?.is_group) return cm.conversation.name ?? 'Grupo'
     const other = (cm.members ?? []).find((m: any) => m.user_id !== currentUserId)
     return other?.user?.full_name ?? 'Chat'
   }
 
   const filteredUsers = users.filter(u =>
-    u.id !== currentUserId &&
-    u.full_name.toLowerCase().includes(newChatSearch.toLowerCase())
+    u.id !== currentUserId && u.full_name.toLowerCase().includes(newChatSearch.toLowerCase())
   )
 
+  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
+
+  // Mobile: mostrar lista o chat
+  const showList = !activeChat
+
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] md:h-screen">
-      {/* Sidebar de conversaciones */}
-      <div className="w-64 bg-white border-r border-gray-100 flex flex-col shrink-0">
+    <div className="flex h-[calc(100vh-3.5rem)] md:h-screen relative">
+      {/* Lista de conversaciones */}
+      <div className={`${showList ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-64 bg-white border-r border-gray-100 shrink-0`}>
         <div className="px-4 py-4 border-b border-gray-50 flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-700">Mensajes</p>
+          <p className="text-sm font-semibold text-gray-700">
+            Mensajes {totalUnread > 0 && <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{totalUnread}</span>}
+          </p>
           <button onClick={() => setShowNewChat(true)}
-            className="w-7 h-7 bg-[#1B9BF0] text-white rounded-lg flex items-center justify-center hover:bg-[#0F7ACC] transition-all">
-            <Plus size={14}/>
+            className="w-8 h-8 bg-[#1B9BF0] text-white rounded-xl flex items-center justify-center hover:bg-[#0F7ACC] transition-all">
+            <Plus size={15}/>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
-          {/* Canal general */}
           <button onClick={() => setActiveChat({ type: 'global', name: 'General' })}
-            className={'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all ' + (activeChat.type === 'global' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-600 hover:bg-gray-50')}>
-            <Hash size={15} className={activeChat.type === 'global' ? 'text-[#1B9BF0]' : 'text-gray-400'}/>
+            className={'w-full flex items-center gap-3 px-4 py-3 text-sm transition-all ' + (activeChat?.type === 'global' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-600 hover:bg-gray-50')}>
+            <Hash size={16} className={activeChat?.type === 'global' ? 'text-[#1B9BF0]' : 'text-gray-400'}/>
             <span className="font-medium">General</span>
           </button>
 
           {conversations.length > 0 && (
-            <div className="px-4 pt-4 pb-1">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Directos</p>
-            </div>
+            <p className="px-4 pt-4 pb-1 text-xs font-medium text-gray-400 uppercase tracking-wide">Directos</p>
           )}
 
           {conversations.map((cm: any) => {
             const convId = cm.conversation_id
             const name = getConvName(cm)
             const unread = unreadCounts[convId] ?? 0
-            const active = activeChat.id === convId
-            const isGrp = cm.conversation?.is_group
+            const active = activeChat?.id === convId
 
             return (
               <button key={convId}
                 onClick={() => { setActiveChat({ type: 'conversation', id: convId, name }); markRead(convId) }}
-                className={'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-600 hover:bg-gray-50')}>
-                <div className={'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ' + (active ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
-                  {isGrp ? <Users size={13}/> : name[0]?.toUpperCase()}
+                className={'w-full flex items-center gap-3 px-4 py-3 text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-600 hover:bg-gray-50')}>
+                <div className={'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ' + (active ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
+                  {cm.conversation?.is_group ? <Users size={14}/> : name[0]?.toUpperCase()}
                 </div>
-                <span className="flex-1 text-left truncate">{name}</span>
+                <span className="flex-1 text-left truncate font-medium">{name}</span>
                 {unread > 0 && (
                   <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
                     {unread > 9 ? '9+' : unread}
@@ -187,33 +179,30 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
       </div>
 
       {/* Ventana de chat */}
-      <div className="flex-1 min-w-0">
-        {activeChat.type === 'global' ? (
-          <ChatWindow
-            key="global"
-            conversationId={null}
-            isGlobal={true}
-            name="General"
-            currentUserId={currentUserId}
-            users={users}
-            tasks={tasks}
-            projects={projects}
-            initialMessages={globalMessages}
-          />
-        ) : activeChat.id ? (
-          <ChatWindow
-            key={activeChat.id}
-            conversationId={activeChat.id}
-            isGlobal={false}
-            name={activeChat.name}
-            currentUserId={currentUserId}
-            users={users}
-            tasks={tasks}
-            projects={projects}
-            initialMessages={convMessages[activeChat.id] ?? []}
-          />
+      <div className={`${!showList ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-w-0`}>
+        {activeChat ? (
+          <>
+            {/* Back button mobile */}
+            <div className="md:hidden absolute top-0 left-0 z-10">
+              <button onClick={() => setActiveChat(null)}
+                className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500">
+                <ArrowLeft size={16}/> Volver
+              </button>
+            </div>
+            <ChatWindow
+              key={activeChat.id ?? 'global'}
+              conversationId={activeChat.id ?? null}
+              isGlobal={activeChat.type === 'global'}
+              name={activeChat.name}
+              currentUserId={currentUserId}
+              users={users}
+              tasks={tasks}
+              projects={projects}
+              initialMessages={activeChat.type === 'global' ? globalMessages : (convMessages[activeChat.id ?? ''] ?? [])}
+            />
+          </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+          <div className="hidden md:flex flex-col items-center justify-center h-full text-gray-400">
             <MessageSquare size={32} className="mb-3 opacity-20"/>
             <p className="text-sm">Seleccioná una conversación</p>
           </div>
@@ -222,7 +211,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
 
       {/* Modal nuevo chat */}
       {showNewChat && (
-        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <p className="font-semibold text-gray-900">Nueva conversación</p>
@@ -231,7 +220,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
               </button>
             </div>
 
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex gap-2 mb-4">
               <button onClick={() => setIsGroup(false)}
                 className={'flex-1 py-2 rounded-xl text-sm font-medium transition-all ' + (!isGroup ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
                 Directo
@@ -260,12 +249,10 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
                 const selected = selectedUsers.includes(u.id)
                 return (
                   <button key={u.id}
-                    onClick={() => setSelectedUsers(prev =>
-                      selected ? prev.filter(id => id !== u.id) : [...prev, u.id]
-                    )}
-                    className={'w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all ' + (selected ? 'bg-[#E8F4FE]' : 'hover:bg-gray-50')}>
-                    <div className={'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ' + (selected ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
-                      {selected ? <Check size={12}/> : u.full_name[0].toUpperCase()}
+                    onClick={() => setSelectedUsers(prev => selected ? prev.filter(id => id !== u.id) : [...prev, u.id])}
+                    className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ' + (selected ? 'bg-[#E8F4FE]' : 'hover:bg-gray-50')}>
+                    <div className={'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ' + (selected ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
+                      {selected ? <Check size={13}/> : u.full_name[0].toUpperCase()}
                     </div>
                     <span className="text-sm text-gray-700">{u.full_name}</span>
                   </button>

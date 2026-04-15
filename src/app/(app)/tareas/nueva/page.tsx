@@ -16,7 +16,8 @@ export default function NuevaTareaPage() {
     project_id: params.get('proyecto') ?? '',
     title: '', description: '',
     priority: 'media', due_date: '',
-    direct_responsible_id: '', direct_hours: '',
+    direct_responsible_id: '',
+    estimated_hours: '',
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -30,43 +31,28 @@ export default function NuevaTareaPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      setError('No hay sesión activa')
-      setLoading(false)
-      return
-    }
 
-    const payload = {
+    const { error: err } = await supabase.from('tasks').insert({
       project_id: form.project_id,
       title: form.title,
       description: form.description || null,
       priority: form.priority,
       due_date: form.due_date,
       direct_responsible_id: form.direct_responsible_id || null,
-      direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
-      status: 'creado' as const,
-      created_by: user.id,
-    }
+      estimated_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
+      direct_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
+      status: 'creado',
+      created_by: user?.id,
+    })
 
-    console.log('Inserting task:', payload)
-    console.log('User:', user.id)
-
-    const { data, error } = await supabase.from('tasks').insert(payload).select()
-    
-    console.log('Result data:', data)
-    console.log('Result error:', error)
-
-    if (error) {
-      setError(`Error: ${error.message} (${error.code})`)
+    if (err) {
+      setError('Error: ' + err.message)
       setLoading(false)
-      return
+    } else {
+      router.push('/tareas')
     }
-
-    router.push('/tareas')
   }
 
   return (
@@ -90,13 +76,13 @@ export default function NuevaTareaPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Título *</label>
           <input type="text" value={form.title} onChange={e => set('title', e.target.value)} required
             placeholder="Ej: Diseño de homepage"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] focus:border-transparent" />
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Descripción</label>
           <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
             placeholder="Detalle de la tarea..."
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none" />
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none"/>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -112,7 +98,7 @@ export default function NuevaTareaPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha límite *</label>
             <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} required
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -125,17 +111,16 @@ export default function NuevaTareaPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Horas asignadas</label>
-            <input type="number" min="0" step="0.5" value={form.direct_hours} onChange={e => set('direct_hours', e.target.value)}
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Horas estimadas</label>
+            <input type="number" min="0" step="0.5" value={form.estimated_hours}
+              onChange={e => set('estimated_hours', e.target.value)}
               placeholder="8"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
         </div>
 
         {error && (
-          <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">
-            {error}
-          </div>
+          <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">{error}</div>
         )}
 
         <div className="flex gap-3 pt-2">
