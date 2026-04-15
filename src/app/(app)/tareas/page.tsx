@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, CheckSquare, Clock, Filter } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
 
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -45,7 +45,9 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     hours_logged: Math.round((horasPorTarea[t.id] ?? 0) * 10) / 10,
   })) ?? []
 
-  const proyectosFiltrados = cliente ? proyectosAll?.filter(p => p.client_id === cliente) : proyectosAll
+  const proyectosFiltrados = cliente
+    ? proyectosAll?.filter(p => p.client_id === cliente)
+    : proyectosAll
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -54,11 +56,11 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
           <h1 className="text-xl font-semibold text-gray-900">Tareas</h1>
           <p className="text-sm text-gray-400 mt-0.5">{tareasConHoras.length} tareas</p>
         </div>
-        <Link href="/tareas/nueva" className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+        <Link href="/tareas/nueva"
+          className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
           <Plus size={15}/> Nueva tarea
         </Link>
       </div>
-
       <TareasTable
         tareas={tareasConHoras}
         clientes={clientes?.map(c => ({ value: c.id, label: c.name })) ?? []}
