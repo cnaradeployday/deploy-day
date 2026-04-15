@@ -10,7 +10,7 @@ const statusColors: Record<string, string> = {
   en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
-  creado: 'Creado', estimado: 'Estimado', en_proceso: 'En proceso', terminado: 'Terminado',
+  creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso', terminado: 'Terminado',
 }
 const nextStatus: Record<string, { status: string; label: string }> = {
   estimado: { status: 'en_proceso', label: 'Iniciar' },

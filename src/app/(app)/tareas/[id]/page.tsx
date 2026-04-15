@@ -12,7 +12,7 @@ const statusColors: Record<string, string> = {
   presentado: 'bg-purple-50 text-purple-600',
 }
 const statusLabels: Record<string, string> = {
-  creado: 'Creado', estimado: 'Estimado', en_proceso: 'En proceso',
+  creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
   terminado: 'Terminado', presentado: 'Presentado'
 }
 const priorityColors: Record<string, string> = {
