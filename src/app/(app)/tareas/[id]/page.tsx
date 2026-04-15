@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Pencil } from 'lucide-react'
 import TaskActions from './TaskActions'
 import TaskTimer from './TaskTimer'
+import TaskComments from './TaskComments'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -40,11 +41,17 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
 
-  const canUseTimer = ['estimado','en_proceso'].includes(t.status) && (
-    t.direct_responsible_id === user?.id ||
-    (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id) ||
-    ['admin','gerente_operaciones'].includes(profile?.role ?? '')
-  )
+  const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
+  const isAssigned = t.direct_responsible_id === user?.id ||
+    (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
+  const canUseTimer = ['estimado','en_proceso'].includes(t.status) && (isAssigned || isAdmin)
+  const canEdit = isAdmin
+
+  const { data: comments } = await supabase
+    .from('task_comments')
+    .select('id, content, created_at, user:users(id, full_name)')
+    .eq('task_id', id)
+    .order('created_at', { ascending: true })
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -61,6 +68,12 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[t.priority]}`}>{t.priority}</span>
           <span className={`text-xs px-2.5 py-1 rounded-full ${statusColors[t.status]}`}>{statusLabels[t.status]}</span>
+          {canEdit && (
+            <Link href={`/tareas/${t.id}/editar`}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+              <Pencil size={14}/>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -92,10 +105,10 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div className="space-y-4">
           {canUseTimer && (
-            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status} />
+            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status}/>
           )}
           <TaskActions
             task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
@@ -105,28 +118,33 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
           />
         </div>
 
-        <div className="space-y-4">
-          {(t.time_entries as any[])?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">Historial de horas</p>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {(t.time_entries as any[]).map((e: any) => (
-                  <div key={e.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
-                    <div>
-                      <p className="text-xs font-medium text-gray-700">{e.user?.full_name}</p>
-                      {e.notes && <p className="text-xs text-gray-400 mt-0.5">{e.notes}</p>}
-                    </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
-                      <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
-                    </div>
+        {(t.time_entries as any[])?.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Historial de horas</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(t.time_entries as any[]).map((e: any) => (
+                <div key={e.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className="text-xs font-medium text-gray-700">{e.user?.full_name}</p>
+                    {e.notes && <p className="text-xs text-gray-400 mt-0.5">{e.notes}</p>}
                   </div>
-                ))}
-              </div>
+                  <div className="text-right shrink-0 ml-3">
+                    <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
+                    <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      <TaskComments
+        taskId={t.id}
+        currentUserId={user?.id ?? ''}
+        currentUserName={profile?.role ?? ''}
+        initialComments={comments ?? []}
+      />
     </div>
   )
 }
