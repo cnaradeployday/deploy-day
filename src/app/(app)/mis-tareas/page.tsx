@@ -1,11 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
-import TareasTable from '@/app/(app)/tareas/TareasTable'
+import MisTareasClient from './MisTareasClient'
 
 export default async function MisTareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const sp = await searchParams
-  const { status, priority, proyecto } = sp
+  const { status, priority, proyecto, cliente } = sp
 
   const { data: directas } = await supabase
     .from('tasks')
@@ -13,7 +13,6 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       project:projects(id, name, client:clients(id, name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)`)
     .eq('direct_responsible_id', user?.id)
-    .not('status', 'in', '("presentado")')
     .order('due_date', { ascending: true })
 
   const { data: colaboraciones } = await supabase
@@ -23,15 +22,16 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name))`)
     .eq('user_id', user?.id)
 
-  const colabTasks = colaboraciones?.map((c: any) => c.task).filter(Boolean) ?? []
-  const allTasks = [...(directas ?? []), ...colabTasks]
-  let uniqueTasks = allTasks.filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i)
+  const colabTasks = (colaboraciones ?? []).map((c: any) => c.task).filter(Boolean)
+  let allTasks = [...(directas ?? []), ...colabTasks]
+  allTasks = allTasks.filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i)
 
-  if (status) uniqueTasks = uniqueTasks.filter(t => t.status === status)
-  if (priority) uniqueTasks = uniqueTasks.filter(t => t.priority === priority)
-  if (proyecto) uniqueTasks = uniqueTasks.filter(t => t.project?.id === proyecto)
+  if (status) allTasks = allTasks.filter(t => t.status === status)
+  if (priority) allTasks = allTasks.filter(t => t.priority === priority)
+  if (proyecto) allTasks = allTasks.filter(t => t.project?.id === proyecto)
+  if (cliente) allTasks = allTasks.filter(t => (t.project?.client as any)?.id === cliente)
 
-  const taskIds = uniqueTasks.map(t => t.id)
+  const taskIds = allTasks.map(t => t.id)
   const { data: timeEntries } = taskIds.length
     ? await supabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
     : { data: [] }
@@ -41,28 +41,23 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     horasPorTarea[e.task_id] = (horasPorTarea[e.task_id] ?? 0) + e.hours_logged
   })
 
-  const tareasConHoras = uniqueTasks.map(t => ({
+  const tareasConHoras = allTasks.map(t => ({
     ...t,
     hours_logged: Math.round((horasPorTarea[t.id] ?? 0) * 10) / 10,
   }))
 
-  const proyectosUnicos = [...new Map(uniqueTasks.map(t => [t.project?.id, t.project])).values()]
-    .filter(Boolean).map(p => ({ value: p.id, label: p.name }))
+  const proyectosUnicos = [...new Map(allTasks.map(t => [t.project?.id, t.project])).values()]
+    .filter(Boolean).map((p: any) => ({ value: p.id, label: p.name }))
+
+  const clientesUnicos = [...new Map(allTasks.map(t => [(t.project?.client as any)?.id, t.project?.client])).values()]
+    .filter(Boolean).map((c: any) => ({ value: c.id, label: c.name }))
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
-        <p className="text-sm text-gray-400 mt-0.5">{tareasConHoras.length} tareas asignadas</p>
-      </div>
-      <TareasTable
-        tareas={tareasConHoras}
-        clientes={[]}
-        proyectos={proyectosUnicos}
-        usuarios={[]}
-        filters={{ status, priority, proyecto }}
-        hideColumns={['client', 'responsible']}
-      />
-    </div>
+    <MisTareasClient
+      tareas={tareasConHoras}
+      proyectos={proyectosUnicos}
+      clientes={clientesUnicos}
+      filters={{ status, priority, proyecto, cliente }}
+    />
   )
 }
