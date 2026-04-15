@@ -47,6 +47,7 @@ export default function AppLayout({ children, userRole, userName, userId }: {
   const isChat = pathname === '/chat'
 
   useEffect(() => {
+    if (!userId) return
     const sb = createClient()
     const lastRead = localStorage.getItem('chat_last_read') ?? '1970-01-01'
 
@@ -54,10 +55,10 @@ export default function AppLayout({ children, userRole, userName, userId }: {
       .select('id', { count: 'exact', head: true })
       .eq('is_global', true)
       .gt('created_at', lastRead)
-      .neq('user_id', userId ?? '')
+      .neq('user_id', userId)
       .then(({ count }) => setUnreadCount(count ?? 0))
 
-    const channel = sb.channel('chat-badge')
+    const channel = sb.channel('chat-badge-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'is_global=eq.true' },
         (payload) => {
           if (payload.new.user_id !== userId) {
@@ -66,18 +67,29 @@ export default function AppLayout({ children, userRole, userName, userId }: {
         })
       .subscribe()
 
+    return () => { sb.removeChannel(channel) }
+  }, [userId])
+
+  useEffect(() => {
     if (isChat) {
       localStorage.setItem('chat_last_read', new Date().toISOString())
       setUnreadCount(0)
     }
-
-    return () => { sb.removeChannel(channel) }
-  }, [isChat, userId])
+  }, [isChat])
 
   async function logout() {
     const sb = createClient()
     await sb.auth.signOut()
     router.push('/login')
+  }
+
+  const Badge = ({ count }: { count: number }) => {
+    if (count === 0) return null
+    return (
+      <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+        {count > 9 ? '9+' : count}
+      </span>
+    )
   }
 
   const NavLink = ({ href, label, icon: Icon, onClick, badge }: {
@@ -87,20 +99,16 @@ export default function AppLayout({ children, userRole, userName, userId }: {
     return (
       <Link href={href} onClick={onClick}
         className={'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0] font-medium' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')}>
-        <div className="relative">
+        <div className="relative shrink-0">
           <Icon size={15} strokeWidth={active ? 2 : 1.5} color={active ? '#1B9BF0' : undefined}/>
           {badge && unreadCount > 0 && !active && (
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
         </div>
         <span className="flex-1">{label}</span>
-        {badge && unreadCount > 0 && !active && (
-          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
+        {badge && unreadCount > 0 && !active && <Badge count={unreadCount}/>}
       </Link>
     )
   }
@@ -111,7 +119,7 @@ export default function AppLayout({ children, userRole, userName, userId }: {
         <div className="px-4 py-4 border-b border-gray-50">
           <Image src="/logo.jpeg" alt="Deploy Day" width={120} height={36} className="object-contain rounded-md"/>
           <button onClick={() => setShowProfile(!showProfile)}
-            className="flex items-center gap-2 mt-3 w-full hover:bg-gray-50 rounded-xl px-1 py-1 transition-all group">
+            className="flex items-center gap-2 mt-3 w-full hover:bg-gray-50 rounded-xl px-1 py-1.5 transition-all">
             <div className="w-7 h-7 rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0">
               {userName?.[0]?.toUpperCase()}
             </div>
@@ -121,9 +129,11 @@ export default function AppLayout({ children, userRole, userName, userId }: {
             </div>
           </button>
           {showProfile && (
-            <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2">
-              <Image src="/mascota.jpeg" alt="Deploy Day" width={48} height={48} className="rounded-xl mx-auto"/>
-              <p className="text-xs text-center text-gray-500 font-medium">{userName}</p>
+            <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
+              <div className="flex justify-center">
+                <Image src="/mascota.jpeg" alt="mascota" width={52} height={52} className="rounded-xl"/>
+              </div>
+              <p className="text-xs text-center text-gray-600 font-medium">{userName}</p>
               <p className="text-xs text-center text-gray-400 capitalize">{userRole.replace(/_/g,' ')}</p>
               <button onClick={logout}
                 className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-all">
@@ -132,12 +142,12 @@ export default function AppLayout({ children, userRole, userName, userId }: {
             </div>
           )}
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
           {visible.map(item => <NavLink key={item.href} {...item}/>)}
         </nav>
         <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
           <span className="text-xs text-gray-300">v{APP_VERSION}</span>
-          <button onClick={logout} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-all">
+          <button onClick={logout} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600">
             <LogOut size={13}/> Salir
           </button>
         </div>
@@ -147,8 +157,13 @@ export default function AppLayout({ children, userRole, userName, userId }: {
         <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-300">v{APP_VERSION}</span>
-          <button onClick={() => setOpen(!open)} className="p-1 text-gray-500">
+          <button onClick={() => setOpen(!open)} className="p-1 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
+            {unreadCount > 0 && !open && (
+              <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -184,11 +199,12 @@ export default function AppLayout({ children, userRole, userName, userId }: {
         {visibleBottom.map(({ href, label, icon: Icon, badge }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
-            <Link key={href} href={href} className={'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 transition-colors ' + (active ? 'text-[#1B9BF0]' : 'text-gray-400')}>
+            <Link key={href} href={href}
+              className={'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 transition-colors ' + (active ? 'text-[#1B9BF0]' : 'text-gray-400')}>
               <div className="relative">
                 <Icon size={19} strokeWidth={active ? 2 : 1.5}/>
                 {badge && unreadCount > 0 && !active && (
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
