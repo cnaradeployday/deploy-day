@@ -49,7 +49,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
     if (value) p.set(key, value) else p.delete(key)
-    router.push(pathname + '?' + p.toString())
+    router.push(`${pathname}?${p.toString()}`)
   }, [params, pathname, router])
 
   const clear = () => router.push(pathname)
