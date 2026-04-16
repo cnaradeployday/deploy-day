@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import LiquidacionesColaborador from './LiquidacionesColaborador'
 import LiquidacionesAdmin from './LiquidacionesAdmin'
 
-export default async function LiquidacionesPage({ searchParams }: { searchParams: Promise<Record<string,string>> }) {
+export default async function LiquidacionesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('users').select('*').eq('id', user?.id ?? '').single()
@@ -31,33 +31,43 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
     )
   }
 
-  const { data: todasLiquidaciones } = await supabase
+  const { data: liqDelMesRaw } = await supabase
     .from('liquidaciones')
-    .select('*, user:users(id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre)')
-    .order('mes', { ascending: false })
-
-  const { data: liqDelMes } = await supabase
-    .from('liquidaciones')
-    .select('*, user:users(id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre)')
+    .select('*')
     .eq('mes', selectedMes)
     .order('estado', { ascending: true })
 
+  const { data: conFacturaRaw } = await supabase
+    .from('liquidaciones')
+    .select('*')
+    .eq('estado', 'factura_subida')
+    .order('mes', { ascending: false })
+
+  const { data: misLiquidaciones } = await supabase
+    .from('liquidaciones')
+    .select('*')
+    .eq('user_id', user?.id)
+    .order('mes', { ascending: false })
+
   const { data: allUsers } = await supabase
     .from('users')
-    .select('id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre')
-    .eq('is_active', true)
+    .select('id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre, role')
     .order('full_name')
 
-  const conFactura = (todasLiquidaciones ?? []).filter(l => l.estado === 'factura_subida')
+  const usersMap = Object.fromEntries((allUsers ?? []).map(u => [u.id, u]))
+  const liqDelMes = (liqDelMesRaw ?? []).map(l => ({ ...l, user: usersMap[l.user_id] ?? null }))
+  const conFactura = (conFacturaRaw ?? []).map(l => ({ ...l, user: usersMap[l.user_id] ?? null }))
 
   return (
     <LiquidacionesAdmin
-      liqDelMes={liqDelMes ?? []}
+      liqDelMes={liqDelMes}
       conFactura={conFactura}
+      misLiquidaciones={misLiquidaciones ?? []}
       allUsers={allUsers ?? []}
       userRole={profile.role}
       currentUserId={user?.id ?? ''}
       currentUserName={profile.full_name ?? ''}
+      currentUserProfile={profile}
       tab={tab}
       selectedMes={selectedMes}
     />
