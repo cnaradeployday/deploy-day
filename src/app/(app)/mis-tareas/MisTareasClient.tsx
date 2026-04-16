@@ -63,7 +63,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters }
       Proyecto: t.project?.name ?? '—',
       Estado: statusLabels[t.status] ?? t.status,
       Prioridad: t.priority,
-      'Horas est.': t.estimated_hours ?? '—',
+      'Horas est.': t.my_assigned_hours ?? t.estimated_hours ?? '—',
       'Horas usadas': t.hours_logged ?? 0,
       Vence: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
     }))
@@ -146,13 +146,13 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters }
               <tr><td colSpan={9} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : tareas.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
-              const pct = t.estimated_hours ? Math.min(100, Math.round(((t.hours_logged ?? 0) / t.estimated_hours) * 100)) : null
+              const myHours = t.my_assigned_hours ?? t.estimated_hours; const pct = myHours ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[160px] truncate">{t.title}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{t.project?.client?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{t.project?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.estimated_hours ? t.estimated_hours+'h' : '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{myHours ? myHours+'h' : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>
