@@ -43,6 +43,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
     .eq('is_active', true)
     .order('full_name')
 
+  console.log('LIQUIDACIONES QUERY RESULT:', liquidaciones?.length, liquidaciones?.[0])
   return (
     <LiquidacionesAdmin
       liquidaciones={liquidaciones ?? []}
