@@ -28,7 +28,10 @@ export default function NuevoClientePage() {
     if (!newPayment.trim()) return
     const sb = createClient()
     const { data } = await sb.from('payment_methods').upsert({ name: newPayment.trim() }, { onConflict: 'name' }).select().single()
-    if (data) { setPaymentMethods(prev => [...prev.filter(p => p.id !== data.id), data].sort((a,b) => a.name.localeCompare(b.name))); setNewPayment('') }
+    if (data) {
+      setPaymentMethods(prev => [...prev.filter(p => p.id !== data.id), data].sort((a, b) => a.name.localeCompare(b.name)))
+      setNewPayment('')
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,8 +90,13 @@ export default function NuevoClientePage() {
               ))}
             </div>
           )}
-          <select onChange={e => { if (e.target.value && !selectedPayments.includes(e.target.value)) setSelectedPayments(prev => [...prev, e.target.value]); e.target.value = '' }}
-            defaultValue=""
+          <select
+            value=""
+            onChange={e => {
+              if (e.target.value && !selectedPayments.includes(e.target.value))
+                setSelectedPayments(prev => [...prev, e.target.value])
+              e.target.value = ''
+            }}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white mb-2">
             <option value="">+ Agregar forma de pago</option>
             {paymentMethods.filter(p => !selectedPayments.includes(p.name)).map(p => (
