@@ -7,6 +7,18 @@ import { Plus, Trash2, Calendar, Check } from 'lucide-react'
 interface Segmento { desde: string; hasta: string; horas: string; notas: string }
 const EMPTY: Segmento = { desde: '', hasta: '', horas: '', notas: '' }
 
+// Fix timezone: parse YYYY-MM-DD without converting to UTC
+function formatDate(dateStr: string) {
+  if (!dateStr) return ''
+  const [year, month, day] = dateStr.split('-')
+  return `${day}/${month}/${year}`
+}
+
+// Default dates for current year
+const now = new Date()
+const DEFAULT_DESDE = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+const DEFAULT_HASTA = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
+
 export default function ProyectoSegmentos({ projectId, segmentos, soldHours, totalSegmentos }: {
   projectId: string
   segmentos: any[]
@@ -14,7 +26,7 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
   totalSegmentos: number
 }) {
   const router = useRouter()
-  const [pendientes, setPendientes] = useState<Segmento[]>([{ ...EMPTY }])
+  const [pendientes, setPendientes] = useState<Segmento[]>([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }])
   const [saving, setSaving] = useState(false)
 
   const horasPendientes = pendientes.reduce((acc, s) => acc + (parseFloat(s.horas) || 0), 0)
@@ -26,11 +38,11 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
   }
 
   function agregarFila() {
-    setPendientes(prev => [...prev, { ...EMPTY }])
+    setPendientes(prev => [...prev, { desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }])
   }
 
   function quitarFila(i: number) {
-    if (pendientes.length === 1) { setPendientes([{ ...EMPTY }]); return }
+    if (pendientes.length === 1) { setPendientes([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }]); return }
     setPendientes(prev => prev.filter((_, idx) => idx !== i))
   }
 
@@ -40,20 +52,20 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
     if (!validos.length) return
     const totalNuevo = validos.reduce((acc, s) => acc + parseFloat(s.horas), 0)
     if (totalNuevo > disponible) {
-      alert(`Las horas ingresadas (${totalNuevo}h) superan el disponible del proyecto (${disponible}h)`)
+      alert(`Las horas ingresadas (${totalNuevo}h) superan el disponible (${disponible}h)`)
       return
     }
     setSaving(true)
     await createClient().from('project_hour_segments').insert(
       validos.map(s => ({
         project_id: projectId,
-        desde: s.desde,
+        desde: s.desde,   // stored as YYYY-MM-DD string, no Date conversion
         hasta: s.hasta,
         horas: parseFloat(s.horas),
         notas: s.notas || null,
       }))
     )
-    setPendientes([{ ...EMPTY }])
+    setPendientes([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }])
     router.refresh()
     setSaving(false)
   }
@@ -139,7 +151,7 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
               <div>
                 <p className="text-xs font-semibold text-gray-700">{s.horas}h</p>
                 <p className="text-xs text-gray-400">
-                  {new Date(s.desde).toLocaleDateString('es-AR')} → {new Date(s.hasta).toLocaleDateString('es-AR')}
+                  {formatDate(s.desde)} → {formatDate(s.hasta)}
                   {s.notas && ' · ' + s.notas}
                 </p>
               </div>
