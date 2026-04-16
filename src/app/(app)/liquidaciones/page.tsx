@@ -12,6 +12,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
   const sp = await searchParams
   const isColaborador = profile.role === 'colaborador'
   const tab = sp.tab ?? (isColaborador ? 'mis-liquidaciones' : 'resumen')
+  const mesParam = sp.mes ?? new Date().toISOString().slice(0, 7)
 
   if (isColaborador) {
     const { data: liquidaciones } = await supabase
@@ -30,7 +31,6 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
     )
   }
 
-  // Admin / Gerente
   const { data: liquidaciones } = await supabase
     .from('liquidaciones')
     .select('*, user:users(id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre)')
@@ -51,6 +51,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
       currentUserId={user?.id ?? ''}
       currentUserName={profile.full_name ?? ''}
       tab={tab}
+      initialMes={mesParam}
     />
   )
 }

@@ -20,19 +20,20 @@ const estadoResumenLabels: Record<string, string> = {
   pagado: 'Cobrado',
 }
 
-export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, currentUserId, currentUserName, tab }: {
+export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, currentUserId, currentUserName, tab, initialMes }: {
   liquidaciones: any[]
   allUsers: any[]
   userRole: string
   currentUserId: string
   currentUserName: string
   tab: string
+  initialMes?: string
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [notas, setNotas] = useState<Record<string, string>>({})
-  const [selectedMes, setSelectedMes] = useState(new Date().toISOString().slice(0, 7))
+  const [selectedMes, setSelectedMes] = useState(initialMes ?? new Date().toISOString().slice(0, 7))
   const isAdmin = userRole === 'admin'
 
   const TABS = [
@@ -52,8 +53,7 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
     const { data, error } = await createClient().rpc('generar_liquidaciones', { p_mes: selectedMes })
     setGenerating(false)
     if (error) { alert('Error: ' + error.message); return }
-    router.refresh()
-    setTimeout(() => alert('Generadas ' + data + ' liquidaciones para ' + selectedMes), 100)
+    window.location.href = '/liquidaciones?tab=' + tab + '&mes=' + selectedMes
   }
 
   async function aprobar(id: string) {
