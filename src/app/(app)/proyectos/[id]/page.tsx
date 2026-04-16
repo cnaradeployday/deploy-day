@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Clock, CheckSquare } from 'lucide-react'
+import { ArrowLeft, Plus, Clock, CheckSquare, Pencil } from 'lucide-react'
 import ProyectoSegmentos from './ProyectoSegmentos'
 
 const statusColors: Record<string, string> = {
