@@ -12,7 +12,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
   const sp = await searchParams
   const isColaborador = profile.role === 'colaborador'
   const tab = sp.tab ?? (isColaborador ? 'mis-liquidaciones' : 'resumen')
-  const mesParam = sp.mes ?? new Date().toISOString().slice(0, 7)
+  const selectedMes = sp.mes ?? new Date().toISOString().slice(0, 7)
 
   if (isColaborador) {
     const { data: liquidaciones } = await supabase
@@ -31,10 +31,15 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
     )
   }
 
-  const { data: liquidaciones } = await supabase
+  const { data: todasLiquidaciones } = await supabase
     .from('liquidaciones')
     .select('*, user:users(id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre)')
     .order('mes', { ascending: false })
+
+  const { data: liqDelMes } = await supabase
+    .from('liquidaciones')
+    .select('*, user:users(id, full_name, hourly_cost, currency, banco, cbu, cuenta_nombre)')
+    .eq('mes', selectedMes)
     .order('estado', { ascending: true })
 
   const { data: allUsers } = await supabase
@@ -43,16 +48,18 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
     .eq('is_active', true)
     .order('full_name')
 
-  console.log('LIQUIDACIONES QUERY RESULT:', liquidaciones?.length, liquidaciones?.[0])
+  const conFactura = (todasLiquidaciones ?? []).filter(l => l.estado === 'factura_subida')
+
   return (
     <LiquidacionesAdmin
-      liquidaciones={liquidaciones ?? []}
+      liqDelMes={liqDelMes ?? []}
+      conFactura={conFactura}
       allUsers={allUsers ?? []}
       userRole={profile.role}
       currentUserId={user?.id ?? ''}
       currentUserName={profile.full_name ?? ''}
       tab={tab}
-      initialMes={mesParam}
+      selectedMes={selectedMes}
     />
   )
 }

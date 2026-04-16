@@ -20,20 +20,20 @@ const estadoResumenLabels: Record<string, string> = {
   pagado: 'Cobrado',
 }
 
-export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, currentUserId, currentUserName, tab, initialMes }: {
-  liquidaciones: any[]
+export default function LiquidacionesAdmin({ liqDelMes, conFactura, allUsers, userRole, currentUserId, currentUserName, tab, selectedMes }: {
+  liqDelMes: any[]
+  conFactura: any[]
   allUsers: any[]
   userRole: string
   currentUserId: string
   currentUserName: string
   tab: string
-  initialMes?: string
+  selectedMes: string
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [notas, setNotas] = useState<Record<string, string>>({})
-  const [selectedMes, setSelectedMes] = useState(initialMes ?? new Date().toISOString().slice(0, 7))
   const isAdmin = userRole === 'admin'
 
   const TABS = [
@@ -48,12 +48,16 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
     meses.push(d.toISOString().slice(0, 7))
   }
 
+  function changeMes(mes: string) {
+    router.push('/liquidaciones?tab=' + tab + '&mes=' + mes)
+  }
+
   async function generarLiquidaciones() {
     setGenerating(true)
     const { data, error } = await createClient().rpc('generar_liquidaciones', { p_mes: selectedMes })
     setGenerating(false)
     if (error) { alert('Error: ' + error.message); return }
-    window.location.href = '/liquidaciones?tab=' + tab + '&mes=' + selectedMes
+    router.push('/liquidaciones?tab=' + tab + '&mes=' + selectedMes)
   }
 
   async function aprobar(id: string) {
@@ -101,10 +105,7 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
     URL.revokeObjectURL(blobUrl)
   }
 
-  const liqDelMes = liquidaciones.filter(l => l.mes === selectedMes)
   const pendientes = liqDelMes.filter(l => l.estado === 'confirmado_colaborador')
-  const conFactura = liquidaciones.filter(l => l.estado === 'factura_subida')
-
   const nombreMes = (m: string) => new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
 
   return (
@@ -112,7 +113,7 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-gray-900">Liquidaciones</h1>
         <div className="flex items-center gap-2">
-          <select value={selectedMes} onChange={e => setSelectedMes(e.target.value)}
+          <select value={selectedMes} onChange={e => changeMes(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white capitalize">
             {meses.map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
           </select>
@@ -127,7 +128,7 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
 
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6">
         {TABS.map(t => (
-          <Link key={t.key} href={'?tab=' + t.key}
+          <Link key={t.key} href={'/liquidaciones?tab=' + t.key + '&mes=' + selectedMes}
             className={'flex-1 text-center py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ' + (tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
             <t.icon size={14}/>
             {t.label}
@@ -141,11 +142,11 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
         ))}
       </div>
 
-      {/* =================== RESUMEN EQUIPO =================== */}
+      {/* RESUMEN EQUIPO */}
       {tab === 'resumen' && (
         <div>
           <p className="text-sm text-gray-400 mb-4 capitalize">
-            {nombreMes(selectedMes)} · {liqDelMes.length} colaboradores
+            {nombreMes(selectedMes)} · {liqDelMes.length} colaborador{liqDelMes.length !== 1 ? 'es' : ''}
           </p>
           {!liqDelMes.length ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
@@ -176,7 +177,6 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
                       </span>
                     </div>
                   </div>
-
                   {liq.estado === 'confirmado_colaborador' && (
                     <div className="px-5 pb-4 space-y-2">
                       <textarea value={notas[liq.id] ?? ''} onChange={e => setNotas(n => ({ ...n, [liq.id]: e.target.value }))}
@@ -201,10 +201,10 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
         </div>
       )}
 
-      {/* =================== SERVICIO CONTRACTORS =================== */}
+      {/* SERVICIO CONTRACTORS */}
       {tab === 'contractors' && (
         <div>
-          <p className="text-sm text-gray-400 mb-4">Facturas recibidas pendientes de pago — {conFactura.length} factura{conFactura.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-400 mb-4">{conFactura.length} factura{conFactura.length !== 1 ? 's' : ''} recibida{conFactura.length !== 1 ? 's' : ''} pendiente{conFactura.length !== 1 ? 's' : ''} de pago</p>
           {!conFactura.length ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
               <Building2 size={32} className="mx-auto mb-3 opacity-20"/>
@@ -256,8 +256,6 @@ export default function LiquidacionesAdmin({ liquidaciones, allUsers, userRole, 
                         )}
                       </div>
                     </div>
-
-                    {/* Datos bancarios expandibles */}
                     {(u?.banco || u?.cbu) && (
                       <div className="px-5 pb-4">
                         <div className="bg-gray-50 rounded-xl px-4 py-3 text-xs text-gray-600 grid grid-cols-3 gap-2">
