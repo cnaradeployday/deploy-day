@@ -15,12 +15,16 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+
+  // Si el usuario tiene custom_role_id, el select muestra 'custom:<id>'
+  const initialRole = miembro.custom_role_id
+    ? 'custom:' + miembro.custom_role_id
+    : miembro.role ?? 'colaborador'
+
   const [form, setForm] = useState({
     full_name: miembro.full_name ?? '',
     email: miembro.email ?? '',
-    role: miembro.role ?? 'colaborador',
-    custom_role_id: miembro.custom_role_id ?? '',
-    custom_role_id: miembro.custom_role_id ?? '',
+    role: initialRole,
     is_active: miembro.is_active ?? true,
     banco: miembro.banco ?? '',
     cbu: miembro.cbu ?? '',
@@ -37,9 +41,14 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
     const customRoleId = isCustom ? form.role.replace('custom:', '') : null
     const realRole = isCustom ? 'colaborador' : form.role
     const { error } = await createClient().from('users').update({
-      ...form,
+      full_name: form.full_name,
+      email: form.email,
       role: realRole,
       custom_role_id: customRoleId,
+      is_active: form.is_active,
+      banco: form.banco,
+      cbu: form.cbu,
+      cuenta_nombre: form.cuenta_nombre,
     }).eq('id', miembro.id)
     if (error) alert('Error: ' + error.message)
     else router.refresh()
@@ -117,16 +126,17 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
                 <label className="block text-xs text-gray-400 mb-1.5">Rol</label>
                 <select value={form.role} onChange={e => set('role', e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-                  <option value="colaborador">Colaborador</option>
-                  <option value="gerente_operaciones">Gerente de operaciones</option>
-                  <option value="admin">Admin</option>
+                  <optgroup label="Roles del sistema">
+                    <option value="colaborador">Colaborador</option>
+                    <option value="gerente_operaciones">Gerente de operaciones</option>
+                    <option value="admin">Admin</option>
+                  </optgroup>
                   {customRoles.length > 0 && (
-                    <>
-                      <option disabled>── Roles personalizados ──</option>
+                    <optgroup label="Roles personalizados">
                       {customRoles.map((r: any) => (
                         <option key={r.id} value={'custom:' + r.id}>{r.name}</option>
                       ))}
-                    </>
+                    </optgroup>
                   )}
                 </select>
               </div>
