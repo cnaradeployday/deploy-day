@@ -83,7 +83,7 @@ function BottomNavItem({ href, label, Icon, active, badge, unreadCount }: {
   )
 }
 
-export default function AppLayout({ children, userRole, userName, userId }: {
+export default function AppLayout({ children, userRole, userName, userId, customRoleName, customPermissions }: {
   children: React.ReactNode; userRole: string; userName: string; userId?: string
 }) {
   const pathname = usePathname()
@@ -92,7 +92,7 @@ export default function AppLayout({ children, userRole, userName, userId }: {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const visible = navItems.filter(i => i.roles.includes(userRole))
-  const visibleBottom = bottomNav.filter(i => i.roles.includes(userRole))
+  const visibleBottom = bottomNav.filter(canSeeItem)
   const isChat = pathname === '/chat'
 
   useEffect(() => {
