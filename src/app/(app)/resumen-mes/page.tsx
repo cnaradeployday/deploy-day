@@ -50,8 +50,14 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     : { data: [] }
 
   // Tareas del mes con horas estimadas
+  // Solo tareas que vencen dentro del mes (para que estimated_hours sea del mes, no del proyecto completo)
   const { data: tareas } = proyectoIds.length
-    ? await supabase.from('tasks').select('id, estimated_hours, project_id').in('project_id', proyectoIds)
+    ? await supabase
+        .from('tasks')
+        .select('id, estimated_hours, project_id, due_date')
+        .in('project_id', proyectoIds)
+        .gte('due_date', primerDia)
+        .lte('due_date', ultimoDia)
     : { data: [] }
 
   // Time entries del mes (horas consumidas)
