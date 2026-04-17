@@ -129,7 +129,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
             </div>
             <div className="text-left min-w-0">
               <p className="text-xs font-medium text-gray-700 truncate">{userName}</p>
-              <p className="text-xs text-gray-400 capitalize">{userRole.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
             </div>
           </button>
           {showProfile && (
@@ -138,7 +138,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
                 <Image src="/mascota.jpeg" alt="mascota" width={52} height={52} className="rounded-xl"/>
               </div>
               <p className="text-xs text-center text-gray-600 font-medium">{userName}</p>
-              <p className="text-xs text-center text-gray-400 capitalize">{userRole.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-center text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
               <button onClick={logout} className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-all">
                 <LogOut size={12}/> Cerrar sesión
               </button>
@@ -185,7 +185,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
                 <Image src="/mascota.jpeg" alt="mascota" width={36} height={36} className="rounded-xl"/>
                 <div>
                   <p className="text-sm font-medium text-gray-700">{userName}</p>
-                  <p className="text-xs text-gray-400 capitalize">{userRole.replace(/_/g, ' ')}</p>
+                  <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
                 </div>
               </div>
             </div>
