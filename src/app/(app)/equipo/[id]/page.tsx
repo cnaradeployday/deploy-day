@@ -13,16 +13,13 @@ export default async function EditarUsuarioPage({ params }: { params: Promise<{ 
   if (!miembro) notFound()
 
   const { data: historial } = await supabase
-    .from('user_rate_history')
-    .select('*')
-    .eq('user_id', id)
-    .order('created_at', { ascending: false })
+    .from('user_rate_history').select('*').eq('user_id', id).order('created_at', { ascending: false })
 
   const { data: availability } = await supabase
-    .from('user_availability')
-    .select('*')
-    .eq('user_id', id)
-    .order('desde', { ascending: true })
+    .from('user_availability').select('*').eq('user_id', id).order('desde', { ascending: true })
+
+  const { data: customRoles } = await supabase
+    .from('roles').select('id, name').eq('is_system', false).order('name')
 
   return (
     <EditarUsuarioClient
@@ -30,6 +27,7 @@ export default async function EditarUsuarioPage({ params }: { params: Promise<{ 
       historial={historial ?? []}
       adminId={user?.id ?? ''}
       availability={availability ?? []}
+      customRoles={customRoles ?? []}
     />
   )
 }

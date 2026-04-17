@@ -6,11 +6,12 @@ import Link from 'next/link'
 import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2 } from 'lucide-react'
 import { CURRENCIES, Currency } from '@/lib/utils/currency'
 
-export default function EditarUsuarioClient({ miembro, historial, adminId, availability }: {
+export default function EditarUsuarioClient({ miembro, historial, adminId, availability, customRoles }: {
   miembro: any
   historial: any[]
   adminId: string
   availability: any[]
+  customRoles: any[]
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -18,6 +19,8 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
     full_name: miembro.full_name ?? '',
     email: miembro.email ?? '',
     role: miembro.role ?? 'colaborador',
+    custom_role_id: miembro.custom_role_id ?? '',
+    custom_role_id: miembro.custom_role_id ?? '',
     is_active: miembro.is_active ?? true,
     banco: miembro.banco ?? '',
     cbu: miembro.cbu ?? '',
@@ -30,7 +33,14 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
   async function guardarInfo(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const { error } = await createClient().from('users').update(form).eq('id', miembro.id)
+    const isCustom = form.role.startsWith('custom:')
+    const customRoleId = isCustom ? form.role.replace('custom:', '') : null
+    const realRole = isCustom ? 'colaborador' : form.role
+    const { error } = await createClient().from('users').update({
+      ...form,
+      role: realRole,
+      custom_role_id: customRoleId,
+    }).eq('id', miembro.id)
     if (error) alert('Error: ' + error.message)
     else router.refresh()
     setLoading(false)
@@ -110,6 +120,14 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
                   <option value="colaborador">Colaborador</option>
                   <option value="gerente_operaciones">Gerente de operaciones</option>
                   <option value="admin">Admin</option>
+                  {customRoles.length > 0 && (
+                    <>
+                      <option disabled>── Roles personalizados ──</option>
+                      {customRoles.map((r: any) => (
+                        <option key={r.id} value={'custom:' + r.id}>{r.name}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
               <div>
