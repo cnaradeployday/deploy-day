@@ -19,13 +19,24 @@ const now = new Date()
 const DEFAULT_DESDE = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 const DEFAULT_HASTA = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
 
-export default function ProyectoSegmentos({ projectId, segmentos, soldHours, totalSegmentos }: {
+export default function ProyectoSegmentos({ projectId, segmentos, soldHours, totalSegmentos, timeEntries, taskIds }: {
   projectId: string
   segmentos: any[]
   soldHours: number
   totalSegmentos: number
+  timeEntries?: any[]
+  taskIds?: string[]
 }) {
   const router = useRouter()
+
+  function horasConsumidasEnSegmento(desde: string, hasta: string) {
+    if (!timeEntries?.length) return 0
+    return Math.round(
+      timeEntries
+        .filter(e => e.entry_date >= desde && e.entry_date <= hasta)
+        .reduce((s, e) => s + e.hours_logged, 0) * 10
+    ) / 10
+  }
   const [pendientes, setPendientes] = useState<Segmento[]>([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }])
   const [saving, setSaving] = useState(false)
 
@@ -148,8 +159,11 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
           <p className="text-xs font-medium text-gray-400 mb-2">Segmentos guardados</p>
           {segmentos.map(s => (
             <div key={s.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-              <div>
-                <p className="text-xs font-semibold text-gray-700">{s.horas}h</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <p className="text-xs font-semibold text-gray-700">{s.horas}h est.</p>
+                  <p className="text-xs text-green-600 font-medium">{horasConsumidasEnSegmento(s.desde, s.hasta)}h cons.</p>
+                </div>
                 <p className="text-xs text-gray-400">
                   {formatDate(s.desde)} → {formatDate(s.hasta)}
                   {s.notas && ' · ' + s.notas}

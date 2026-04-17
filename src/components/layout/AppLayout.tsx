@@ -92,6 +92,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
   const [open, setOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const canSeeItem = (item: { href: string; roles: string[] }) => {
     if (item.roles.includes(userRole)) return true
     if (customPermissions && customPermissions.length > 0) {
@@ -141,7 +142,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
               <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
             </div>
           </button>
-          {showProfile && (
+          {showProfile && !collapsed && (
             <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
               <div className="flex justify-center">
                 <Image src="/mascota.jpeg" alt="mascota" width={52} height={52} className="rounded-xl"/>
@@ -154,17 +155,21 @@ export default function AppLayout({ children, userRole, userName, userId, custom
             </div>
           )}
         </div>
-        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-          {visible.map(item => (
-            <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
-              active={pathname === item.href || pathname.startsWith(item.href + '/')}
-              badge={item.badge} unreadCount={unreadCount}/>
-          ))}
+        <nav className={"flex-1 py-3 space-y-0.5 overflow-y-auto " + (collapsed ? "px-1" : "px-3")}>
+          {visible.map(item => collapsed
+            ? <Link key={item.href} href={item.href} title={item.label}
+                className={"flex items-center justify-center py-2.5 rounded-xl transition-all " + (pathname === item.href || pathname.startsWith(item.href + '/') ? "bg-[#E8F4FE] text-[#1B9BF0]" : "text-gray-500 hover:bg-gray-100")}>
+                <item.icon size={18} strokeWidth={pathname === item.href ? 2 : 1.5}/>
+              </Link>
+            : <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
+                active={pathname === item.href || pathname.startsWith(item.href + '/')}
+                badge={item.badge} unreadCount={unreadCount}/>
+          )}
         </nav>
-        <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
-          <span className="text-xs text-gray-300">v{APP_VERSION}</span>
-          <button onClick={logout} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600">
-            <LogOut size={13}/> Salir
+        <div className={"border-t border-gray-50 flex items-center " + (collapsed ? "px-1 py-3 justify-center" : "px-4 py-3 justify-between")}>
+          {!collapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
+          <button onClick={logout} title="Cerrar sesión" className={"flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 " + (collapsed ? "justify-center" : "")}>
+            <LogOut size={13}/> {!collapsed && "Salir"}
           </button>
         </div>
       </aside>
@@ -223,7 +228,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
         ))}
       </nav>
 
-      <main className={isChat ? 'md:ml-56 pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen flex flex-col' : 'md:ml-56 pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen'}>
+      <main className={isChat ? (collapsed ? 'md:ml-14' : 'md:ml-56') + ' pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen flex flex-col' : (collapsed ? 'md:ml-14' : 'md:ml-56') + ' pt-14 md:pt-0 pb-20 md:pb-0 min-h-screen transition-all duration-200'}>
         {children}
       </main>
     </div>

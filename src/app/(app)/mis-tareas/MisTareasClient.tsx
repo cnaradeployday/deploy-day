@@ -2,6 +2,7 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback } from 'react'
 import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Download, Pencil, CheckCircle, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -77,7 +78,13 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters }
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
+          <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
+          <Link href="/tareas/nueva"
+            className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+            <Plus size={15}/> Nueva tarea
+          </Link>
+        </div>
           <p className="text-sm text-gray-400 mt-0.5">{tareas.length} tareas asignadas</p>
         </div>
         <button onClick={exportar}

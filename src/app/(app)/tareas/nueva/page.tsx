@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, X } from 'lucide-react'
 
+interface Colab { uid: string; hours: string }
+
 export default function NuevaTareaPage() {
   const router = useRouter()
   const params = useSearchParams()
@@ -12,13 +14,12 @@ export default function NuevaTareaPage() {
   const [error, setError] = useState('')
   const [proyectos, setProyectos] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
-  const [colaboradores, setColaboradores] = useState<string[]>([])
+  const [colaboradores, setColaboradores] = useState<Colab[]>([])
   const [form, setForm] = useState({
     project_id: params.get('proyecto') ?? '',
     title: '', description: '',
     priority: 'media', due_date: '',
-    direct_responsible_id: '',
-    estimated_hours: '',
+    direct_responsible_id: '', direct_hours: '',
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -28,49 +29,39 @@ export default function NuevaTareaPage() {
     sb.from('users').select('id, full_name').eq('is_active', true).order('full_name').then(({ data }) => setUsuarios(data ?? []))
   }, [])
 
-  function addColaborador(uid: string) {
-    if (!uid || colaboradores.includes(uid) || uid === form.direct_responsible_id) return
-    setColaboradores(prev => [...prev, uid])
-  }
+  const totalHoras = (parseFloat(form.direct_hours) || 0) + colaboradores.reduce((s, c) => s + (parseFloat(c.hours) || 0), 0)
 
-  function removeColaborador(uid: string) {
-    setColaboradores(prev => prev.filter(id => id !== uid))
+  function addColaborador(uid: string) {
+    if (!uid || colaboradores.find(c => c.uid === uid) || uid === form.direct_responsible_id) return
+    setColaboradores(prev => [...prev, { uid, hours: '' }])
   }
+  function removeColaborador(uid: string) { setColaboradores(prev => prev.filter(c => c.uid !== uid)) }
+  function setColabHours(uid: string, hours: string) { setColaboradores(prev => prev.map(c => c.uid === uid ? { ...c, hours } : c)) }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-
     const { data: task, error: err } = await supabase.from('tasks').insert({
-      project_id: form.project_id,
-      title: form.title,
-      description: form.description || null,
-      priority: form.priority,
-      due_date: form.due_date,
+      project_id: form.project_id, title: form.title,
+      description: form.description || null, priority: form.priority,
+      due_date: form.due_date || null,
       direct_responsible_id: form.direct_responsible_id || null,
-      estimated_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
-      direct_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
-      status: 'creado',
-      created_by: user?.id,
+      estimated_hours: totalHoras || null,
+      direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
+      status: 'creado', created_by: user?.id,
     }).select().single()
-
     if (err) { setError('Error: ' + err.message); setLoading(false); return }
-
     if (colaboradores.length > 0 && task) {
       await supabase.from('task_collaborators').insert(
-        colaboradores.map(uid => ({ task_id: task.id, user_id: uid }))
+        colaboradores.map(c => ({ task_id: task.id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
       )
     }
-
     router.push('/tareas')
   }
 
-  const availableColabs = usuarios.filter(u =>
-    u.id !== form.direct_responsible_id && !colaboradores.includes(u.id)
-  )
+  const availableColabs = usuarios.filter(u => u.id !== form.direct_responsible_id && !colaboradores.find(c => c.uid === u.id))
 
   return (
     <div className="p-6 max-w-xl mx-auto">
@@ -84,9 +75,7 @@ export default function NuevaTareaPage() {
           <select value={form.project_id} onChange={e => set('project_id', e.target.value)} required
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
             <option value="">Seleccionar proyecto</option>
-            {proyectos.map(p => (
-              <option key={p.id} value={p.id}>{(p.client as any)?.name} — {p.name}</option>
-            ))}
+            {proyectos.map(p => <option key={p.id} value={p.id}>{(p.client as any)?.name} — {p.name}</option>)}
           </select>
         </div>
         <div>
@@ -113,56 +102,64 @@ export default function NuevaTareaPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha límite *</label>
-            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} required
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Responsable directo</label>
-            <select value={form.direct_responsible_id} onChange={e => set('direct_responsible_id', e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-              <option value="">Sin asignar</option>
-              {usuarios.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Horas estimadas</label>
-            <input type="number" min="0" step="0.5" value={form.estimated_hours}
-              onChange={e => set('estimated_hours', e.target.value)} placeholder="8"
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Fecha límite</label>
+            <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Colaboradores adicionales</label>
-          {colaboradores.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {colaboradores.map(uid => {
-                const u = usuarios.find(x => x.id === uid)
-                return (
-                  <span key={uid} className="flex items-center gap-1.5 bg-[#E8F4FE] text-[#1B9BF0] text-xs px-2.5 py-1 rounded-full">
-                    {u?.full_name}
-                    <button type="button" onClick={() => removeColaborador(uid)}><X size={11}/></button>
-                  </span>
-                )
-              })}
+        {/* HORAS DESGLOSADAS */}
+        <div className="border border-gray-100 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">Estimación de horas</p>
+            {totalHoras > 0 && (
+              <span className="text-xs font-semibold text-[#1B9BF0] bg-blue-50 px-2.5 py-1 rounded-full">Total: {totalHoras}h</span>
+            )}
+          </div>
+          <div className="grid grid-cols-5 gap-1 px-1">
+            <span className="col-span-3 text-xs text-gray-400">Persona</span>
+            <span className="col-span-2 text-xs text-gray-400">Horas</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            <div className="col-span-3">
+              <select value={form.direct_responsible_id} onChange={e => set('direct_responsible_id', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                <option value="">Responsable — sin asignar</option>
+                {usuarios.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
             </div>
-          )}
-          <select onChange={e => { addColaborador(e.target.value); e.target.value = '' }} defaultValue=""
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            <div className="col-span-2">
+              <input type="number" min="0" step="0.5" value={form.direct_hours}
+                onChange={e => set('direct_hours', e.target.value)} placeholder="0"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            </div>
+          </div>
+          {colaboradores.map(c => {
+            const u = usuarios.find(x => x.id === c.uid)
+            return (
+              <div key={c.uid} className="grid grid-cols-5 gap-2 items-center">
+                <div className="col-span-3 flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl">
+                  <span className="text-sm text-gray-600 truncate flex-1">{u?.full_name ?? c.uid}</span>
+                  <button type="button" onClick={() => removeColaborador(c.uid)} className="text-gray-300 hover:text-red-400 shrink-0"><X size={12}/></button>
+                </div>
+                <div className="col-span-2">
+                  <input type="number" min="0" step="0.5" value={c.hours}
+                    onChange={e => setColabHours(c.uid, e.target.value)} placeholder="0"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+                </div>
+              </div>
+            )
+          })}
+          <select value="" onChange={e => { addColaborador(e.target.value); e.target.value = '' }}
+            className="w-full px-3 py-2 border border-dashed border-gray-200 rounded-xl text-sm text-gray-400 bg-white focus:outline-none">
             <option value="">+ Agregar colaborador</option>
             {availableColabs.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
           </select>
         </div>
 
         {error && <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">{error}</div>}
-
         <div className="flex gap-3 pt-2">
-          <Link href="/tareas" className="flex-1 text-center py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
-            Cancelar
-          </Link>
+          <Link href="/tareas" className="flex-1 text-center py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</Link>
           <button type="submit" disabled={loading}
             className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
             {loading ? 'Guardando...' : 'Crear tarea'}

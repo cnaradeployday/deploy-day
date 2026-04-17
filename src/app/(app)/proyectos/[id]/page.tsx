@@ -40,6 +40,13 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
     .eq('project_id', id)
     .order('desde', { ascending: true })
 
+  // Horas consumidas reales (time_entries de todas las tareas del proyecto)
+  const taskIds = (tareas ?? []).map(t => t.id)
+  const { data: timeEntries } = taskIds.length
+    ? await supabase.from('time_entries').select('task_id, hours_logged, entry_date').in('task_id', taskIds)
+    : { data: [] }
+  const totalConsumido = Math.round(((timeEntries ?? []).reduce((s, e) => s + e.hours_logged, 0)) * 10) / 10
+
   const { data: profile } = await supabase.auth.getUser()
     .then(({ data }) => supabase.from('users').select('role').eq('id', data.user?.id ?? '').single())
 
@@ -70,7 +77,7 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
         {[
           { label: 'Horas vendidas', value: proyecto.sold_hours + 'h' },
           { label: 'Horas estimadas', value: totalEstimado + 'h' },
-          { label: 'Disponibles', value: (proyecto.sold_hours - totalEstimado) + 'h' },
+          { label: 'Horas consumidas', value: totalConsumido + 'h' },
           { label: 'Tareas', value: tareas?.length ?? 0 },
         ].map(({ label, value }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
@@ -96,6 +103,8 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
           segmentos={segmentos ?? []}
           soldHours={proyecto.sold_hours}
           totalSegmentos={totalSegmentos}
+          timeEntries={timeEntries ?? []}
+          taskIds={taskIds}
         />
       )}
 
