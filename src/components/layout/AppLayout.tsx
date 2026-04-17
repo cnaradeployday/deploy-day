@@ -92,7 +92,15 @@ export default function AppLayout({ children, userRole, userName, userId, custom
   const [open, setOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
-  const visible = navItems.filter(i => i.roles.includes(userRole))
+  const canSeeItem = (item: { href: string; roles: string[] }) => {
+    if (item.roles.includes(userRole)) return true
+    if (customPermissions && customPermissions.length > 0) {
+      const key = item.href.replace('/', '').replace(/-/g, '_')
+      return customPermissions.includes(key)
+    }
+    return false
+  }
+  const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)
   const isChat = pathname === '/chat'
 
