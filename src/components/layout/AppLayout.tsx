@@ -16,6 +16,7 @@ const navItems = [
   { href: '/mis-tareas', label: 'Mis tareas', icon: Clock, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas', label: 'Mis horas', icon: Timer, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/chat', label: 'Chat', icon: MessageSquare, roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/resumen-mes', label: 'Resumen del mes', icon: BarChart3, roles: ['admin','gerente_operaciones'] },
   { href: '/reportes', label: 'Reportes', icon: BarChart3, roles: ['admin','gerente_operaciones'] },
   { href: '/solicitudes', label: 'Solicitudes', icon: AlertCircle, roles: ['admin','gerente_operaciones'] },
   { href: '/liquidaciones', label: 'Liquidaciones', icon: Receipt, roles: ['admin','gerente_operaciones','colaborador'] },
