@@ -3,11 +3,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Pencil } from 'lucide-react'
 
-const roleLabels: Record<string, string> = {
-  admin: 'Admin',
-  gerente_operaciones: 'Gerente de operaciones',
-  colaborador: 'Colaborador',
-}
 const roleColors: Record<string, string> = {
   admin: 'bg-purple-50 text-purple-600',
   gerente_operaciones: 'bg-blue-50 text-blue-600',
@@ -22,10 +17,21 @@ export default async function EquipoPage() {
 
   const { data: equipo } = await supabase
     .from('users')
-    .select('id, full_name, email, role, is_active, hourly_cost, currency')
+    .select('id, full_name, email, role, custom_role_id, is_active, hourly_cost, currency')
     .order('full_name')
 
+  const { data: customRoles } = await supabase
+    .from('roles').select('id, name').eq('is_system', false)
+
+  const rolesMap = Object.fromEntries((customRoles ?? []).map(r => [r.id, r.name]))
+
   const isAdmin = profile?.role === 'admin'
+
+  function getRoleLabel(m: any) {
+    if (m.custom_role_id && rolesMap[m.custom_role_id]) return rolesMap[m.custom_role_id]
+    const labels: Record<string, string> = { admin: 'Admin', gerente_operaciones: 'Gerente de operaciones', colaborador: 'Colaborador' }
+    return labels[m.role] ?? m.role
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -41,7 +47,6 @@ export default async function EquipoPage() {
           </Link>
         )}
       </div>
-
       <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
         {equipo?.map(m => (
           <div key={m.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
@@ -60,8 +65,8 @@ export default async function EquipoPage() {
                   {m.currency === 'USD' ? 'USD ' : '$'}{m.hourly_cost}/h
                 </span>
               )}
-              <span className={'text-xs px-2.5 py-1 rounded-full ' + roleColors[m.role]}>
-                {roleLabels[m.role]}
+              <span className={'text-xs px-2.5 py-1 rounded-full ' + (m.custom_role_id ? 'bg-amber-50 text-amber-600' : roleColors[m.role] ?? 'bg-gray-100 text-gray-500')}>
+                {getRoleLabel(m)}
               </span>
               <span className={'text-xs px-2.5 py-1 rounded-full ' + (m.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400')}>
                 {m.is_active ? 'Activo' : 'Inactivo'}

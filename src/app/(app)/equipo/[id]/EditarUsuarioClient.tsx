@@ -7,22 +7,15 @@ import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2 } from 'lucide-r
 import { CURRENCIES, Currency } from '@/lib/utils/currency'
 
 export default function EditarUsuarioClient({ miembro, historial, adminId, availability, customRoles }: {
-  miembro: any
-  historial: any[]
-  adminId: string
-  availability: any[]
-  customRoles: any[]
+  miembro: any; historial: any[]; adminId: string; availability: any[]; customRoles: any[]
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const initialRole = miembro.custom_role_id ? 'custom:' + miembro.custom_role_id : miembro.role ?? 'colaborador'
   const [form, setForm] = useState({
-    full_name: miembro.full_name ?? '',
-    email: miembro.email ?? '',
-    role: initialRole,
-    is_active: miembro.is_active ?? true,
-    banco: miembro.banco ?? '',
-    cbu: miembro.cbu ?? '',
+    full_name: miembro.full_name ?? '', email: miembro.email ?? '',
+    role: initialRole, is_active: miembro.is_active ?? true,
+    banco: miembro.banco ?? '', cbu: miembro.cbu ?? '',
     cuenta_nombre: miembro.cuenta_nombre ?? miembro.full_name ?? '',
   })
   const [rateForm, setRateForm] = useState({ hourly_cost: '', currency: (miembro.currency ?? 'ARS') as Currency })
@@ -36,14 +29,10 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
     const customRoleId = isCustom ? form.role.replace('custom:', '') : null
     const realRole = isCustom ? 'colaborador' : form.role
     const { error } = await createClient().from('users').update({
-      full_name: form.full_name,
-      email: form.email,
-      role: realRole,
-      custom_role_id: customRoleId,
-      is_active: form.is_active,
-      banco: form.banco,
-      cbu: form.cbu,
-      cuenta_nombre: form.cuenta_nombre,
+      full_name: form.full_name, email: form.email,
+      role: realRole, custom_role_id: customRoleId,
+      is_active: form.is_active, banco: form.banco,
+      cbu: form.cbu, cuenta_nombre: form.cuenta_nombre,
     }).eq('id', miembro.id)
     if (error) alert('Error: ' + error.message)
     else router.refresh()
@@ -62,8 +51,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
       currency: rateForm.currency, valid_from: hoy, mes: hoy.slice(0, 7), created_by: adminId,
     })
     setRateForm(f => ({ ...f, hourly_cost: '' }))
-    router.refresh()
-    setLoading(false)
+    router.refresh(); setLoading(false)
   }
 
   async function agregarDisponibilidad(e: React.FormEvent) {
@@ -75,8 +63,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
       horas: parseFloat(availForm.horas), notas: availForm.notas || null, created_by: adminId,
     })
     setAvailForm({ desde: '', hasta: '', horas: '', notas: '' })
-    router.refresh()
-    setLoading(false)
+    router.refresh(); setLoading(false)
   }
 
   async function eliminarDisponibilidad(id: string) {
