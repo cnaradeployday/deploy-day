@@ -15,12 +15,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-
-  // Si el usuario tiene custom_role_id, el select muestra 'custom:<id>'
-  const initialRole = miembro.custom_role_id
-    ? 'custom:' + miembro.custom_role_id
-    : miembro.role ?? 'colaborador'
-
+  const initialRole = miembro.custom_role_id ? 'custom:' + miembro.custom_role_id : miembro.role ?? 'colaborador'
   const [form, setForm] = useState({
     full_name: miembro.full_name ?? '',
     email: miembro.email ?? '',
@@ -94,7 +89,6 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
       <Link href="/equipo" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Equipo
       </Link>
-
       <div className="flex items-center gap-4 mb-6">
         <div className="w-12 h-12 rounded-full bg-[#E8F4FE] flex items-center justify-center text-lg font-semibold text-[#1B9BF0]">
           {miembro.full_name?.[0]?.toUpperCase()}
@@ -104,9 +98,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
           <p className="text-sm text-gray-400">{miembro.email}</p>
         </div>
       </div>
-
       <div className="space-y-4">
-        {/* Info personal */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <p className="text-sm font-semibold text-gray-700 mb-4">Información personal</p>
           <form onSubmit={guardarInfo} className="space-y-3">
@@ -173,7 +165,6 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
           </form>
         </div>
 
-        {/* Tarifa */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -214,7 +205,6 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
           )}
         </div>
 
-        {/* Disponibilidad */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
             <Calendar size={14} className="text-[#1B9BF0]"/> Disponibilidad de horas
