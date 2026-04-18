@@ -1,9 +1,10 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, FolderKanban, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, FolderKanban, ChevronUp, ChevronDown, Download } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import * as XLSX from 'xlsx'
 
 const serviceLabels: Record<string, string> = {
   marketing_digital: 'Marketing digital',
@@ -18,7 +19,7 @@ function formatDate(d: string | null) {
   return `${day}/${m}/${y}`
 }
 
-type SortKey = 'name' | 'cliente' | 'sold_hours' | 'start_date' | 'end_date' | 'is_active'
+type SortKey = 'name' | 'cliente' | 'service_type' | 'sold_hours' | 'start_date' | 'end_date' | 'is_active'
 
 export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelete }: {
   proyectos: any[]
@@ -47,10 +48,10 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
     if (filterTipo) list = list.filter(p => p.service_type === filterTipo)
     if (filterActivo === 'activo') list = list.filter(p => p.is_active)
     if (filterActivo === 'inactivo') list = list.filter(p => !p.is_active)
-
     list.sort((a, b) => {
       let av: any, bv: any
       if (sortKey === 'cliente') { av = (a.client as any)?.name ?? ''; bv = (b.client as any)?.name ?? '' }
+      else if (sortKey === 'service_type') { av = serviceLabels[a.service_type] ?? ''; bv = serviceLabels[b.service_type] ?? '' }
       else { av = a[sortKey] ?? ''; bv = b[sortKey] ?? '' }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
@@ -78,6 +79,22 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
     setDeletingId(null)
   }
 
+  function exportar() {
+    const data = filtered.map(p => ({
+      Proyecto: p.name,
+      Cliente: (p.client as any)?.name ?? '—',
+      'Tipo de servicio': serviceLabels[p.service_type] ?? p.service_type,
+      'Horas vendidas': p.sold_hours,
+      Inicio: formatDate(p.start_date),
+      Fin: formatDate(p.end_date),
+      Estado: p.is_active ? 'Activo' : 'Inactivo',
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Proyectos')
+    XLSX.writeFile(wb, 'proyectos.xlsx')
+  }
+
   function SortIcon({ k }: { k: SortKey }) {
     if (sortKey !== k) return <ChevronUp size={11} className="text-gray-300"/>
     return sortDir === 'asc' ? <ChevronUp size={11} className="text-[#1B9BF0]"/> : <ChevronDown size={11} className="text-[#1B9BF0]"/>
@@ -85,18 +102,33 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
 
   const hasFilters = filterBusqueda || filterCliente || filterTipo || filterActivo
 
+  const cols = [
+    { key: 'name' as SortKey,         label: 'Proyecto',          span: 'col-span-2' },
+    { key: 'cliente' as SortKey,       label: 'Cliente',           span: 'col-span-2' },
+    { key: 'service_type' as SortKey,  label: 'Tipo de servicio',  span: 'col-span-2' },
+    { key: 'sold_hours' as SortKey,    label: 'Horas',             span: 'col-span-1 text-right' },
+    { key: 'start_date' as SortKey,    label: 'Inicio',            span: 'col-span-1 text-center' },
+    { key: 'end_date' as SortKey,      label: 'Fin',               span: 'col-span-1 text-center' },
+    { key: 'is_active' as SortKey,     label: 'Estado',            span: 'col-span-1 text-center' },
+  ]
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Proyectos</h1>
           <p className="text-sm text-gray-400 mt-0.5">{filtered.length} de {proyectos.length} proyectos</p>
         </div>
-        <Link href="/proyectos/nuevo"
-          className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
-          <Plus size={15}/> Nuevo proyecto
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={exportar}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all">
+            <Download size={14}/> Excel
+          </button>
+          <Link href="/proyectos/nuevo"
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
+            <Plus size={15}/> Nuevo proyecto
+          </Link>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -142,7 +174,6 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
         )}
       </div>
 
-      {/* Tabla */}
       {!filtered.length ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
           <FolderKanban size={32} className="mx-auto mb-3 opacity-20"/>
@@ -150,18 +181,11 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          {/* Header de tabla */}
+          {/* Header */}
           <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 bg-gray-50 border-b border-gray-100">
-            {[
-              { key: 'name' as SortKey, label: 'Proyecto', cols: 'col-span-3' },
-              { key: 'cliente' as SortKey, label: 'Cliente', cols: 'col-span-2' },
-              { key: 'sold_hours' as SortKey, label: 'Horas', cols: 'col-span-1 text-right' },
-              { key: 'start_date' as SortKey, label: 'Inicio', cols: 'col-span-2 text-center' },
-              { key: 'end_date' as SortKey, label: 'Fin', cols: 'col-span-2 text-center' },
-              { key: 'is_active' as SortKey, label: 'Estado', cols: 'col-span-1 text-center' },
-            ].map(({ key, label, cols }) => (
+            {cols.map(({ key, label, span }) => (
               <button key={key} onClick={() => toggleSort(key)}
-                className={cols + ' flex items-center gap-1 hover:text-gray-600 transition-colors ' + (cols.includes('right') ? 'justify-end' : cols.includes('center') ? 'justify-center' : '')}>
+                className={span + ' flex items-center gap-1 hover:text-gray-600 transition-colors ' + (span.includes('right') ? 'justify-end' : span.includes('center') ? 'justify-center' : '')}>
                 {label} <SortIcon k={key}/>
               </button>
             ))}
@@ -171,16 +195,16 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
           {/* Filas */}
           {filtered.map(p => (
             <div key={p.id} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center transition-colors">
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <Link href={`/proyectos/${p.id}`} className="text-sm font-medium text-gray-900 hover:text-[#1B9BF0] transition-colors block truncate">
                   {p.name}
                 </Link>
-                <p className="text-xs text-gray-400">{serviceLabels[p.service_type] ?? p.service_type}</p>
               </div>
               <span className="col-span-2 text-sm text-gray-600 truncate">{(p.client as any)?.name ?? '—'}</span>
+              <span className="col-span-2 text-xs text-gray-500">{serviceLabels[p.service_type] ?? p.service_type}</span>
               <span className="col-span-1 text-sm font-semibold text-gray-900 text-right">{p.sold_hours}h</span>
-              <span className="col-span-2 text-xs text-gray-500 text-center">{formatDate(p.start_date)}</span>
-              <span className="col-span-2 text-xs text-gray-500 text-center">{formatDate(p.end_date)}</span>
+              <span className="col-span-1 text-xs text-gray-500 text-center">{formatDate(p.start_date)}</span>
+              <span className="col-span-1 text-xs text-gray-500 text-center">{formatDate(p.end_date)}</span>
               <div className="col-span-1 flex justify-center">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${p.is_active ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
                   {p.is_active ? 'Activo' : 'Inactivo'}
