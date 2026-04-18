@@ -94,7 +94,6 @@ export default function AppLayout({ children, userRole, userName, userId, custom
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
   const canSeeItem = (item: { href: string; roles: string[] }) => {
     if (item.roles.includes(userRole)) return true
     if (customPermissions && customPermissions.length > 0) {
