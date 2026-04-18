@@ -104,7 +104,7 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
           soldHours={proyecto.sold_hours}
           totalSegmentos={totalSegmentos}
           timeEntries={timeEntries ?? []}
-          taskIds={taskIds}
+          
         />
       )}
 
