@@ -128,6 +128,12 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   }, [tareas, selStatus, selPriority, selCliente, selProyecto, selResponsable, selMes])
 
   const sorted = [...filtered].sort((a, b) => {
+    // Columnas numéricas
+    if (sortKey === 'estimated_hours' || sortKey === 'hours_logged') {
+      const na = Number((a as any)[sortKey] ?? 0)
+      const nb = Number((b as any)[sortKey] ?? 0)
+      return sortDir === 'asc' ? na - nb : nb - na
+    }
     let va: string, vb: string
     if (sortKey === 'client') { va = a.project?.client?.name ?? ''; vb = b.project?.client?.name ?? '' }
     else if (sortKey === 'project') { va = a.project?.name ?? ''; vb = b.project?.name ?? '' }
