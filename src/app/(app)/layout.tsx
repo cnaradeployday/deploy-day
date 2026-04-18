@@ -13,17 +13,14 @@ export default async function Layout({ children }: { children: React.ReactNode }
     .eq('id', user.id)
     .single()
 
-  // Si tiene rol custom, traer sus permisos y el nombre del rol
-  let customRoleName: string | null = null
-  let customPermissions: string[] = []
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canSeeOnlineUsers = isAdmin
 
-  if (profile?.custom_role_id) {
-    const [{ data: roleData }, { data: perms }] = await Promise.all([
-      supabase.from('roles').select('name').eq('id', profile.custom_role_id).single(),
-      supabase.from('role_permissions').select('module, can_read').eq('role_id', profile.custom_role_id),
-    ])
-    customRoleName = roleData?.name ?? null
-    customPermissions = (perms ?? []).filter(p => p.can_read).map(p => p.module)
+  if (!canSeeOnlineUsers && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'online_users').single()
+    canSeeOnlineUsers = perm?.can_read ?? false
   }
 
   return (
@@ -31,8 +28,9 @@ export default async function Layout({ children }: { children: React.ReactNode }
       userRole={profile?.role ?? 'colaborador'}
       userName={profile?.full_name ?? ''}
       userId={user.id}
-      customRoleName={customRoleName}
-      customPermissions={customPermissions}
-    >{children}</AppLayout>
+      canSeeOnlineUsers={canSeeOnlineUsers}
+    >
+      {children}
+    </AppLayout>
   )
 }

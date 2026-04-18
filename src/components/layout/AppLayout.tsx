@@ -177,6 +177,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
           )}
         </nav>
         <div className={"border-t border-gray-50 flex items-center " + (collapsed ? "px-1 py-3 justify-center" : "px-4 py-3 justify-between")}>
+          {!collapsed && canSeeOnlineUsers && <OnlineUsers/>}
           {!collapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
           <button onClick={logout} title="Cerrar sesión" className={"flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 " + (collapsed ? "justify-center" : "")}>
             <LogOut size={13}/> {!collapsed && "Salir"}
@@ -187,7 +188,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
       <header className="md:hidden fixed top-0 inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-5 z-30">
         <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>
         <div className="flex items-center gap-3">
-          <OnlineUsers/>
+          {canSeeOnlineUsers && <OnlineUsers/>}
           <span className="text-xs text-gray-300">v{APP_VERSION}</span>
           <button onClick={() => setOpen(!open)} className="p-1 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
