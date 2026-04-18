@@ -1,9 +1,9 @@
 'use client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, Pencil, CheckCircle, X, Plus } from 'lucide-react'
+import { Download, Pencil, CheckCircle, X, Plus, ChevronUp, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -38,6 +38,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
+  const [sortKey, setSortKey] = useState('due_date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
@@ -60,8 +62,31 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
   const mes = filters.mes ?? mesActual
 
-  // KPIs usando MIS horas (my_assigned_hours), no el total de la tarea
-  const totalEstimadas = tareas.reduce((s, t) => s + (t.my_assigned_hours ?? t.estimated_hours ?? 0), 0)
+  function toggleSort(key: string) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const SortIcon = ({ k }: { k: string }) => {
+    if (sortKey !== k) return <ChevronUp size={11} className="opacity-20"/>
+    return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
+  }
+
+  // my_assigned_hours = direct_hours si soy responsable, assigned_hours si soy colaborador
+  const sorted = [...tareas].sort((a, b) => {
+    if (sortKey === 'my_assigned_hours' || sortKey === 'hours_logged') {
+      const na = Number(a[sortKey] ?? 0); const nb = Number(b[sortKey] ?? 0)
+      return sortDir === 'asc' ? na - nb : nb - na
+    }
+    let va = '', vb = ''
+    if (sortKey === 'client') { va = a.project?.client?.name ?? ''; vb = b.project?.client?.name ?? '' }
+    else if (sortKey === 'project') { va = a.project?.name ?? ''; vb = b.project?.name ?? '' }
+    else if (sortKey === 'responsible') { va = a.direct_responsible?.full_name ?? ''; vb = b.direct_responsible?.full_name ?? '' }
+    else { va = String(a[sortKey] ?? ''); vb = String(b[sortKey] ?? '') }
+    return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+  })
+
+  const totalEstimadas = tareas.reduce((s, t) => s + (t.my_assigned_hours ?? 0), 0)
   const totalUsadas = tareas.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
   const totalRestantes = totalEstimadas - totalUsadas
 
@@ -79,7 +104,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
       Proyecto: t.project?.name ?? '—',
       Estado: statusLabels[t.status] ?? t.status,
       Prioridad: t.priority,
-      'Mis horas est.': t.my_assigned_hours ?? t.estimated_hours ?? '—',
+      'Mis horas': t.my_assigned_hours ?? '—',
       'Horas usadas': t.hours_logged ?? 0,
       Vence: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
     }))
@@ -88,6 +113,20 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
     XLSX.utils.book_append_sheet(wb, ws, 'Mis tareas')
     XLSX.writeFile(wb, 'mis-tareas-' + mes + '.xlsx')
   }
+
+  const cols = [
+    { key: 'title',              label: 'Tarea' },
+    { key: 'es_colaborador',     label: 'Rol' },
+    { key: 'client',             label: 'Cliente' },
+    { key: 'project',            label: 'Proyecto' },
+    { key: 'responsible',        label: 'Responsable' },
+    { key: 'my_assigned_hours',  label: 'Est.' },
+    { key: 'hours_logged',       label: 'Usado' },
+    { key: 'due_date',           label: 'Vence' },
+    { key: 'priority',           label: 'Prioridad' },
+    { key: 'status',             label: 'Estado' },
+    { key: 'actions',            label: '' },
+  ]
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -117,8 +156,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[
           { label: 'Horas estimadas', value: Math.round(totalEstimadas * 10) / 10, color: 'text-gray-900' },
-          { label: 'Horas usadas', value: Math.round(totalUsadas * 10) / 10, color: 'text-[#1B9BF0]' },
-          { label: 'Restantes', value: Math.round(totalRestantes * 10) / 10, color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
+          { label: 'Horas usadas',    value: Math.round(totalUsadas * 10) / 10,    color: 'text-[#1B9BF0]' },
+          { label: 'Restantes',       value: Math.round(totalRestantes * 10) / 10,  color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
             <p className="text-xs text-gray-400">{label}</p>
@@ -179,18 +218,22 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-50">
-              {['Tarea','Rol','Cliente','Proyecto','Responsable','Est.','Usado','Vence','Prioridad','Estado',''].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">{h}</th>
+              {cols.map(({ key, label }) => (
+                <th key={key} onClick={() => key !== 'actions' && toggleSort(key)}
+                  className={'px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap ' + (key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : '')}>
+                  <div className="flex items-center gap-1">{label}{key !== 'actions' && <SortIcon k={key}/>}</div>
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {!tareas.length ? (
+            {!sorted.length ? (
               <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas en {nombreMes(mes)}</td></tr>
-            ) : tareas.map(t => {
+            ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
-              const myHours = t.my_assigned_hours ?? t.estimated_hours
-              const pct = myHours ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
+              // mis horas = my_assigned_hours (ya viene correcto del server)
+              const myHours = t.my_assigned_hours ?? 0
+              const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[160px] truncate">{t.title}</td>
@@ -199,10 +242,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                       {t.es_colaborador ? 'Colaborador' : 'Responsable'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.project?.client?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.project?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{myHours ? myHours+'h' : '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.project?.client?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.project?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.direct_responsible?.full_name ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
@@ -242,8 +285,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
       {/* Mobile */}
       <div className="md:hidden space-y-2">
-        {tareas.map(t => {
+        {sorted.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+          const myHours = t.my_assigned_hours ?? 0
           return (
             <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
               <div className="flex items-start justify-between mb-2">
@@ -259,7 +303,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
-                  <span>{t.hours_logged ?? 0}h{(t.my_assigned_hours ?? t.estimated_hours) ? '/'+(t.my_assigned_hours ?? t.estimated_hours)+'h' : ''}</span>
+                  <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Link href={'/tareas/' + t.id + '/editar'} className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
