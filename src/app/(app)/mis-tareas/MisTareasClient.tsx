@@ -34,10 +34,22 @@ interface Props {
   proyectos: { value: string; label: string }[]
   clientes: { value: string; label: string }[]
   filters: Record<string, string | undefined>
+  mesActual: string
 }
 
-export default function MisTareasClient({ tareas, proyectos, clientes, filters }: Props) {
+export default function MisTareasClient({ tareas, proyectos, clientes, filters, mesActual }: Props) {
   const router = useRouter()
+
+  const meses: string[] = []
+  const now = new Date()
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    meses.push(d.toISOString().slice(0, 7))
+  }
+  function nombreMes(m: string) {
+    return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
+  }
+
   const pathname = usePathname()
   const params = useSearchParams()
 
@@ -49,7 +61,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters }
   }, [params, pathname, router])
 
   const clear = () => router.push(pathname)
-  const hasFilters = Object.values(filters).some(Boolean)
+  const hasFilters = Object.values(filters).some(v => v && v !== filters.mes)
+  const totalEstimadas = tareas.reduce((s, t) => s + ((t as any).my_assigned_hours ?? (t as any).estimated_hours ?? 0), 0)
+  const totalUsadas = tareas.reduce((s, t) => s + ((t as any).hours_logged ?? 0), 0)
 
   async function advance(taskId: string, status: string) {
     if (!nextStatus[status]) return
@@ -78,12 +92,36 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters }
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
-          <Link href="/tareas/nueva"
-            className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
-            <Plus size={15}/> Nueva tarea
-          </Link>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
+            <p className="text-sm text-gray-400 mt-0.5 capitalize">{nombreMes(filters.mes ?? mesActual)} · {tareas.length} tarea{tareas.length !== 1 ? 's' : ''}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={filters.mes ?? mesActual}
+              onChange={e => update('mes', e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white capitalize">
+              {meses.map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
+            </select>
+            <Link href="/tareas/nueva"
+              className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+              <Plus size={15}/> Nueva tarea
+            </Link>
+          </div>
+        </div>
+
+        {/* Totales del mes */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {[
+            { label: 'Horas estimadas', value: totalEstimadas, color: 'text-gray-900' },
+            { label: 'Horas usadas', value: Math.round(totalUsadas * 10) / 10, color: 'text-[#1B9BF0]' },
+            { label: 'Restantes', value: Math.round((totalEstimadas - totalUsadas) * 10) / 10, color: totalEstimadas - totalUsadas < 0 ? 'text-red-500' : 'text-green-600' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+              <p className="text-xs text-gray-400">{label}</p>
+              <p className={'text-xl font-bold mt-0.5 ' + color}>{value}h</p>
+            </div>
+          ))}
         </div>
           <p className="text-sm text-gray-400 mt-0.5">{tareas.length} tareas asignadas</p>
         </div>

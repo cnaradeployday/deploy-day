@@ -7,14 +7,24 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams
   const { status, priority, proyecto, cliente } = sp
 
+  const mesActual = new Date().toISOString().slice(0, 7)
+  const mes = sp.mes ?? mesActual
+  const [anio, mesNum] = mes.split('-').map(Number)
+  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
+  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+
+  // Tareas donde soy responsable directo filtradas por mes (due_date en el mes)
   const { data: directas } = await supabase
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours, direct_hours,
       project:projects(id, name, client:clients(id, name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)`)
     .eq('direct_responsible_id', user?.id)
+    .gte('due_date', primerDia)
+    .lte('due_date', ultimoDia)
     .order('due_date', { ascending: true })
 
+  // Tareas donde soy colaborador filtradas por mes
   const { data: colaboraciones } = await supabase
     .from('task_collaborators')
     .select(`assigned_hours, task:tasks(id, title, status, priority, due_date, estimated_hours,
@@ -25,6 +35,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const colabTasks = (colaboraciones ?? [])
     .map((c: any) => c.task ? { ...c.task, my_assigned_hours: c.assigned_hours } : null)
     .filter(Boolean)
+    .filter((t: any) => t.due_date >= primerDia && t.due_date <= ultimoDia)
 
   const directasMapped = (directas ?? []).map(t => ({
     ...t,
@@ -67,7 +78,8 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       tareas={tareasConHoras}
       proyectos={proyectosUnicos}
       clientes={clientesUnicos}
-      filters={{ status, priority, proyecto, cliente }}
+      filters={{ status, priority, proyecto, cliente, mes }}
+      mesActual={mesActual}
     />
   )
 }
