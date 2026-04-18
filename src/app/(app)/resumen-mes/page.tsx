@@ -50,18 +50,19 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     : { data: [] }
 
   // Tareas del mes con horas estimadas
-  // Solo tareas que vencen dentro del mes (para que estimated_hours sea del mes, no del proyecto completo)
-  const { data: tareas } = proyectoIds.length
+  // Tareas que vencen dentro del mes seleccionado
+  const { data: tareasRaw } = proyectoIds.length
     ? await supabase
         .from('tasks')
-        .select('id, estimated_hours, project_id, due_date')
+        .select('id, estimated_hours, direct_hours, project_id, due_date')
         .in('project_id', proyectoIds)
         .gte('due_date', primerDia)
         .lte('due_date', ultimoDia)
     : { data: [] }
+  const tareas = tareasRaw ?? []
 
   // Time entries del mes (horas consumidas)
-  const taskIds = (tareas ?? []).map(t => t.id)
+  const taskIds = tareas.map(t => t.id)
   const { data: entries } = taskIds.length
     ? await supabase.from('time_entries').select('task_id, hours_logged')
         .in('task_id', taskIds)
@@ -83,7 +84,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   // Horas estimadas por proyecto
   const horasEstimadasPorProyecto: Record<string, number> = {}
-  ;(tareas ?? []).forEach(t => {
+  ;tareas.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)
   })
 
@@ -93,7 +94,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     consumidoPorTask[e.task_id] = (consumidoPorTask[e.task_id] ?? 0) + e.hours_logged
   })
   const consumidoPorProyecto: Record<string, number> = {}
-  ;(tareas ?? []).forEach(t => {
+  ;tareas.forEach(t => {
     consumidoPorProyecto[t.project_id] = (consumidoPorProyecto[t.project_id] ?? 0) + (consumidoPorTask[t.id] ?? 0)
   })
 
