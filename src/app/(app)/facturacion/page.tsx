@@ -60,18 +60,18 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
   const horasPorProyecto: Record<string, number> = {}
   ;(segmentos ?? []).forEach(s => { horasPorProyecto[s.project_id] = (horasPorProyecto[s.project_id] ?? 0) + s.horas })
 
-  // Horas ejecutadas por proyecto en el mes
+  // Horas ejecutadas (time_entries del mes) y costo por proyecto
   const horasEjecutadasPorProyecto: Record<string, number> = {}
-  ;(entries ?? []).forEach(e => {
-    const proyId = taskProyecto[e.task_id]
-    if (!proyId) return
-    horasEjecutadasPorProyecto[proyId] = (horasEjecutadasPorProyecto[proyId] ?? 0) + e.hours_logged
-  })
-
   const costoUSDPorProyecto: Record<string, number> = {}
+
   ;(entries ?? []).forEach(e => {
     const proyId = taskProyecto[e.task_id]
     if (!proyId) return
+
+    // Horas ejecutadas
+    horasEjecutadasPorProyecto[proyId] = (horasEjecutadasPorProyecto[proyId] ?? 0) + e.hours_logged
+
+    // Costo
     const u = userMap[e.user_id]
     if (!u || !u.hourly_cost) return
     const costoUSD = u.currency === 'USD' ? e.hours_logged * u.hourly_cost
@@ -84,8 +84,10 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
     const cId = (p.client as any)?.id ?? 'sin-cliente'
     const cNombre = (p.client as any)?.name ?? '—'
     const horasVendidas = horasPorProyecto[p.id] ?? 0
+    const horasEjecutadas = Math.round((horasEjecutadasPorProyecto[p.id] ?? 0) * 10) / 10
     const precioHora = p.price_per_hour ?? null
     const moneda = p.currency ?? 'USD'
+
     let facturacionUSD: number | null = null
     let facturacionARS: number | null = null
     if (precioHora && precioHora > 0) {
@@ -97,15 +99,19 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
         facturacionUSD = tipoCambio ? Math.round((facturacionARS / tipoCambio) * 100) / 100 : null
       }
     }
-    const horasEjecutadas = Math.round((horasEjecutadasPorProyecto[p.id] ?? 0) * 10) / 10
+
     const costoUSD = Math.round((costoUSDPorProyecto[p.id] ?? 0) * 100) / 100
     const costoARS = tipoCambio ? Math.round(costoUSD * tipoCambio) : null
     const rentabilidadUSD = facturacionUSD !== null ? Math.round((facturacionUSD - costoUSD) * 100) / 100 : null
     const rentabilidadARS = facturacionARS !== null && costoARS !== null ? Math.round(facturacionARS - costoARS) : null
     const margen = facturacionUSD && facturacionUSD > 0 && rentabilidadUSD !== null
       ? Math.round((rentabilidadUSD / facturacionUSD) * 100) : null
+
     if (!clienteMap[cId]) clienteMap[cId] = { clienteId: cId, clienteNombre: cNombre, proyectos: [] }
-    clienteMap[cId].proyectos.push({ id: p.id, nombre: p.name, horasVendidas, precioHora, moneda, facturacionARS, facturacionUSD, costoUSD, costoARS, rentabilidadUSD, rentabilidadARS, margen })
+    clienteMap[cId].proyectos.push({
+      id: p.id, nombre: p.name, horasVendidas, horasEjecutadas, precioHora, moneda,
+      facturacionARS, facturacionUSD, costoUSD, costoARS, rentabilidadUSD, rentabilidadARS, margen
+    })
   })
 
   const filas = Object.values(clienteMap).sort((a: any, b: any) => a.clienteNombre.localeCompare(b.clienteNombre))
