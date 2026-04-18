@@ -51,7 +51,7 @@ function MultiSelect({ label, options, selected, onChange }: {
   )
 }
 
-type SortKey = 'nombre' | 'cliente' | 'servicio' | 'horasMes' | 'soldHours' | 'precioHora' | 'startDate' | 'endDate'
+type SortKey = 'nombre' | 'cliente' | 'servicio' | 'horasMes' | 'soldHours' | 'startDate' | 'endDate'
 
 export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: {
   filas: any[]; clientes: any[]; mes: string; mesActual: string
@@ -62,7 +62,6 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: 
   const [selCliente, setSelCliente] = useState<string[]>([])
   const [selServicio, setSelServicio] = useState<string[]>([])
   const [selActivo, setSelActivo] = useState<string[]>([])
-  const [selMoneda, setSelMoneda] = useState<string[]>([])
 
   const meses: string[] = []
   const now = new Date()
@@ -81,29 +80,25 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: 
     if (selCliente.length) list = list.filter(f => selCliente.includes(f.clienteId))
     if (selServicio.length) list = list.filter(f => selServicio.includes(f.servicio))
     if (selActivo.length) list = list.filter(f => selActivo.includes(f.isActive ? 'activo' : 'inactivo'))
-    if (selMoneda.length) list = list.filter(f => selMoneda.includes(f.moneda))
     list.sort((a, b) => {
-      const numKeys = ['horasMes', 'soldHours', 'precioHora']
-      if (numKeys.includes(sortKey)) {
-        const na = Number(a[sortKey] ?? 0), nb = Number(b[sortKey] ?? 0)
-        return sortDir === 'asc' ? na - nb : nb - na
+      if (['horasMes','soldHours'].includes(sortKey)) {
+        return sortDir === 'asc' ? (a[sortKey]??0) - (b[sortKey]??0) : (b[sortKey]??0) - (a[sortKey]??0)
       }
       const va = String(a[sortKey] ?? ''), vb = String(b[sortKey] ?? '')
       return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
     })
     return list
-  }, [filas, selCliente, selServicio, selActivo, selMoneda, sortKey, sortDir])
+  }, [filas, selCliente, selServicio, selActivo, sortKey, sortDir])
 
-  const hasFilters = selCliente.length || selServicio.length || selActivo.length || selMoneda.length
-
-  function clearFilters() { setSelCliente([]); setSelServicio([]); setSelActivo([]); setSelMoneda([]) }
+  const totalHorasMes = Math.round(filtered.reduce((s, f) => s + (f.horasMes ?? 0), 0) * 10) / 10
+  const totalSoldHours = filtered.reduce((s, f) => s + (f.soldHours ?? 0), 0)
+  const hasFilters = selCliente.length || selServicio.length || selActivo.length
 
   function exportar() {
     const data = filtered.map(f => ({
       Mes: nombreMes(mes), Cliente: f.cliente, Proyecto: f.nombre,
       Servicio: serviceLabels[f.servicio] ?? f.servicio,
-      'Horas del mes': f.horasMes, 'Horas totales': f.soldHours,
-      'Precio/hora': f.precioHora ?? '—', Moneda: f.moneda,
+      'Horas del mes': f.horasMes, 'Horas vendidas totales': f.soldHours,
       Inicio: formatDate(f.startDate), Fin: formatDate(f.endDate),
       Estado: f.isActive ? 'Activo' : 'Inactivo',
     }))
@@ -118,26 +113,14 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: 
     return sortDir === 'asc' ? <ChevronUp size={11} className="text-[#1B9BF0]"/> : <ChevronDown size={11} className="text-[#1B9BF0]"/>
   }
 
-  const cols: { key: SortKey; label: string; span: string }[] = [
-    { key: 'nombre',    label: 'Proyecto',        span: 'col-span-2' },
-    { key: 'cliente',   label: 'Cliente',          span: 'col-span-2' },
-    { key: 'servicio',  label: 'Tipo de servicio', span: 'col-span-2' },
-    { key: 'horasMes',  label: 'Horas del mes',    span: 'col-span-1 text-right' },
-    { key: 'soldHours', label: 'Horas totales',    span: 'col-span-1 text-right' },
-    { key: 'precioHora',label: 'Precio/h',         span: 'col-span-1 text-right' },
-    { key: 'startDate', label: 'Inicio',           span: 'col-span-1 text-center' },
-    { key: 'endDate',   label: 'Fin',              span: 'col-span-1 text-center' },
-  ]
-
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <FolderKanban size={18} className="text-[#1B9BF0]"/> Proyectos del mes
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5 capitalize">{nombreMes(mes)} · {filtered.length} de {filas.length} proyectos</p>
+          <p className="text-sm text-gray-400 mt-0.5 capitalize">{nombreMes(mes)} · {filtered.length} proyectos</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={mes} onChange={e => router.push('/proyectos-mes?mes=' + e.target.value)}
@@ -151,23 +134,35 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: 
         </div>
       </div>
 
-      {/* Filtros multi */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MultiSelect label="Cliente" options={clientes.map(c => ({ value: c.id, label: c.name }))} selected={selCliente} onChange={setSelCliente}/>
-          <MultiSelect label="Tipo de servicio" options={Object.entries(serviceLabels).map(([k,v]) => ({ value: k, label: v }))} selected={selServicio} onChange={setSelServicio}/>
-          <MultiSelect label="Estado" options={[{ value: 'activo', label: 'Activo' }, { value: 'inactivo', label: 'Inactivo' }]} selected={selActivo} onChange={setSelActivo}/>
-          <MultiSelect label="Moneda" options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }]} selected={selMoneda} onChange={setSelMoneda}/>
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
+          <p className="text-xs text-gray-400 mb-1">Proyectos activos</p>
+          <p className="text-2xl font-bold text-gray-900">{filtered.length}</p>
         </div>
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-          <span className="text-xs text-gray-400">{filtered.length} de {filas.length} proyectos</span>
-          {hasFilters && (
-            <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600">Limpiar filtros</button>
-          )}
+        <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
+          <p className="text-xs text-gray-400 mb-1">Horas vendidas en el mes</p>
+          <p className="text-2xl font-bold text-[#1B9BF0]">{totalHorasMes}h</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
+          <p className="text-xs text-gray-400 mb-1">Horas vendidas totales</p>
+          <p className="text-2xl font-bold text-gray-900">{totalSoldHours}h</p>
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* Filtros */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
+        <div className="grid grid-cols-3 gap-3">
+          <MultiSelect label="Cliente" options={clientes.map((c: any) => ({ value: c.id, label: c.name }))} selected={selCliente} onChange={setSelCliente}/>
+          <MultiSelect label="Tipo de servicio" options={Object.entries(serviceLabels).map(([k,v]) => ({ value: k, label: v }))} selected={selServicio} onChange={setSelServicio}/>
+          <MultiSelect label="Estado" options={[{ value: 'activo', label: 'Activo' }, { value: 'inactivo', label: 'Inactivo' }]} selected={selActivo} onChange={setSelActivo}/>
+        </div>
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+          <span className="text-xs text-gray-400">{filtered.length} de {filas.length} proyectos</span>
+          {hasFilters && <button onClick={() => { setSelCliente([]); setSelServicio([]); setSelActivo([]) }} className="text-xs text-gray-400 hover:text-gray-600">Limpiar filtros</button>}
+        </div>
+      </div>
+
       {!filtered.length ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
           <FolderKanban size={32} className="mx-auto mb-3 opacity-20"/>
@@ -175,40 +170,44 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: 
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-11 px-5 py-3 text-xs font-medium text-gray-400 bg-gray-50 border-b border-gray-100">
-            {cols.map(({ key, label, span }) => (
+          {/* Header */}
+          <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 bg-gray-50 border-b border-gray-100">
+            {([
+              { key: 'nombre',    label: 'Proyecto',          span: 'col-span-3' },
+              { key: 'cliente',   label: 'Cliente',           span: 'col-span-2' },
+              { key: 'servicio',  label: 'Tipo de servicio',  span: 'col-span-2' },
+              { key: 'horasMes',  label: 'Horas del mes',     span: 'col-span-2 text-right' },
+              { key: 'soldHours', label: 'Horas vendidas',    span: 'col-span-1 text-right' },
+              { key: 'startDate', label: 'Inicio',            span: 'col-span-1 text-center' },
+              { key: 'endDate',   label: 'Fin',               span: 'col-span-1 text-center' },
+            ] as {key: SortKey, label: string, span: string}[]).map(({ key, label, span }) => (
               <button key={key} onClick={() => toggleSort(key)}
-                className={span + ' flex items-center gap-1 hover:text-gray-600 transition-colors ' + (span.includes('right') ? 'justify-end' : span.includes('center') ? 'justify-center' : '')}>
+                className={span + ' flex items-center gap-1 hover:text-gray-600 ' + (span.includes('right') ? 'justify-end' : span.includes('center') ? 'justify-center' : '')}>
                 {label} <SortIcon k={key}/>
               </button>
             ))}
           </div>
+
           {filtered.map(f => (
-            <div key={f.id} className="grid grid-cols-11 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center transition-colors">
-              <div className="col-span-2">
+            <div key={f.id} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
+              <div className="col-span-3">
                 <p className="text-sm font-medium text-gray-900 truncate">{f.nombre}</p>
+                <span className={`text-xs ${f.isActive ? 'text-green-600' : 'text-gray-400'}`}>{f.isActive ? 'Activo' : 'Inactivo'}</span>
               </div>
               <span className="col-span-2 text-sm text-gray-600 truncate">{f.cliente}</span>
               <span className="col-span-2 text-xs text-gray-500">{serviceLabels[f.servicio] ?? f.servicio}</span>
-              <span className="col-span-1 text-sm font-bold text-[#1B9BF0] text-right">{f.horasMes}h</span>
+              <span className="col-span-2 text-sm font-bold text-[#1B9BF0] text-right">{f.horasMes}h</span>
               <span className="col-span-1 text-sm text-gray-700 text-right">{f.soldHours}h</span>
-              <span className="col-span-1 text-xs text-gray-500 text-right">
-                {f.precioHora ? `${f.moneda === 'USD' ? 'U$D' : '$'} ${f.precioHora}` : '—'}
-              </span>
               <span className="col-span-1 text-xs text-gray-500 text-center">{formatDate(f.startDate)}</span>
               <span className="col-span-1 text-xs text-gray-500 text-center">{formatDate(f.endDate)}</span>
             </div>
           ))}
-          {/* Total */}
-          <div className="grid grid-cols-11 px-5 py-3 bg-gray-50 border-t border-gray-100">
-            <span className="col-span-6 text-sm font-bold text-gray-700">Total</span>
-            <span className="col-span-1 text-sm font-bold text-[#1B9BF0] text-right">
-              {Math.round(filtered.reduce((s, f) => s + f.horasMes, 0) * 10) / 10}h
-            </span>
-            <span className="col-span-1 text-sm font-bold text-gray-900 text-right">
-              {filtered.reduce((s, f) => s + f.soldHours, 0)}h
-            </span>
-            <span className="col-span-3"/>
+
+          <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-t border-gray-100">
+            <span className="col-span-7 text-sm font-bold text-gray-700">Total</span>
+            <span className="col-span-2 text-sm font-bold text-[#1B9BF0] text-right">{totalHorasMes}h</span>
+            <span className="col-span-1 text-sm font-bold text-gray-900 text-right">{totalSoldHours}h</span>
+            <span className="col-span-2"/>
           </div>
         </div>
       )}
