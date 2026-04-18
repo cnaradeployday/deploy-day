@@ -10,7 +10,7 @@ function fmtARS(n: number | null) { if (n === null) return '—'; return '$' + M
 const margenColor = (m: number | null) => m === null ? 'text-gray-400' : m >= 50 ? 'text-green-600 font-bold' : m >= 25 ? 'text-amber-500 font-semibold' : 'text-red-500 font-bold'
 
 export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, fechaCotiz,
-  totalHoras, totalUSD, totalARS, totalCostoUSD, totalRentabilidadUSD, totalMargen }: {
+  totalHoras, totalEjecutadas, totalUSD, totalARS, totalCostoUSD, totalRentabilidadUSD, totalMargen }: {
   filas: any[]; mes: string; mesActual: string
   tipoCambio: number | null; fechaCotiz: string | null
   totalHoras: number; totalEjecutadas: number; totalUSD: number; totalARS: number
