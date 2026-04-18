@@ -21,7 +21,6 @@ const navItems = [
   { href: '/solicitudes', label: 'Solicitudes', icon: AlertCircle, roles: ['admin','gerente_operaciones'] },
   { href: '/facturacion', label: 'Facturación', icon: Receipt, roles: ['admin'] },
   { href: '/facturacion', label: 'Facturación', icon: Receipt, roles: ['admin'] },
-  { href: '/facturacion', label: 'Facturación', icon: Receipt, roles: ['admin'] },
   { href: '/liquidaciones', label: 'Liquidaciones', icon: Receipt, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/facturas-clientes', label: 'Facturas clientes', icon: FileText, roles: ['admin'] },
   { href: '/cotizaciones', label: 'Cotizaciones USD', icon: TrendingUp, roles: ['admin'] },
