@@ -6,12 +6,13 @@ import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, Us
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 
-const APP_VERSION = '1.2.0'
+const APP_VERSION = '1.3.0'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/clientes', label: 'Clientes', icon: Users, roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos', label: 'Proyectos', icon: FolderKanban, roles: ['admin','gerente_operaciones'] },
+  { href: '/proyectos-mes', label: 'Proyectos del mes', icon: FolderKanban, roles: ['admin','gerente_operaciones'] },
   { href: '/tareas', label: 'Tareas', icon: CheckSquare, roles: ['admin','gerente_operaciones'] },
   { href: '/mis-tareas', label: 'Mis tareas', icon: Clock, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas', label: 'Mis horas', icon: Timer, roles: ['admin','gerente_operaciones','colaborador'] },
