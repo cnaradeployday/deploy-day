@@ -6,6 +6,7 @@ const MODULES = [
   { key: 'dashboard',              label: 'Dashboard' },
   { key: 'clientes',               label: 'Clientes' },
   { key: 'proyectos',              label: 'Proyectos' },
+  { key: 'proyectos_mes',  label: 'Proyectos del mes' },
   { key: 'tareas',                 label: 'Tareas' },
   { key: 'mis_tareas',             label: 'Mis tareas' },
   { key: 'mis_horas',              label: 'Mis horas' },
@@ -15,11 +16,13 @@ const MODULES = [
   { key: 'reportes_ocupacion',     label: 'Reportes — Ocupación' },
   { key: 'reportes_rentabilidad',  label: 'Reportes — Rentabilidad' },
   { key: 'solicitudes',            label: 'Solicitudes de horas' },
+  { key: 'facturacion',    label: 'Facturación' },
   { key: 'liquidaciones',          label: 'Liquidaciones' },
   { key: 'facturas_clientes',      label: 'Facturas clientes' },
   { key: 'cotizaciones',           label: 'Cotizaciones USD' },
   { key: 'equipo',                 label: 'Equipo' },
   { key: 'roles',                  label: 'Roles y permisos' },
+  { key: 'online_users',  label: 'Ver usuarios online' },
 ]
 
 export default async function RolesPage() {
