@@ -77,13 +77,14 @@ interface Tarea {
   project: any; direct_responsible: any
 }
 
-export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [] }: {
+export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: {
   tareas: Tarea[]
   clientes: { value: string; label: string }[]
   proyectos: { value: string; label: string }[]
   usuarios: { value: string; label: string }[]
   filters: Record<string, string | undefined>
   hideColumns?: string[]
+  totalVendidas?: number
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -179,9 +180,10 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   return (
     <div>
       {/* Contadores */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-4 gap-3 mb-4">
         {[
-          { label: 'Horas estimadas', value: Math.round(totalEstimadas * 10) / 10, color: 'text-gray-900' },
+          { label: 'Horas vendidas', value: Math.round(totalVendidas * 10) / 10, color: 'text-gray-900' },
+          { label: 'Horas estimadas', value: Math.round(totalEstimadas * 10) / 10, color: 'text-gray-700' },
           { label: 'Horas usadas', value: Math.round(totalUsadas * 10) / 10, color: 'text-[#1B9BF0]' },
           { label: 'Restantes', value: Math.round(totalRestantes * 10) / 10, color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
         ].map(({ label, value, color }) => (

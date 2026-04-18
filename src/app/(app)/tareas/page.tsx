@@ -36,6 +36,18 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
 
   const { data: tareas } = await query
 
+  // Horas vendidas del mes (segmentos que intersectan el mes)
+  const mesParaHoras = mes
+  const [hy, hm] = (mesParaHoras ?? new Date().toISOString().slice(0,7)).split('-').map(Number)
+  const hDesde = new Date(hy, hm - 1, 1).toISOString().split('T')[0]
+  const hHasta = new Date(hy, hm, 0).toISOString().split('T')[0]
+  const { data: segmentosMes } = await supabase
+    .from('project_hour_segments')
+    .select('horas')
+    .lte('desde', hHasta)
+    .gte('hasta', hDesde)
+  const totalVendidas = (segmentosMes ?? []).reduce((s, seg) => s + seg.horas, 0)
+
   const taskIds = tareas?.map(t => t.id) ?? []
   const { data: timeEntries } = taskIds.length
     ? await supabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
@@ -67,7 +79,9 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
           <Plus size={15}/> Nueva tarea
         </Link>
       </div>
+      {/* @ts-ignore */}
       <TareasTable
+        totalVendidas={totalVendidas}
         tareas={tareasConHoras}
         clientes={clientes?.map(c => ({ value: c.id, label: c.name })) ?? []}
         proyectos={proyectosFiltrados?.map(p => ({ value: p.id, label: p.name })) ?? []}
