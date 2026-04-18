@@ -5,16 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, Calendar, Check } from 'lucide-react'
 
 interface Segmento { desde: string; hasta: string; horas: string; notas: string }
-const EMPTY: Segmento = { desde: '', hasta: '', horas: '', notas: '' }
 
-// Fix timezone: parse YYYY-MM-DD without converting to UTC
 function formatDate(dateStr: string) {
   if (!dateStr) return ''
   const [year, month, day] = dateStr.split('-')
   return `${day}/${month}/${year}`
 }
 
-// Default dates for current year
 const now = new Date()
 const DEFAULT_DESDE = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 const DEFAULT_HASTA = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`
@@ -28,15 +25,6 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
   taskIds?: string[]
 }) {
   const router = useRouter()
-
-  function horasConsumidasEnSegmento(desde: string, hasta: string) {
-    if (!timeEntries?.length) return 0
-    return Math.round(
-      timeEntries
-        .filter(e => e.entry_date >= desde && e.entry_date <= hasta)
-        .reduce((s, e) => s + e.hours_logged, 0) * 10
-    ) / 10
-  }
   const [pendientes, setPendientes] = useState<Segmento[]>([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }])
   const [saving, setSaving] = useState(false)
 
@@ -53,7 +41,10 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
   }
 
   function quitarFila(i: number) {
-    if (pendientes.length === 1) { setPendientes([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }]); return }
+    if (pendientes.length === 1) {
+      setPendientes([{ desde: DEFAULT_DESDE, hasta: DEFAULT_HASTA, horas: '', notas: '' }])
+      return
+    }
     setPendientes(prev => prev.filter((_, idx) => idx !== i))
   }
 
@@ -70,7 +61,7 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
     await createClient().from('project_hour_segments').insert(
       validos.map(s => ({
         project_id: projectId,
-        desde: s.desde,   // stored as YYYY-MM-DD string, no Date conversion
+        desde: s.desde,
         hasta: s.hasta,
         horas: parseFloat(s.horas),
         notas: s.notas || null,
@@ -84,6 +75,15 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
   async function eliminar(id: string) {
     await createClient().from('project_hour_segments').delete().eq('id', id)
     router.refresh()
+  }
+
+  function horasConsumidasEnSegmento(desde: string, hasta: string) {
+    if (!timeEntries?.length) return 0
+    return Math.round(
+      timeEntries
+        .filter(e => e.entry_date >= desde && e.entry_date <= hasta)
+        .reduce((s, e) => s + e.hours_logged, 0) * 10
+    ) / 10
   }
 
   return (
@@ -108,9 +108,8 @@ export default function ProyectoSegmentos({ projectId, segmentos, soldHours, tot
         {pendientes.map((seg, i) => (
           <div key={i} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-gray-500">Segmento {i + 1}</span>
-              <button type="button" onClick={() => quitarFila(i)}
-                className="text-gray-300 hover:text-red-400 transition-all">
+              <span className="text-xs font-medium text-gray-500">Segmento {totalSegmentos > 0 ? totalSegmentos + i + 1 : i + 1}</span>
+              <button type="button" onClick={() => quitarFila(i)} className="text-gray-300 hover:text-red-400 transition-all">
                 <Trash2 size={13}/>
               </button>
             </div>
