@@ -54,7 +54,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const { data: tareasRaw } = proyectoIds.length
     ? await supabase
         .from('tasks')
-        .select('id, estimated_hours, direct_hours, project_id, due_date')
+        .select('id, estimated_hours, project_id, due_date')
         .in('project_id', proyectoIds)
         .gte('due_date', primerDia)
         .lte('due_date', ultimoDia)

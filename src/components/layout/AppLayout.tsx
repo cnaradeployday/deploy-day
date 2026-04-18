@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 
@@ -94,6 +94,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const canSeeItem = (item: { href: string; roles: string[] }) => {
     if (item.roles.includes(userRole)) return true
     if (customPermissions && customPermissions.length > 0) {
@@ -130,9 +131,15 @@ export default function AppLayout({ children, userRole, userName, userId, custom
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
-      <aside className="hidden md:flex fixed left-0 top-0 h-full w-56 bg-white border-r border-gray-100 flex-col z-30">
+      <aside className={"hidden md:flex fixed left-0 top-0 h-full bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200 " + (collapsed ? "w-14" : "w-56")}>
         <div className="px-4 py-4 border-b border-gray-50">
-          <Image src="/logo.jpeg" alt="Deploy Day" width={120} height={36} className="object-contain rounded-md"/>
+          <div className="flex items-center justify-between">
+            {!collapsed && <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>}
+            <button onClick={() => setCollapsed(!collapsed)}
+              className={"p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all " + (collapsed ? "mx-auto" : "ml-auto")}>
+              {collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
+            </button>
+          </div>
           <button onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2 mt-3 w-full hover:bg-gray-50 rounded-xl px-1 py-1.5 transition-all">
             <div className="w-7 h-7 rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0">
