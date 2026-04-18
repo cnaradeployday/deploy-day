@@ -13,7 +13,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  // Tareas donde soy responsable directo filtradas por mes (due_date en el mes)
+  // Tareas donde soy responsable directo — filtradas por mes
   const { data: directas } = await supabase
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours, direct_hours,
@@ -24,7 +24,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .lte('due_date', ultimoDia)
     .order('due_date', { ascending: true })
 
-  // Tareas donde soy colaborador filtradas por mes
+  // Tareas donde soy colaborador — filtradas por mes
   const { data: colaboraciones } = await supabase
     .from('task_collaborators')
     .select(`assigned_hours, task:tasks(id, title, status, priority, due_date, estimated_hours,
@@ -32,18 +32,24 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name))`)
     .eq('user_id', user?.id)
 
+  // Filtrar colaboraciones por mes y mapear
   const colabTasks = (colaboraciones ?? [])
-    .map((c: any) => c.task ? { ...c.task, my_assigned_hours: c.assigned_hours } : null)
+    .map((c: any) => c.task ? { ...c.task, my_assigned_hours: c.assigned_hours, es_colaborador: true } : null)
     .filter(Boolean)
     .filter((t: any) => t.due_date >= primerDia && t.due_date <= ultimoDia)
 
+  // Tareas directas con my_assigned_hours = direct_hours
   const directasMapped = (directas ?? []).map(t => ({
     ...t,
     my_assigned_hours: (t as any).direct_hours ?? null,
+    es_colaborador: false,
   }))
 
-  let allTasks = [...directasMapped, ...colabTasks]
-  allTasks = allTasks.filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i)
+  // Unificar: si una tarea aparece en directas Y colaboraciones, mantener ambas
+  // (puede ser responsable Y colaborador en teoría, pero lo más común es que sean distintas)
+  const directasIds = new Set(directasMapped.map(t => t.id))
+  const colabSinDuplicar = colabTasks.filter((t: any) => !directasIds.has(t.id))
+  let allTasks = [...directasMapped, ...colabSinDuplicar]
 
   if (status) allTasks = allTasks.filter(t => t.status === status)
   if (priority) allTasks = allTasks.filter(t => t.priority === priority)
@@ -51,8 +57,15 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   if (cliente) allTasks = allTasks.filter(t => ((t.project as any)?.client as any)?.id === cliente)
 
   const taskIds = allTasks.map(t => t.id)
+
+  // Mis horas cargadas en el mes
   const { data: timeEntries } = taskIds.length
-    ? await supabase.from('time_entries').select('task_id, hours_logged, user_id').in('task_id', taskIds)
+    ? await supabase
+        .from('time_entries')
+        .select('task_id, hours_logged, user_id')
+        .in('task_id', taskIds)
+        .gte('entry_date', primerDia)
+        .lte('entry_date', ultimoDia)
     : { data: [] }
 
   const misHorasPorTarea: Record<string, number> = {}
