@@ -60,6 +60,14 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
   const horasPorProyecto: Record<string, number> = {}
   ;(segmentos ?? []).forEach(s => { horasPorProyecto[s.project_id] = (horasPorProyecto[s.project_id] ?? 0) + s.horas })
 
+  // Horas ejecutadas por proyecto en el mes
+  const horasEjecutadasPorProyecto: Record<string, number> = {}
+  ;(entries ?? []).forEach(e => {
+    const proyId = taskProyecto[e.task_id]
+    if (!proyId) return
+    horasEjecutadasPorProyecto[proyId] = (horasEjecutadasPorProyecto[proyId] ?? 0) + e.hours_logged
+  })
+
   const costoUSDPorProyecto: Record<string, number> = {}
   ;(entries ?? []).forEach(e => {
     const proyId = taskProyecto[e.task_id]
@@ -89,6 +97,7 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
         facturacionUSD = tipoCambio ? Math.round((facturacionARS / tipoCambio) * 100) / 100 : null
       }
     }
+    const horasEjecutadas = Math.round((horasEjecutadasPorProyecto[p.id] ?? 0) * 10) / 10
     const costoUSD = Math.round((costoUSDPorProyecto[p.id] ?? 0) * 100) / 100
     const costoARS = tipoCambio ? Math.round(costoUSD * tipoCambio) : null
     const rentabilidadUSD = facturacionUSD !== null ? Math.round((facturacionUSD - costoUSD) * 100) / 100 : null
@@ -101,6 +110,7 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
 
   const filas = Object.values(clienteMap).sort((a: any, b: any) => a.clienteNombre.localeCompare(b.clienteNombre))
   const totalHoras = filas.reduce((s: number, c: any) => s + c.proyectos.reduce((ps: number, p: any) => ps + p.horasVendidas, 0), 0)
+  const totalEjecutadas = filas.reduce((s: number, c: any) => s + c.proyectos.reduce((ps: number, p: any) => ps + (p.horasEjecutadas ?? 0), 0), 0)
   const totalUSD = filas.reduce((s: number, c: any) => s + c.proyectos.reduce((ps: number, p: any) => ps + (p.facturacionUSD ?? 0), 0), 0)
   const totalARS = filas.reduce((s: number, c: any) => s + c.proyectos.reduce((ps: number, p: any) => ps + (p.facturacionARS ?? 0), 0), 0)
   const totalCostoUSD = filas.reduce((s: number, c: any) => s + c.proyectos.reduce((ps: number, p: any) => ps + (p.costoUSD ?? 0), 0), 0)
@@ -112,6 +122,7 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
       filas={filas} mes={mes} mesActual={mesActual}
       tipoCambio={tipoCambio} fechaCotiz={fechaCotiz}
       totalHoras={Math.round(totalHoras * 10) / 10}
+      totalEjecutadas={Math.round(totalEjecutadas * 10) / 10}
       totalUSD={Math.round(totalUSD * 100) / 100}
       totalARS={Math.round(totalARS)}
       totalCostoUSD={Math.round(totalCostoUSD * 100) / 100}

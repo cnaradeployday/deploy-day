@@ -13,7 +13,7 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
   totalHoras, totalUSD, totalARS, totalCostoUSD, totalRentabilidadUSD, totalMargen }: {
   filas: any[]; mes: string; mesActual: string
   tipoCambio: number | null; fechaCotiz: string | null
-  totalHoras: number; totalUSD: number; totalARS: number
+  totalHoras: number; totalEjecutadas: number; totalUSD: number; totalARS: number
   totalCostoUSD: number; totalRentabilidadUSD: number; totalMargen: number | null
 }) {
   const router = useRouter()
@@ -60,6 +60,7 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
         {[
           { label: 'Clientes activos', value: filas.length, format: (v: any) => v, color: 'text-gray-900' },
           { label: 'Horas vendidas', value: totalHoras + 'h', format: (v: any) => v, color: 'text-gray-900' },
+          { label: 'Horas ejecutadas', value: totalEjecutadas + 'h', sub: null, color: totalEjecutadas > totalHoras ? 'text-red-500' : 'text-green-600' },
           { label: 'Facturación', value: fmtUSD(totalUSD), sub: tipoCambio ? fmtARS(totalARS) : null, color: 'text-[#1B9BF0]' },
           { label: 'Costo', value: fmtUSD(totalCostoUSD), sub: tipoCambio ? fmtARS(Math.round(totalCostoUSD * tipoCambio)) : null, color: 'text-red-500' },
           { label: 'Rentabilidad bruta', value: fmtUSD(totalRentabilidadUSD), sub: totalMargen !== null ? totalMargen + '% margen' : null, color: margenColor(totalMargen) },
@@ -86,8 +87,9 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 bg-gray-50 border-b border-gray-100">
-            <span className="col-span-3">Cliente / Proyecto</span>
-            <span className="col-span-1 text-right">Horas</span>
+            <span className="col-span-2">Cliente / Proyecto</span>
+            <span className="col-span-1 text-right">Vendidas</span>
+            <span className="col-span-1 text-right">Ejec.</span>
             <span className="col-span-1 text-right">P/h</span>
             <span className="col-span-2 text-right">Facturación</span>
             <span className="col-span-2 text-right">Costo</span>
@@ -107,7 +109,7 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
               <div key={c.clienteId} className="border-b border-gray-50 last:border-0">
                 <div onClick={() => multi && toggle(c.clienteId)}
                   className={'grid grid-cols-12 px-5 py-3.5 items-center ' + (multi ? 'cursor-pointer hover:bg-gray-50' : '')}>
-                  <div className="col-span-3 flex items-center gap-2">
+                  <div className="col-span-2 flex items-center gap-2">
                     {multi ? (exp ? <ChevronDown size={13} className="text-gray-400 shrink-0"/> : <ChevronRight size={13} className="text-gray-400 shrink-0"/>) : <span className="w-3.5"/>}
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{c.clienteNombre}</p>
@@ -116,6 +118,9 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
                     </div>
                   </div>
                   <span className="col-span-1 text-sm font-semibold text-gray-900 text-right">{sh}h</span>
+                  <span className="col-span-1 text-sm text-right" style={{color: c.proyectos.reduce((s:number,p:any)=>s+(p.horasEjecutadas??0),0) > sh ? '#ef4444' : '#16a34a'}}>
+                    {Math.round(c.proyectos.reduce((s:number,p:any)=>s+(p.horasEjecutadas??0),0)*10)/10}h
+                  </span>
                   <span className="col-span-1 text-right text-xs text-gray-400">{!multi && c.proyectos[0].precioHora ? `${c.proyectos[0].moneda === 'USD' ? 'U$D' : '$'}${c.proyectos[0].precioHora}` : '—'}</span>
                   <span className="col-span-2 text-sm font-bold text-[#1B9BF0] text-right">{fmtUSD(sf)}</span>
                   <span className="col-span-2 text-sm font-semibold text-red-400 text-right">{fmtUSD(sc)}</span>
@@ -126,8 +131,9 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
                   <div className="bg-gray-50/50 border-t border-gray-50">
                     {c.proyectos.map((p: any) => (
                       <div key={p.id} className="grid grid-cols-12 px-5 py-2.5 items-center border-b border-gray-50 last:border-0">
-                        <div className="col-span-3 pl-6 text-xs text-gray-700">{p.nombre}</div>
+                        <div className="col-span-2 pl-6 text-xs text-gray-700">{p.nombre}</div>
                         <span className="col-span-1 text-xs text-gray-600 text-right">{p.horasVendidas}h</span>
+                        <span className="col-span-1 text-xs text-right" style={{color: (p.horasEjecutadas??0) > p.horasVendidas ? '#ef4444' : '#16a34a'}}>{p.horasEjecutadas ?? 0}h</span>
                         <span className="col-span-1 text-right text-xs text-gray-500">{p.precioHora ? `${p.moneda === 'USD' ? 'U$D' : '$'}${p.precioHora}` : '—'}</span>
                         <span className="col-span-2 text-xs text-[#1B9BF0] font-semibold text-right">{fmtUSD(p.facturacionUSD)}</span>
                         <span className="col-span-2 text-xs text-red-400 text-right">{fmtUSD(p.costoUSD)}</span>
@@ -142,8 +148,9 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
           })}
 
           <div className="grid grid-cols-12 px-5 py-4 bg-gray-50 border-t border-gray-200 items-center">
-            <span className="col-span-3 text-sm font-bold text-gray-700">Total</span>
+            <span className="col-span-2 text-sm font-bold text-gray-700">Total</span>
             <span className="col-span-1 text-sm font-bold text-gray-900 text-right">{totalHoras}h</span>
+            <span className="col-span-1 text-sm font-bold text-right" style={{color: totalEjecutadas > totalHoras ? '#ef4444' : '#16a34a'}}>{totalEjecutadas}h</span>
             <span className="col-span-1"/>
             <span className="col-span-2 text-sm font-bold text-[#1B9BF0] text-right">{fmtUSD(totalUSD)}</span>
             <span className="col-span-2 text-sm font-bold text-red-400 text-right">{fmtUSD(totalCostoUSD)}</span>
