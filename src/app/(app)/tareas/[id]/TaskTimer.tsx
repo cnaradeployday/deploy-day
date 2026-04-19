@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Play, Square, Clock } from 'lucide-react'
 
-export default function TaskTimer({ taskId, userId }: { taskId: string; userId: string }) {
+export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: string; userId: string; taskStatus?: string }) {
   const [running, setRunning] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [loading, setLoading] = useState(false)
