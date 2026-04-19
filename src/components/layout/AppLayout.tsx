@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
 const APP_VERSION = '1.3.0'
@@ -108,6 +108,7 @@ export default function AppLayout({
 }) {
   const pathname = usePathname()
   const router = useRouter()
+  const mainRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
@@ -121,10 +122,37 @@ export default function AppLayout({
     setMounted(true)
   }, [])
 
+  // Aplicar margin al main solo en desktop via JS después de montar
+  useEffect(() => {
+    if (!mainRef.current || !mounted) return
+    const isDesktop = window.innerWidth >= 768
+    if (isDesktop) {
+      mainRef.current.style.marginLeft = (collapsed ? 56 : 224) + 'px'
+    } else {
+      mainRef.current.style.marginLeft = '0px'
+    }
+  }, [mounted, collapsed])
+
+  // Re-calcular en resize
+  useEffect(() => {
+    if (!mainRef.current) return
+    function handleResize() {
+      if (!mainRef.current) return
+      const isDesktop = window.innerWidth >= 768
+      mainRef.current.style.marginLeft = isDesktop ? (collapsed ? 56 : 224) + 'px' : '0px'
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [collapsed])
+
   function toggleCollapsed() {
     const next = !collapsed
     setCollapsed(next)
     localStorage.setItem('sidebar_collapsed', String(next))
+    // Actualizar main inmediatamente
+    if (mainRef.current && window.innerWidth >= 768) {
+      mainRef.current.style.marginLeft = (next ? 56 : 224) + 'px'
+    }
   }
 
   const canSeeItem = (item: { href: string; roles: string[] }) => {
@@ -139,6 +167,7 @@ export default function AppLayout({
   const visibleBottom = bottomNav.filter(canSeeItem)
   const isChat = pathname === '/chat'
   const isCollapsed = mounted && collapsed
+  const newsPx = hasNews ? 40 : 0
 
   useEffect(() => {
     if (!userId) return
@@ -162,21 +191,18 @@ export default function AppLayout({
     router.push('/login')
   }
 
-  const newsTop = hasNews ? 40 : 0
-  const sidebarWidth = isCollapsed ? 56 : 224
-
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
       {activeNews && <NewsBanner news={activeNews} userId={userId ?? ''}/>}
 
       {/* Sidebar desktop */}
       <aside
-        style={{ top: newsTop, width: sidebarWidth }}
-        className="hidden md:flex fixed left-0 h-full bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200"
+        style={{ top: newsPx, width: isCollapsed ? 56 : 224, height: `calc(100vh - ${newsPx}px)` }}
+        className="hidden md:flex fixed left-0 bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200"
       >
-        <div className="px-4 py-4 border-b border-gray-50">
+        <div className="px-4 py-4 border-b border-gray-50 shrink-0">
           <div className="flex items-center justify-between">
-            {!isCollapsed && <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>}
+            {!isCollapsed && <Image src="/logo.jpeg" alt="DDS" width={100} height={30} className="object-contain rounded-md"/>}
             <button onClick={toggleCollapsed}
               className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ${isCollapsed ? 'mx-auto' : 'ml-auto'}`}>
               {isCollapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
@@ -194,9 +220,7 @@ export default function AppLayout({
           </button>
           {showProfile && !isCollapsed && (
             <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
-              <div className="flex justify-center">
-                <Avatar url={avatarUrl ?? null} name={userName} size={14}/>
-              </div>
+              <div className="flex justify-center"><Avatar url={avatarUrl ?? null} name={userName} size={14}/></div>
               <p className="text-xs text-center text-gray-600 font-medium">{userName}</p>
               <p className="text-xs text-center text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
               <Link href="/mi-perfil" onClick={() => setShowProfile(false)}
@@ -210,7 +234,7 @@ export default function AppLayout({
           )}
         </div>
 
-        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${isCollapsed ? 'px-1' : 'px-3'}`}>
+        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto min-h-0 ${isCollapsed ? 'px-1' : 'px-3'}`}>
           {visible.map(item => isCollapsed
             ? <Link key={item.href} href={item.href} title={item.label}
                 className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === item.href || pathname.startsWith(item.href + '/') ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -221,22 +245,21 @@ export default function AppLayout({
                 badge={item.badge} unreadCount={unreadCount}/>
           )}
           {canManageNews && (isCollapsed
-            ? <Link href="/news" title="Anuncios"
-                className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
+            ? <Link href="/news" title="Anuncios" className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <Megaphone size={18}/>
               </Link>
             : <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0}/>
           )}
           {isCollapsed
-            ? <Link href="/mi-perfil" title="Mi perfil"
-                className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/mi-perfil' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
+            ? <Link href="/mi-perfil" title="Mi perfil" className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/mi-perfil' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <UserCog size={18}/>
               </Link>
             : <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0}/>
           }
         </nav>
 
-        <div className={`border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
+        {/* Footer siempre visible */}
+        <div className={`shrink-0 border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
           {canSeeOnlineUsers && <OnlineUsers collapsed={isCollapsed}/>}
           {!isCollapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
           <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${isCollapsed ? 'justify-center' : ''}`}>
@@ -246,15 +269,11 @@ export default function AppLayout({
       </aside>
 
       {/* Header mobile */}
-      <header
-        style={{ top: newsTop }}
-        className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-5 z-30"
-      >
-        <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>
-        <div className="flex items-center gap-3">
+      <header style={{ top: newsPx }} className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30">
+        <Image src="/logo.jpeg" alt="DDS" width={90} height={28} className="object-contain rounded-md"/>
+        <div className="flex items-center gap-2">
           {canSeeOnlineUsers && <OnlineUsers/>}
-          <span className="text-xs text-gray-300">v{APP_VERSION}</span>
-          <button onClick={() => setOpen(!open)} className="p-1 text-gray-500 relative">
+          <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
             {unreadCount > 0 && !open && (
               <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
@@ -269,13 +288,13 @@ export default function AppLayout({
       {open && (
         <div className="md:hidden fixed inset-0 z-40" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"/>
-          <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="absolute left-0 top-0 h-full w-72 bg-white shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-5 border-b border-gray-50">
-              <Image src="/logo.jpeg" alt="Deploy Day" width={110} height={34} className="object-contain rounded-md"/>
-              <div className="flex items-center gap-3 mt-3">
-                <Avatar url={avatarUrl ?? null} name={userName} size={9}/>
+              <Image src="/logo.jpeg" alt="DDS" width={100} height={30} className="object-contain rounded-md"/>
+              <div className="flex items-center gap-3 mt-4">
+                <Avatar url={avatarUrl ?? null} name={userName} size={10}/>
                 <div>
-                  <p className="text-sm font-medium text-gray-700">{userName}</p>
+                  <p className="text-sm font-medium text-gray-800">{userName}</p>
                   <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
                 </div>
               </div>
@@ -286,14 +305,12 @@ export default function AppLayout({
                   active={pathname === item.href || pathname.startsWith(item.href + '/')}
                   badge={item.badge} unreadCount={unreadCount} onClick={() => setOpen(false)}/>
               ))}
-              {canManageNews && (
-                <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0} onClick={() => setOpen(false)}/>
-              )}
+              {canManageNews && <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0} onClick={() => setOpen(false)}/>}
               <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0} onClick={() => setOpen(false)}/>
             </nav>
-            <div className="px-3 py-4 border-t border-gray-50 flex items-center justify-between">
+            <div className="px-4 py-4 border-t border-gray-50 flex items-center justify-between">
               <span className="text-xs text-gray-300">v{APP_VERSION}</span>
-              <button onClick={logout} className="flex items-center gap-2 text-sm text-gray-400">
+              <button onClick={logout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-all">
                 <LogOut size={15}/> Cerrar sesión
               </button>
             </div>
@@ -310,10 +327,11 @@ export default function AppLayout({
         ))}
       </nav>
 
-      {/* Main — usa style inline para que el margin reaccione instantáneamente al cambio */}
+      {/* Main — marginLeft solo en desktop via ref */}
       <main
-        style={{ marginLeft: mounted ? sidebarWidth : 224, marginTop: hasNews ? 40 : 0 }}
-        className={`transition-all duration-200 min-h-screen pb-20 md:pb-0 pt-14 md:pt-0${isChat ? ' flex flex-col' : ''}`}
+        ref={mainRef}
+        style={{ marginTop: newsPx }}
+        className={`min-h-screen pt-14 md:pt-0 pb-20 md:pb-0 transition-all duration-200${isChat ? ' flex flex-col' : ''}`}
       >
         {children}
       </main>
