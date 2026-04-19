@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2, KeyRound, Loader2, Check, Eye, EyeOff } from 'lucide-react'
 import { CURRENCIES, Currency } from '@/lib/utils/currency'
 
 export default function EditarUsuarioClient({ miembro, historial, adminId, availability, customRoles }: {
@@ -20,6 +20,15 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
   })
   const [rateForm, setRateForm] = useState({ hourly_cost: '', currency: (miembro.currency ?? 'ARS') as Currency })
   const [availForm, setAvailForm] = useState({ desde: '', hasta: '', horas: '', notas: '' })
+
+  // Password change state
+  const [newPass, setNewPass] = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [showPass, setShowPass] = useState(false)
+  const [savingPass, setSavingPass] = useState(false)
+  const [savedPass, setSavedPass] = useState(false)
+  const [errorPass, setErrorPass] = useState<string | null>(null)
+
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
 
   async function guardarInfo(e: React.FormEvent) {
@@ -69,6 +78,24 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
   async function eliminarDisponibilidad(id: string) {
     await createClient().from('user_availability').delete().eq('id', id)
     router.refresh()
+  }
+
+  async function handleChangePass() {
+    if (newPass.length < 6) { setErrorPass('Mínimo 6 caracteres'); return }
+    if (newPass !== confirmPass) { setErrorPass('Las contraseñas no coinciden'); return }
+    setSavingPass(true); setErrorPass(null)
+    // Llama al endpoint de admin para cambiar password de otro usuario
+    const res = await fetch('/api/admin/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: miembro.id, password: newPass }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setErrorPass(data.error ?? 'Error al cambiar contraseña'); setSavingPass(false); return }
+    setSavedPass(true)
+    setNewPass(''); setConfirmPass('')
+    setTimeout(() => setSavedPass(false), 3000)
+    setSavingPass(false)
   }
 
   return (
@@ -150,6 +177,38 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </form>
+        </div>
+
+        {/* Cambio de contraseña — solo admin */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <KeyRound size={14} className="text-gray-400"/>
+            <p className="text-sm font-semibold text-gray-700">Cambiar contraseña</p>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Nueva contraseña</label>
+            <div className="relative">
+              <input type={showPass ? 'text' : 'password'} value={newPass} onChange={e => setNewPass(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] pr-10"/>
+              <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3 top-2.5 text-gray-400">
+                {showPass ? <EyeOff size={16}/> : <Eye size={16}/>}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Confirmar contraseña</label>
+            <input type={showPass ? 'text' : 'password'} value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
+              placeholder="Repetí la nueva contraseña"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+          {errorPass && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-xl">{errorPass}</p>}
+          <button onClick={handleChangePass} disabled={savingPass || !newPass || !confirmPass}
+            className="w-full py-2.5 bg-gray-900 hover:bg-gray-700 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-all flex items-center justify-center gap-2">
+            {savingPass ? <><Loader2 size={15} className="animate-spin"/> Cambiando...</>
+              : savedPass ? <><Check size={15}/> Contraseña actualizada</>
+              : 'Cambiar contraseña'}
+          </button>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 p-5">

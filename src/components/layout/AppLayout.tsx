@@ -39,16 +39,15 @@ const bottomNav = [
 ]
 
 function Avatar({ url, name, size = 7 }: { url: string | null; name: string; size?: number }) {
-  const sz = `w-${size} h-${size}`
   if (url) {
     return (
-      <div className={`${sz} rounded-full overflow-hidden shrink-0 border border-gray-100`}>
+      <div className={`w-${size} h-${size} rounded-full overflow-hidden shrink-0 border border-gray-100`}>
         <Image src={url} alt={name} width={size * 4} height={size * 4} className="object-cover w-full h-full" unoptimized/>
       </div>
     )
   }
   return (
-    <div className={`${sz} rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0`}>
+    <div className={`w-${size} h-${size} rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0`}>
       {name?.[0]?.toUpperCase()}
     </div>
   )
@@ -112,12 +111,10 @@ export default function AppLayout({
   const [open, setOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
-  // Arranca en false, se sincroniza con localStorage en useEffect para evitar hydration mismatch
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
   const hasNews = !!activeNews
 
-  // Leer preferencia guardada del sidebar al montar
   useEffect(() => {
     const saved = localStorage.getItem('sidebar_collapsed')
     if (saved === 'true') setCollapsed(true)
@@ -141,6 +138,7 @@ export default function AppLayout({
   const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)
   const isChat = pathname === '/chat'
+  const isCollapsed = mounted && collapsed
 
   useEffect(() => {
     if (!userId) return
@@ -164,37 +162,37 @@ export default function AppLayout({
     router.push('/login')
   }
 
-  const newsOffset = hasNews ? 'top-10' : 'top-0'
-  const mainPtMobile = hasNews ? 'pt-24' : 'pt-14'
-  // Usar siempre el valor correcto de collapsed — antes de montar usamos false para SSR
-  const sidebarW = (mounted && collapsed) ? 'w-14' : 'w-56'
-  const mainMl  = (mounted && collapsed) ? 'md:ml-14' : 'md:ml-56'
+  const newsTop = hasNews ? 40 : 0
+  const sidebarWidth = isCollapsed ? 56 : 224
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
       {activeNews && <NewsBanner news={activeNews} userId={userId ?? ''}/>}
 
       {/* Sidebar desktop */}
-      <aside className={`hidden md:flex fixed left-0 h-full bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200 ${newsOffset} ${sidebarW}`}>
+      <aside
+        style={{ top: newsTop, width: sidebarWidth }}
+        className="hidden md:flex fixed left-0 h-full bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200"
+      >
         <div className="px-4 py-4 border-b border-gray-50">
           <div className="flex items-center justify-between">
-            {!(mounted && collapsed) && <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>}
+            {!isCollapsed && <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>}
             <button onClick={toggleCollapsed}
-              className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ${(mounted && collapsed) ? 'mx-auto' : 'ml-auto'}`}>
-              {(mounted && collapsed) ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
+              className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ${isCollapsed ? 'mx-auto' : 'ml-auto'}`}>
+              {isCollapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
             </button>
           </div>
           <button onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2 mt-3 w-full hover:bg-gray-50 rounded-xl px-1 py-1.5 transition-all">
             <Avatar url={avatarUrl ?? null} name={userName} size={7}/>
-            {!(mounted && collapsed) && (
+            {!isCollapsed && (
               <div className="text-left min-w-0">
                 <p className="text-xs font-medium text-gray-700 truncate">{userName}</p>
                 <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
               </div>
             )}
           </button>
-          {showProfile && !(mounted && collapsed) && (
+          {showProfile && !isCollapsed && (
             <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
               <div className="flex justify-center">
                 <Avatar url={avatarUrl ?? null} name={userName} size={14}/>
@@ -212,8 +210,8 @@ export default function AppLayout({
           )}
         </div>
 
-        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${(mounted && collapsed) ? 'px-1' : 'px-3'}`}>
-          {visible.map(item => (mounted && collapsed)
+        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${isCollapsed ? 'px-1' : 'px-3'}`}>
+          {visible.map(item => isCollapsed
             ? <Link key={item.href} href={item.href} title={item.label}
                 className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === item.href || pathname.startsWith(item.href + '/') ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <item.icon size={18} strokeWidth={pathname === item.href ? 2 : 1.5}/>
@@ -222,33 +220,36 @@ export default function AppLayout({
                 active={pathname === item.href || pathname.startsWith(item.href + '/')}
                 badge={item.badge} unreadCount={unreadCount}/>
           )}
-          {canManageNews && ((mounted && collapsed)
+          {canManageNews && (isCollapsed
             ? <Link href="/news" title="Anuncios"
                 className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
-                <Megaphone size={18} strokeWidth={pathname === '/news' ? 2 : 1.5}/>
+                <Megaphone size={18}/>
               </Link>
             : <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0}/>
           )}
-          {(mounted && collapsed)
+          {isCollapsed
             ? <Link href="/mi-perfil" title="Mi perfil"
                 className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/mi-perfil' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
-                <UserCog size={18} strokeWidth={pathname === '/mi-perfil' ? 2 : 1.5}/>
+                <UserCog size={18}/>
               </Link>
             : <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0}/>
           }
         </nav>
 
-        <div className={`border-t border-gray-50 flex items-center ${(mounted && collapsed) ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
-          {canSeeOnlineUsers && <OnlineUsers collapsed={mounted && collapsed}/>}
-          {!(mounted && collapsed) && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
-          <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${(mounted && collapsed) ? 'justify-center' : ''}`}>
-            <LogOut size={13}/> {!(mounted && collapsed) && 'Salir'}
+        <div className={`border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
+          {canSeeOnlineUsers && <OnlineUsers collapsed={isCollapsed}/>}
+          {!isCollapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
+          <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${isCollapsed ? 'justify-center' : ''}`}>
+            <LogOut size={13}/> {!isCollapsed && 'Salir'}
           </button>
         </div>
       </aside>
 
       {/* Header mobile */}
-      <header className={`md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-5 z-30 ${newsOffset}`}>
+      <header
+        style={{ top: newsTop }}
+        className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-5 z-30"
+      >
         <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>
         <div className="flex items-center gap-3">
           {canSeeOnlineUsers && <OnlineUsers/>}
@@ -309,7 +310,11 @@ export default function AppLayout({
         ))}
       </nav>
 
-      <main className={`${mainMl} ${mainPtMobile} md:pt-0 pb-20 md:pb-0 transition-all duration-200 min-h-screen${isChat ? ' flex flex-col' : ''}${hasNews ? ' md:mt-10' : ''}`}>
+      {/* Main — usa style inline para que el margin reaccione instantáneamente al cambio */}
+      <main
+        style={{ marginLeft: mounted ? sidebarWidth : 224, marginTop: hasNews ? 40 : 0 }}
+        className={`transition-all duration-200 min-h-screen pb-20 md:pb-0 pt-14 md:pt-0${isChat ? ' flex flex-col' : ''}`}
+      >
         {children}
       </main>
     </div>
