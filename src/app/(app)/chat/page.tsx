@@ -8,7 +8,6 @@ export default async function ChatPage() {
   const { data: users } = await supabase
     .from('users')
     .select('id, full_name')
-    .eq('is_active', true)
     .order('full_name')
 
   const { data: tasks } = await supabase

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { Loader2 } from 'lucide-react'
 
 export default function TaskActions({ task, userId, userRole, timeEntries, isDirectResponsible }: {
   task: { id: string; status: string; estimated_hours: number | null }
@@ -15,15 +16,16 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const isAdmin = userRole === 'admin'
   const isGerente = userRole === 'gerente_operaciones'
   const canManage = isAdmin || isGerente
 
   const transitions: Record<string, { next: string; label: string; who: 'all' | 'manage' | 'responsible' }> = {
-    creado: { next: 'estimado', label: 'Iniciar tarea', who: 'all' },
-    estimado: { next: 'en_proceso', label: 'Marcar en proceso', who: 'all' },
-    en_proceso: { next: 'terminado', label: 'Marcar como terminado', who: 'all' },
+    creado:    { next: 'estimado',   label: 'Iniciar tarea',          who: 'all' },
+    estimado:  { next: 'en_proceso', label: 'Marcar en proceso',      who: 'all' },
+    en_proceso:{ next: 'terminado',  label: 'Marcar como terminado',  who: 'all' },
     terminado: { next: 'presentado', label: 'Marcar como presentado', who: 'responsible' },
   }
 
@@ -37,7 +39,16 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
   async function changeStatus() {
     if (!t) return
     setLoading(true)
-    await createClient().from('tasks').update({ status: t.next }).eq('id', task.id)
+    setErrorMsg(null)
+    const { error } = await createClient()
+      .from('tasks')
+      .update({ status: t.next })
+      .eq('id', task.id)
+    if (error) {
+      setErrorMsg('Error al cambiar estado: ' + error.message)
+      setLoading(false)
+      return
+    }
     router.refresh()
     setLoading(false)
   }
@@ -45,11 +56,17 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
   async function logTime() {
     if (!hours || parseFloat(hours) <= 0) return
     setLoading(true)
-    await createClient().from('time_entries').insert({
+    setErrorMsg(null)
+    const { error } = await createClient().from('time_entries').insert({
       task_id: task.id, user_id: userId,
       hours_logged: parseFloat(hours),
       entry_date: date, notes: notes || null
     })
+    if (error) {
+      setErrorMsg('Error al registrar horas: ' + error.message)
+      setLoading(false)
+      return
+    }
     setHours(''); setNotes('')
     router.refresh()
     setLoading(false)
@@ -57,6 +74,12 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
 
   return (
     <div className="space-y-4">
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-600">
+          {errorMsg}
+        </div>
+      )}
+
       {canTransition && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-medium text-gray-700 mb-3">Cambiar estado</p>
@@ -66,8 +89,8 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
             </p>
           )}
           <button onClick={changeStatus} disabled={loading}
-            className="w-full bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-            {loading ? 'Guardando...' : t.label}
+            className="w-full bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {loading ? <><Loader2 size={15} className="animate-spin"/> Guardando...</> : t.label}
           </button>
         </div>
       )}
@@ -92,8 +115,8 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
             placeholder="Notas (opcional)"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] mb-3"/>
           <button onClick={logTime} disabled={loading || !hours}
-            className="w-full bg-black hover:bg-gray-800 text-white py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-            {loading ? 'Guardando...' : 'Registrar horas'}
+            className="w-full bg-black hover:bg-gray-800 text-white py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {loading ? <><Loader2 size={15} className="animate-spin"/> Guardando...</> : 'Registrar horas'}
           </button>
         </div>
       )}

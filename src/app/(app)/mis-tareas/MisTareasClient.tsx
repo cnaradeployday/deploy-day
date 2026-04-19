@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
@@ -42,6 +42,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null)
   const [tareasLocal, setTareasLocal] = useState<any[]>(tareas)
+
+  // Sincronizar cuando el server refresca los datos
+  useEffect(() => { setTareasLocal(tareas) }, [tareas])
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
@@ -105,11 +108,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
       setTareasLocal(prev => prev.map(t =>
         t.id === taskId ? { ...t, status } : t
       ))
-      alert('Error al cambiar estado: ' + error.message)
+      alert('Error: ' + error.message)
     } else {
       router.refresh()
     }
-
     setLoading(null)
   }
 
@@ -132,17 +134,17 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   }
 
   const cols = [
-    { key: 'title',              label: 'Tarea' },
-    { key: 'es_colaborador',     label: 'Rol' },
-    { key: 'client',             label: 'Cliente' },
-    { key: 'project',            label: 'Proyecto' },
-    { key: 'responsible',        label: 'Responsable' },
-    { key: 'my_assigned_hours',  label: 'Est.' },
-    { key: 'hours_logged',       label: 'Usado' },
-    { key: 'due_date',           label: 'Vence' },
-    { key: 'priority',           label: 'Prioridad' },
-    { key: 'status',             label: 'Estado' },
-    { key: 'actions',            label: '' },
+    { key: 'title',             label: 'Tarea' },
+    { key: 'es_colaborador',    label: 'Rol' },
+    { key: 'client',            label: 'Cliente' },
+    { key: 'project',           label: 'Proyecto' },
+    { key: 'responsible',       label: 'Responsable' },
+    { key: 'my_assigned_hours', label: 'Est.' },
+    { key: 'hours_logged',      label: 'Usado' },
+    { key: 'due_date',          label: 'Vence' },
+    { key: 'priority',          label: 'Prioridad' },
+    { key: 'status',            label: 'Estado' },
+    { key: 'actions',           label: '' },
   ]
 
   return (
@@ -286,12 +288,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                           onClick={() => advanceStatus(t.id, t.status)}
                           disabled={!!loading}
                           title={nextLabel[t.status]}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                           {isLoading
                             ? <Loader2 size={13} className="animate-spin text-green-500"/>
-                            : <CheckCircle size={13}/>
-                          }
+                            : <CheckCircle size={13}/>}
                         </button>
                       )}
                     </div>
@@ -335,12 +335,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                       onClick={() => advanceStatus(t.id, t.status)}
                       disabled={!!loading}
                       title={nextLabel[t.status]}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       {isLoading
                         ? <Loader2 size={14} className="animate-spin text-green-500"/>
-                        : <CheckCircle size={14}/>
-                      }
+                        : <CheckCircle size={14}/>}
                     </button>
                   )}
                 </div>

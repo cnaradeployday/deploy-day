@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Users } from 'lucide-react'
 
@@ -13,6 +13,7 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
   const [users, setUsers] = useState<OnlineUser[]>([])
   const [showTooltip, setShowTooltip] = useState(false)
   const [myId, setMyId] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const sb = createClient()
@@ -48,67 +49,71 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
     }
 
     init()
+    return () => { if (channel) sb.removeChannel(channel) }
+  }, [])
 
-    return () => {
-      if (channel) sb.removeChannel(channel)
+  // Cerrar tooltip al clickear afuera
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setShowTooltip(false)
+      }
     }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   const count = users.length
 
+  const Tooltip = () => (
+    <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] min-w-[180px] p-2">
+      <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
+      {users.map(u => (
+        <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
+          <span className="text-xs text-gray-700 truncate">
+            {u.full_name}{u.user_id === myId ? ' (vos)' : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+
   if (collapsed) {
     return (
-      <div
-        className="relative"
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-      >
-        <button className="w-8 h-8 flex items-center justify-center rounded-xl bg-green-50 hover:bg-green-100 transition-all relative">
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => setShowTooltip(v => !v)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl bg-green-50 hover:bg-green-100 transition-all relative"
+        >
           <Users size={14} className="text-green-600"/>
           <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
             {count}
           </span>
         </button>
-        {showTooltip && count > 0 && (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-100 rounded-xl shadow-lg z-50 min-w-[160px] p-2">
-            <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
-            {users.map(u => (
-              <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
-                <span className="text-xs text-gray-700 truncate">
-                  {u.full_name} {u.user_id === myId ? <span className="text-gray-400">(vos)</span> : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        {showTooltip && count > 0 && <Tooltip/>}
       </div>
     )
   }
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}
-    >
-      <button className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-green-50 hover:bg-green-100 transition-all">
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setShowTooltip(v => !v)}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+        className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-green-50 hover:bg-green-100 transition-all"
+      >
         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
         <span className="text-xs font-semibold text-green-700">{count}</span>
         <Users size={11} className="text-green-600"/>
       </button>
-
       {showTooltip && count > 0 && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg z-50 min-w-[160px] p-2">
-          <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
-          {users.map(u => (
-            <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
-              <span className="text-xs text-gray-700 truncate">
-                {u.full_name} {u.user_id === myId ? <span className="text-gray-400">(vos)</span> : ''}
-              </span>
-            </div>
-          ))}
+        <div
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          <Tooltip/>
         </div>
       )}
     </div>
