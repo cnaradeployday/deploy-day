@@ -20,7 +20,7 @@ const priorityColors: Record<string, string> = {
   alta: 'bg-amber-50 text-amber-600', critica: 'bg-red-50 text-red-600'
 }
 
-export default async function TareaDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TareaDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { id } = await params
   const sp = await searchParams
   const backTo = sp.from === 'mis-tareas' ? '/mis-tareas' : '/tareas'

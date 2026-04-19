@@ -40,6 +40,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   const params = useSearchParams()
   const [sortKey, setSortKey] = useState('due_date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [loading, setLoading] = useState<string | null>(null)
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
@@ -92,8 +93,11 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
   async function advanceStatus(taskId: string, status: string) {
     if (!nextStatus[status]) return
-    await createClient().from('tasks').update({ status: nextStatus[status] }).eq('id', taskId)
+    setLoading(taskId)
+    const { error } = await createClient().from('tasks').update({ status: nextStatus[status] }).eq('id', taskId)
+    if (error) { alert('Error al cambiar estado: ' + error.message); setLoading(null); return }
     router.refresh()
+    setLoading(null)
   }
 
   function exportar() {
