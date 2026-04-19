@@ -20,10 +20,19 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
 
   const { data: proyectos } = await supabase
     .from('projects')
-    .select('id, name, price_per_hour, currency, sold_hours, client:clients(id, name)')
-    .eq('is_active', true).order('name')
+    .select('id, name, price_per_hour, currency, sold_hours, start_date, end_date, client:clients(id, name)')
+    .eq('is_active', true)
+    .order('name')
 
-  const proyectoIds = (proyectos ?? []).map(p => p.id)
+  // Filtrar proyectos activos en el mes: start_date <= ultimoDia AND (end_date >= primerDia OR end_date IS NULL)
+  const proyectosDelMes = (proyectos ?? []).filter(p => {
+    if (!p.start_date) return false
+    if (p.start_date > ultimoDia) return false
+    if (p.end_date && p.end_date < primerDia) return false
+    return true
+  })
+
+  const proyectoIds = proyectosDelMes.map(p => p.id)
 
   const { data: segmentos } = proyectoIds.length
     ? await supabase.from('project_hour_segments').select('project_id, horas')
@@ -57,34 +66,40 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
   const taskProyecto: Record<string, string> = {}
   ;(tareas ?? []).forEach(t => { taskProyecto[t.id] = t.project_id })
 
-  const horasPorProyecto: Record<string, number> = {}
-  ;(segmentos ?? []).forEach(s => { horasPorProyecto[s.project_id] = (horasPorProyecto[s.project_id] ?? 0) + s.horas })
+  // Horas vendidas: segmentos del mes si existen, sino sold_hours del proyecto como fallback
+  const horasPorSegmento: Record<string, number> = {}
+  ;(segmentos ?? []).forEach(s => {
+    horasPorSegmento[s.project_id] = (horasPorSegmento[s.project_id] ?? 0) + s.horas
+  })
 
-  // Horas ejecutadas (time_entries del mes) y costo por proyecto
+  // Horas ejecutadas y costo por proyecto
   const horasEjecutadasPorProyecto: Record<string, number> = {}
   const costoUSDPorProyecto: Record<string, number> = {}
 
   ;(entries ?? []).forEach(e => {
     const proyId = taskProyecto[e.task_id]
     if (!proyId) return
-
-    // Horas ejecutadas
     horasEjecutadasPorProyecto[proyId] = (horasEjecutadasPorProyecto[proyId] ?? 0) + e.hours_logged
-
-    // Costo
     const u = userMap[e.user_id]
     if (!u || !u.hourly_cost) return
-    const costoUSD = u.currency === 'USD' ? e.hours_logged * u.hourly_cost
+    const costoUSD = u.currency === 'USD'
+      ? e.hours_logged * u.hourly_cost
       : tipoCambio ? (e.hours_logged * u.hourly_cost) / tipoCambio : 0
     costoUSDPorProyecto[proyId] = (costoUSDPorProyecto[proyId] ?? 0) + costoUSD
   })
 
   const clienteMap: Record<string, any> = {}
-  ;(proyectos ?? []).filter(p => horasPorProyecto[p.id] !== undefined).forEach(p => {
+
+  proyectosDelMes.forEach(p => {
+    // Horas vendidas: segmento del mes si existe, sino sold_hours del proyecto
+    const horasVendidas = horasPorSegmento[p.id] ?? (p.sold_hours ?? 0)
+
+    // Solo incluir si tiene horas vendidas o ejecutadas (evitar proyectos vacíos)
+    const horasEjecutadas = Math.round((horasEjecutadasPorProyecto[p.id] ?? 0) * 10) / 10
+    if (horasVendidas === 0 && horasEjecutadas === 0) return
+
     const cId = (p.client as any)?.id ?? 'sin-cliente'
     const cNombre = (p.client as any)?.name ?? '—'
-    const horasVendidas = horasPorProyecto[p.id] ?? 0
-    const horasEjecutadas = Math.round((horasEjecutadasPorProyecto[p.id] ?? 0) * 10) / 10
     const precioHora = p.price_per_hour ?? null
     const moneda = p.currency ?? 'USD'
 
@@ -107,10 +122,14 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
     const margen = facturacionUSD && facturacionUSD > 0 && rentabilidadUSD !== null
       ? Math.round((rentabilidadUSD / facturacionUSD) * 100) : null
 
+    // Indicar si las horas vienen de segmento o de sold_hours
+    const usaSegmento = horasPorSegmento[p.id] !== undefined
+
     if (!clienteMap[cId]) clienteMap[cId] = { clienteId: cId, clienteNombre: cNombre, proyectos: [] }
     clienteMap[cId].proyectos.push({
       id: p.id, nombre: p.name, horasVendidas, horasEjecutadas, precioHora, moneda,
-      facturacionARS, facturacionUSD, costoUSD, costoARS, rentabilidadUSD, rentabilidadARS, margen
+      facturacionARS, facturacionUSD, costoUSD, costoARS, rentabilidadUSD, rentabilidadARS,
+      margen, usaSegmento,
     })
   })
 
