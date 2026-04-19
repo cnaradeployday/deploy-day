@@ -87,7 +87,7 @@ function BottomNavItem({ href, label, Icon, active, badge, unreadCount }: {
   )
 }
 
-export default function AppLayout({ children, userRole, userName, userId, customRoleName, customPermissions }: {
+export default function AppLayout({ children, userRole, userName, userId, customRoleName, customPermissions, canSeeOnlineUsers = false }: {
   children: React.ReactNode; userRole: string; userName: string; userId?: string
   customRoleName?: string | null; customPermissions?: string[]
 }) {
