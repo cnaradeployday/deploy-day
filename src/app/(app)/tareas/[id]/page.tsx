@@ -22,6 +22,9 @@ const priorityColors: Record<string, string> = {
 
 export default async function TareaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const sp = await searchParams
+  const backTo = sp.from === 'mis-tareas' ? '/mis-tareas' : '/tareas'
+  const backLabel = sp.from === 'mis-tareas' ? 'Mis tareas' : 'Tareas'
   const supabase = await createClient()
 
   const { data: t } = await supabase
@@ -54,8 +57,8 @@ export default async function TareaDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <Link href="/tareas" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
-        <ArrowLeft size={15}/> Tareas
+      <Link href={backTo} className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
+        <ArrowLeft size={15}/> {backLabel}
       </Link>
 
       <div className="flex items-start justify-between mb-4">
