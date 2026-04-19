@@ -127,22 +127,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
     XLSX.writeFile(wb, 'mis-tareas-' + mes + '.xlsx')
   }
 
-  const cols = [
-    { key: 'title',             label: 'Tarea' },
-    { key: 'es_colaborador',    label: 'Rol' },
-    { key: 'client',            label: 'Cliente' },
-    { key: 'project',           label: 'Proyecto' },
-    { key: 'responsible',       label: 'Responsable' },
-    { key: 'my_assigned_hours', label: 'Est.' },
-    { key: 'hours_logged',      label: 'Usado' },
-    { key: 'due_date',          label: 'Vence' },
-    { key: 'priority',          label: 'Prioridad' },
-    { key: 'status',            label: 'Estado' },
-    { key: 'actions',           label: '' },
-  ]
-
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-full">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
@@ -223,15 +209,46 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         )}
       </div>
 
-      {/* Tabla desktop */}
-      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-x-auto">
-        <table className="w-full min-w-[960px]">
+      {/* Tabla desktop — sin min-w fijo, columnas con anchos relativos */}
+      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <table className="w-full table-fixed">
+          <colgroup>
+            <col style={{width:'14%'}}/>
+            <col style={{width:'8%'}}/>
+            <col style={{width:'9%'}}/>
+            <col style={{width:'13%'}}/>
+            <col style={{width:'12%'}}/>
+            <col style={{width:'5%'}}/>
+            <col style={{width:'8%'}}/>
+            <col style={{width:'7%'}}/>
+            <col style={{width:'7%'}}/>
+            <col style={{width:'9%'}}/>
+            <col style={{width:'8%'}}/>
+          </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
-              {cols.map(({ key, label }) => (
+              {[
+                { key: 'title',             label: 'Tarea' },
+                { key: 'es_colaborador',    label: 'Rol' },
+                { key: 'client',            label: 'Cliente' },
+                { key: 'project',           label: 'Proyecto' },
+                { key: 'responsible',       label: 'Responsable' },
+                { key: 'my_assigned_hours', label: 'Est.' },
+                { key: 'hours_logged',      label: 'Usado' },
+                { key: 'due_date',          label: 'Vence' },
+                { key: 'priority',          label: 'Prioridad' },
+                { key: 'status',            label: 'Estado' },
+                { key: 'actions',           label: '' },
+              ].map(({ key, label }) => (
                 <th key={key} onClick={() => key !== 'actions' && toggleSort(key)}
-                  className={'px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap ' + (key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : '')}>
-                  <div className="flex items-center gap-1">{label}{key !== 'actions' && <SortIcon k={key}/>}</div>
+                  className={'px-3 py-3 text-left text-xs font-medium text-gray-400 ' + (key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : '')}>
+                  <div className="flex items-center gap-1 truncate">{label}
+                    {key !== 'actions' && (
+                      sortKey !== key
+                        ? <ChevronUp size={11} className="opacity-20 shrink-0"/>
+                        : sortDir === 'asc' ? <ChevronUp size={11} className="shrink-0"/> : <ChevronDown size={11} className="shrink-0"/>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
@@ -246,51 +263,43 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
               const isLoading = loading === t.id
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[160px] truncate">{t.title}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                      {t.es_colaborador ? 'Colaborador' : 'Responsable'}
+                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate">{t.title}</td>
+                  <td className="px-3 py-3">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full truncate block w-fit ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                      {t.es_colaborador ? 'Colab.' : 'Resp.'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.project?.client?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.project?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-700 font-semibold whitespace-nowrap">{myHours > 0 ? myHours + 'h' : '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className={'text-xs font-medium whitespace-nowrap ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1">
+                      <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
                       {pct !== null && (
-                        <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="w-8 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
                             style={{ width: Math.min(100, pct) + '%' }}/>
                         </div>
                       )}
                     </div>
                   </td>
-                  <td className={'px-4 py-3 text-xs whitespace-nowrap ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
+                  <td className={'px-3 py-3 text-xs ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
                     {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
                   </td>
-                  <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + priorityColors[t.priority]}>{t.priority}</span></td>
-                  <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Link
-                        href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all"
-                        title="Cargar avances"
-                      >
+                  <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
+                  <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-0.5">
+                      <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all" title="Cargar avances">
                         <Clock size={13}/>
                       </Link>
                       {nextStatus[t.status] && (
-                        <button
-                          onClick={() => advanceStatus(t.id, t.status)}
-                          disabled={!!loading}
+                        <button onClick={() => advanceStatus(t.id, t.status)} disabled={!!loading}
                           title={nextLabel[t.status]}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {isLoading
-                            ? <Loader2 size={13} className="animate-spin text-green-500"/>
-                            : <CheckCircle size={13}/>}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                          {isLoading ? <Loader2 size={13} className="animate-spin text-green-500"/> : <CheckCircle size={13}/>}
                         </button>
                       )}
                     </div>
@@ -326,23 +335,15 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Link
-                    href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
-                    title="Cargar avances"
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50"
-                  >
+                  <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'} title="Cargar avances"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
                     <Clock size={14}/>
                   </Link>
                   {nextStatus[t.status] && (
-                    <button
-                      onClick={() => advanceStatus(t.id, t.status)}
-                      disabled={!!loading}
+                    <button onClick={() => advanceStatus(t.id, t.status)} disabled={!!loading}
                       title={nextLabel[t.status]}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {isLoading
-                        ? <Loader2 size={14} className="animate-spin text-green-500"/>
-                        : <CheckCircle size={14}/>}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                      {isLoading ? <Loader2 size={14} className="animate-spin text-green-500"/> : <CheckCircle size={14}/>}
                     </button>
                   )}
                 </div>
