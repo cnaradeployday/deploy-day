@@ -111,14 +111,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
   function exportar() {
     const data = tareasLocal.map(t => ({
-      Tarea: t.title,
-      Rol: t.es_colaborador ? 'Colaborador' : 'Responsable',
-      Cliente: t.project?.client?.name ?? '—',
-      Proyecto: t.project?.name ?? '—',
-      Estado: statusLabels[t.status] ?? t.status,
-      Prioridad: t.priority,
-      'Mis horas': t.my_assigned_hours ?? '—',
-      'Horas usadas': t.hours_logged ?? 0,
+      Tarea: t.title, Rol: t.es_colaborador ? 'Colaborador' : 'Responsable',
+      Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—',
+      Estado: statusLabels[t.status] ?? t.status, Prioridad: t.priority,
+      'Mis horas': t.my_assigned_hours ?? '—', 'Horas usadas': t.hours_logged ?? 0,
       Vence: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -139,12 +135,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
             className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white capitalize">
             {meses.map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
           </select>
-          <button onClick={exportar}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+          <button onClick={exportar} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14}/> Excel
           </button>
-          <Link href="/tareas/nueva"
-            className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+          <Link href="/tareas/nueva" className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Nueva tarea
           </Link>
         </div>
@@ -165,6 +159,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { key: 'status', label: 'Estado', options: Object.entries(statusLabels).map(([v,l]) => ({ v, l })), all: 'Todos' },
+          ].map(() => null)}
           <div>
             <label className="block text-xs text-gray-400 mb-1">Estado</label>
             <select value={filters.status ?? ''} onChange={e => update('status', e.target.value)}
@@ -178,9 +175,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
             <select value={filters.priority ?? ''} onChange={e => update('priority', e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
               <option value="">Todas</option>
-              {['baja','media','alta','critica'].map(p => (
-                <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>
-              ))}
+              {['baja','media','alta','critica'].map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase()+p.slice(1)}</option>)}
             </select>
           </div>
           <div>
@@ -209,53 +204,35 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         )}
       </div>
 
-      {/* Tabla desktop — sin min-w fijo, columnas con anchos relativos */}
+      {/* Tabla desktop */}
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <table className="w-full table-fixed">
           <colgroup>
-            <col style={{width:'14%'}}/>
-            <col style={{width:'8%'}}/>
-            <col style={{width:'9%'}}/>
-            <col style={{width:'13%'}}/>
-            <col style={{width:'12%'}}/>
-            <col style={{width:'5%'}}/>
-            <col style={{width:'8%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'9%'}}/>
-            <col style={{width:'8%'}}/>
+            <col style={{width:'14%'}}/><col style={{width:'8%'}}/><col style={{width:'9%'}}/>
+            <col style={{width:'13%'}}/><col style={{width:'12%'}}/><col style={{width:'5%'}}/>
+            <col style={{width:'8%'}}/><col style={{width:'7%'}}/><col style={{width:'7%'}}/>
+            <col style={{width:'9%'}}/><col style={{width:'8%'}}/>
           </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
               {[
-                { key: 'title',             label: 'Tarea' },
-                { key: 'es_colaborador',    label: 'Rol' },
-                { key: 'client',            label: 'Cliente' },
-                { key: 'project',           label: 'Proyecto' },
-                { key: 'responsible',       label: 'Responsable' },
-                { key: 'my_assigned_hours', label: 'Est.' },
-                { key: 'hours_logged',      label: 'Usado' },
-                { key: 'due_date',          label: 'Vence' },
-                { key: 'priority',          label: 'Prioridad' },
-                { key: 'status',            label: 'Estado' },
-                { key: 'actions',           label: '' },
+                { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
+                { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
+                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
+                { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
+                { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
+                { key: 'actions', label: '' },
               ].map(({ key, label }) => (
                 <th key={key} onClick={() => key !== 'actions' && toggleSort(key)}
                   className={'px-3 py-3 text-left text-xs font-medium text-gray-400 ' + (key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : '')}>
-                  <div className="flex items-center gap-1 truncate">{label}
-                    {key !== 'actions' && (
-                      sortKey !== key
-                        ? <ChevronUp size={11} className="opacity-20 shrink-0"/>
-                        : sortDir === 'asc' ? <ChevronUp size={11} className="shrink-0"/> : <ChevronDown size={11} className="shrink-0"/>
-                    )}
-                  </div>
+                  <div className="flex items-center gap-1">{label}{key !== 'actions' && <SortIcon k={key}/>}</div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {!sorted.length ? (
-              <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas en {nombreMes(mes)}</td></tr>
+              <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas en {nombreMes(mes)}</td></tr>
             ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
@@ -265,7 +242,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate">{t.title}</td>
                   <td className="px-3 py-3">
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full truncate block w-fit ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                       {t.es_colaborador ? 'Colab.' : 'Resp.'}
                     </span>
                   </td>
@@ -278,8 +255,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
                       {pct !== null && (
                         <div className="w-8 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
-                            style={{ width: Math.min(100, pct) + '%' }}/>
+                          <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')} style={{ width: Math.min(100, pct) + '%' }}/>
                         </div>
                       )}
                     </div>
@@ -291,8 +267,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-0.5">
-                      <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all" title="Cargar avances">
+                      <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'} title="Cargar avances"
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                         <Clock size={13}/>
                       </Link>
                       {nextStatus[t.status] && (
