@@ -11,31 +11,31 @@ import Image from 'next/image'
 const APP_VERSION = '1.3.0'
 
 const navItems = [
-  { href: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/clientes',         label: 'Clientes',           icon: Users,           roles: ['admin','gerente_operaciones'] },
-  { href: '/proyectos',        label: 'Proyectos',          icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
-  { href: '/proyectos-mes',    label: 'Proyectos del mes',  icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
-  { href: '/tareas',           label: 'Tareas',             icon: CheckSquare,     roles: ['admin','gerente_operaciones'] },
-  { href: '/mis-tareas',       label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-horas',        label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/chat',             label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
-  { href: '/resumen-mes',      label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
-  { href: '/reportes',         label: 'Reportes',           icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
-  { href: '/solicitudes',      label: 'Solicitudes',        icon: AlertCircle,     roles: ['admin','gerente_operaciones'] },
-  { href: '/facturacion',      label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
-  { href: '/liquidaciones',    label: 'Liquidaciones',      icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/facturas-clientes',label: 'Facturas clientes',  icon: FileText,        roles: ['admin'] },
-  { href: '/cotizaciones',     label: 'Cotizaciones USD',   icon: TrendingUp,      roles: ['admin'] },
-  { href: '/roles',            label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
-  { href: '/equipo',           label: 'Equipo',             icon: UserCircle,      roles: ['admin','gerente_operaciones'] },
+  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/clientes',          label: 'Clientes',           icon: Users,           roles: ['admin','gerente_operaciones'] },
+  { href: '/proyectos',         label: 'Proyectos',          icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
+  { href: '/proyectos-mes',     label: 'Proyectos del mes',  icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
+  { href: '/tareas',            label: 'Tareas',             icon: CheckSquare,     roles: ['admin','gerente_operaciones'] },
+  { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
+  { href: '/reportes',          label: 'Reportes',           icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
+  { href: '/solicitudes',       label: 'Solicitudes',        icon: AlertCircle,     roles: ['admin','gerente_operaciones'] },
+  { href: '/facturacion',       label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
+  { href: '/liquidaciones',     label: 'Liquidaciones',      icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/facturas-clientes', label: 'Facturas clientes',  icon: FileText,        roles: ['admin'] },
+  { href: '/cotizaciones',      label: 'Cotizaciones USD',   icon: TrendingUp,      roles: ['admin'] },
+  { href: '/roles',             label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
+  { href: '/equipo',            label: 'Equipo',             icon: UserCircle,      roles: ['admin','gerente_operaciones'] },
 ]
 
 const bottomNav = [
-  { href: '/dashboard',    label: 'Inicio',    icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-tareas',   label: 'Mis tareas',icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-horas',    label: 'Mis horas', icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/chat',         label: 'Chat',      icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
-  { href: '/liquidaciones',label: 'Liquid.',   icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/chat',          label: 'Chat',       icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/liquidaciones', label: 'Liquid.',    icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
 ]
 
 function Avatar({ url, name, size = 7 }: { url: string | null; name: string; size?: number }) {
@@ -112,8 +112,23 @@ export default function AppLayout({
   const [open, setOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
+  // Arranca en false, se sincroniza con localStorage en useEffect para evitar hydration mismatch
   const [collapsed, setCollapsed] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const hasNews = !!activeNews
+
+  // Leer preferencia guardada del sidebar al montar
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebar_collapsed')
+    if (saved === 'true') setCollapsed(true)
+    setMounted(true)
+  }, [])
+
+  function toggleCollapsed() {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('sidebar_collapsed', String(next))
+  }
 
   const canSeeItem = (item: { href: string; roles: string[] }) => {
     if (item.roles.includes(userRole)) return true
@@ -149,36 +164,37 @@ export default function AppLayout({
     router.push('/login')
   }
 
-  // offset top cuando hay news banner (10 = h-10)
   const newsOffset = hasNews ? 'top-10' : 'top-0'
   const mainPtMobile = hasNews ? 'pt-24' : 'pt-14'
+  // Usar siempre el valor correcto de collapsed — antes de montar usamos false para SSR
+  const sidebarW = (mounted && collapsed) ? 'w-14' : 'w-56'
+  const mainMl  = (mounted && collapsed) ? 'md:ml-14' : 'md:ml-56'
 
   return (
     <div className="min-h-screen bg-[#f8f8f7]">
-      {/* News Banner */}
       {activeNews && <NewsBanner news={activeNews} userId={userId ?? ''}/>}
 
       {/* Sidebar desktop */}
-      <aside className={"hidden md:flex fixed left-0 h-full bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200 " + newsOffset + " " + (collapsed ? "w-14" : "w-56")}>
+      <aside className={`hidden md:flex fixed left-0 h-full bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200 ${newsOffset} ${sidebarW}`}>
         <div className="px-4 py-4 border-b border-gray-50">
           <div className="flex items-center justify-between">
-            {!collapsed && <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>}
-            <button onClick={() => setCollapsed(!collapsed)}
-              className={"p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all " + (collapsed ? "mx-auto" : "ml-auto")}>
-              {collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
+            {!(mounted && collapsed) && <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>}
+            <button onClick={toggleCollapsed}
+              className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ${(mounted && collapsed) ? 'mx-auto' : 'ml-auto'}`}>
+              {(mounted && collapsed) ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
             </button>
           </div>
           <button onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2 mt-3 w-full hover:bg-gray-50 rounded-xl px-1 py-1.5 transition-all">
             <Avatar url={avatarUrl ?? null} name={userName} size={7}/>
-            {!collapsed && (
+            {!(mounted && collapsed) && (
               <div className="text-left min-w-0">
                 <p className="text-xs font-medium text-gray-700 truncate">{userName}</p>
                 <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
               </div>
             )}
           </button>
-          {showProfile && !collapsed && (
+          {showProfile && !(mounted && collapsed) && (
             <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
               <div className="flex justify-center">
                 <Avatar url={avatarUrl ?? null} name={userName} size={14}/>
@@ -195,46 +211,44 @@ export default function AppLayout({
             </div>
           )}
         </div>
-        <nav className={"flex-1 py-3 space-y-0.5 overflow-y-auto " + (collapsed ? "px-1" : "px-3")}>
-          {visible.map(item => collapsed
+
+        <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto ${(mounted && collapsed) ? 'px-1' : 'px-3'}`}>
+          {visible.map(item => (mounted && collapsed)
             ? <Link key={item.href} href={item.href} title={item.label}
-                className={"flex items-center justify-center py-2.5 rounded-xl transition-all " + (pathname === item.href || pathname.startsWith(item.href + '/') ? "bg-[#E8F4FE] text-[#1B9BF0]" : "text-gray-500 hover:bg-gray-100")}>
+                className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === item.href || pathname.startsWith(item.href + '/') ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <item.icon size={18} strokeWidth={pathname === item.href ? 2 : 1.5}/>
               </Link>
             : <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
                 active={pathname === item.href || pathname.startsWith(item.href + '/')}
                 badge={item.badge} unreadCount={unreadCount}/>
           )}
-          {/* News — solo para quien tiene permiso */}
-          {canManageNews && (collapsed
+          {canManageNews && ((mounted && collapsed)
             ? <Link href="/news" title="Anuncios"
-                className={"flex items-center justify-center py-2.5 rounded-xl transition-all " + (pathname === '/news' ? "bg-[#E8F4FE] text-[#1B9BF0]" : "text-gray-500 hover:bg-gray-100")}>
+                className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <Megaphone size={18} strokeWidth={pathname === '/news' ? 2 : 1.5}/>
               </Link>
-            : <NavItem href="/news" label="Anuncios" Icon={Megaphone}
-                active={pathname === '/news'} unreadCount={0}/>
+            : <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0}/>
           )}
-          {/* Mi perfil — visible para todos */}
-          {collapsed
+          {(mounted && collapsed)
             ? <Link href="/mi-perfil" title="Mi perfil"
-                className={"flex items-center justify-center py-2.5 rounded-xl transition-all " + (pathname === '/mi-perfil' ? "bg-[#E8F4FE] text-[#1B9BF0]" : "text-gray-500 hover:bg-gray-100")}>
+                className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/mi-perfil' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <UserCog size={18} strokeWidth={pathname === '/mi-perfil' ? 2 : 1.5}/>
               </Link>
-            : <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog}
-                active={pathname === '/mi-perfil'} unreadCount={0}/>
+            : <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0}/>
           }
         </nav>
-        <div className={"border-t border-gray-50 flex items-center " + (collapsed ? "px-1 py-3 justify-center flex-col gap-2" : "px-4 py-3 justify-between")}>
-          {canSeeOnlineUsers && <OnlineUsers collapsed={collapsed}/>}
-          {!collapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
-          <button onClick={logout} title="Cerrar sesión" className={"flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 " + (collapsed ? "justify-center" : "")}>
-            <LogOut size={13}/> {!collapsed && "Salir"}
+
+        <div className={`border-t border-gray-50 flex items-center ${(mounted && collapsed) ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
+          {canSeeOnlineUsers && <OnlineUsers collapsed={mounted && collapsed}/>}
+          {!(mounted && collapsed) && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
+          <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${(mounted && collapsed) ? 'justify-center' : ''}`}>
+            <LogOut size={13}/> {!(mounted && collapsed) && 'Salir'}
           </button>
         </div>
       </aside>
 
       {/* Header mobile */}
-      <header className={"md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-5 z-30 " + newsOffset}>
+      <header className={`md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-5 z-30 ${newsOffset}`}>
         <Image src="/logo.jpeg" alt="Deploy Day" width={100} height={30} className="object-contain rounded-md"/>
         <div className="flex items-center gap-3">
           {canSeeOnlineUsers && <OnlineUsers/>}
@@ -272,11 +286,9 @@ export default function AppLayout({
                   badge={item.badge} unreadCount={unreadCount} onClick={() => setOpen(false)}/>
               ))}
               {canManageNews && (
-                <NavItem href="/news" label="Anuncios" Icon={Megaphone}
-                  active={pathname === '/news'} unreadCount={0} onClick={() => setOpen(false)}/>
+                <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0} onClick={() => setOpen(false)}/>
               )}
-              <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog}
-                active={pathname === '/mi-perfil'} unreadCount={0} onClick={() => setOpen(false)}/>
+              <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0} onClick={() => setOpen(false)}/>
             </nav>
             <div className="px-3 py-4 border-t border-gray-50 flex items-center justify-between">
               <span className="text-xs text-gray-300">v{APP_VERSION}</span>
@@ -297,13 +309,7 @@ export default function AppLayout({
         ))}
       </nav>
 
-      <main className={
-        (isChat
-          ? (collapsed ? 'md:ml-14' : 'md:ml-56') + ' flex flex-col min-h-screen'
-          : (collapsed ? 'md:ml-14' : 'md:ml-56') + ' min-h-screen transition-all duration-200')
-        + ' ' + mainPtMobile + ' md:pt-0 pb-20 md:pb-0'
-        + (hasNews ? ' md:mt-10' : '')
-      }>
+      <main className={`${mainMl} ${mainPtMobile} md:pt-0 pb-20 md:pb-0 transition-all duration-200 min-h-screen${isChat ? ' flex flex-col' : ''}${hasNews ? ' md:mt-10' : ''}`}>
         {children}
       </main>
     </div>
