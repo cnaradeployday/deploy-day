@@ -3,7 +3,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, Pencil, CheckCircle, X, Plus, ChevronUp, ChevronDown } from 'lucide-react'
+import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -264,9 +264,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <Link href={'/tareas/' + t.id + '/editar'}
+                      <Link href={'/tareas/' + t.id + '#avances'}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
-                        <Pencil size={13}/>
+                        <Clock size={13}/>
                       </Link>
                       {nextStatus[t.status] && (
                         <button onClick={() => advanceStatus(t.id, t.status)} title={nextLabel[t.status]}
@@ -306,8 +306,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Link href={'/tareas/' + t.id + '/editar'} className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
-                    <Pencil size={14}/>
+                  <Link href={'/tareas/' + t.id + '#avances'} title="Cargar avances" className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
+                    <Clock size={14}/>
                   </Link>
                   {nextStatus[t.status] && (
                     <button onClick={() => advanceStatus(t.id, t.status)}
