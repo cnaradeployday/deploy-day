@@ -3,7 +3,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown } from 'lucide-react'
+import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -41,6 +41,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   const [sortKey, setSortKey] = useState('due_date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null)
+  const [tareasLocal, setTareasLocal] = useState<any[]>(tareas)
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
@@ -73,8 +74,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
     return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
   }
 
-  // my_assigned_hours = direct_hours si soy responsable, assigned_hours si soy colaborador
-  const sorted = [...tareas].sort((a, b) => {
+  const sorted = [...tareasLocal].sort((a, b) => {
     if (sortKey === 'my_assigned_hours' || sortKey === 'hours_logged') {
       const na = Number(a[sortKey] ?? 0); const nb = Number(b[sortKey] ?? 0)
       return sortDir === 'asc' ? na - nb : nb - na
@@ -87,21 +87,34 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
-  const totalEstimadas = tareas.reduce((s, t) => s + (t.my_assigned_hours ?? 0), 0)
-  const totalUsadas = tareas.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
+  const totalEstimadas = tareasLocal.reduce((s, t) => s + (t.my_assigned_hours ?? 0), 0)
+  const totalUsadas = tareasLocal.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
   const totalRestantes = totalEstimadas - totalUsadas
 
   async function advanceStatus(taskId: string, status: string) {
-    if (!nextStatus[status]) return
+    if (!nextStatus[status] || loading) return
     setLoading(taskId)
+
+    setTareasLocal(prev => prev.map(t =>
+      t.id === taskId ? { ...t, status: nextStatus[status] } : t
+    ))
+
     const { error } = await createClient().from('tasks').update({ status: nextStatus[status] }).eq('id', taskId)
-    if (error) { alert('Error al cambiar estado: ' + error.message); setLoading(null); return }
-    router.refresh()
+
+    if (error) {
+      setTareasLocal(prev => prev.map(t =>
+        t.id === taskId ? { ...t, status } : t
+      ))
+      alert('Error al cambiar estado: ' + error.message)
+    } else {
+      router.refresh()
+    }
+
     setLoading(null)
   }
 
   function exportar() {
-    const data = tareas.map(t => ({
+    const data = tareasLocal.map(t => ({
       Tarea: t.title,
       Rol: t.es_colaborador ? 'Colaborador' : 'Responsable',
       Cliente: t.project?.client?.name ?? '—',
@@ -134,11 +147,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
-          <p className="text-sm text-gray-400 mt-0.5 capitalize">{nombreMes(mes)} · {tareas.length} tarea{tareas.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-400 mt-0.5 capitalize">{nombreMes(mes)} · {tareasLocal.length} tarea{tareasLocal.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={mes} onChange={e => update('mes', e.target.value)}
@@ -156,7 +168,6 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         </div>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[
           { label: 'Horas estimadas', value: Math.round(totalEstimadas * 10) / 10, color: 'text-gray-900' },
@@ -170,7 +181,6 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         ))}
       </div>
 
-      {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
@@ -217,7 +227,6 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         )}
       </div>
 
-      {/* Tabla desktop */}
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -235,9 +244,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
               <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas en {nombreMes(mes)}</td></tr>
             ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
-              // mis horas = my_assigned_hours (ya viene correcto del server)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
+              const isLoading = loading === t.id
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 max-w-[160px] truncate">{t.title}</td>
@@ -268,14 +277,21 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <Link href={'/tareas/' + t.id + '#avances'}
+                      <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                         <Clock size={13}/>
                       </Link>
                       {nextStatus[t.status] && (
-                        <button onClick={() => advanceStatus(t.id, t.status)} title={nextLabel[t.status]}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all">
-                          <CheckCircle size={13}/>
+                        <button
+                          onClick={() => advanceStatus(t.id, t.status)}
+                          disabled={!!loading}
+                          title={nextLabel[t.status]}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {isLoading
+                            ? <Loader2 size={13} className="animate-spin text-green-500"/>
+                            : <CheckCircle size={13}/>
+                          }
                         </button>
                       )}
                     </div>
@@ -287,11 +303,11 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         </table>
       </div>
 
-      {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
           const myHours = t.my_assigned_hours ?? 0
+          const isLoading = loading === t.id
           return (
             <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
               <div className="flex items-start justify-between mb-2">
@@ -310,13 +326,21 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Link href={'/tareas/' + t.id + '#avances'} title="Cargar avances" className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
+                  <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'} title="Cargar avances"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
                     <Clock size={14}/>
                   </Link>
                   {nextStatus[t.status] && (
-                    <button onClick={() => advanceStatus(t.id, t.status)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50">
-                      <CheckCircle size={14}/>
+                    <button
+                      onClick={() => advanceStatus(t.id, t.status)}
+                      disabled={!!loading}
+                      title={nextLabel[t.status]}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isLoading
+                        ? <Loader2 size={14} className="animate-spin text-green-500"/>
+                        : <CheckCircle size={14}/>
+                      }
                     </button>
                   )}
                 </div>

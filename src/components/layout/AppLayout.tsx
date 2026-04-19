@@ -97,6 +97,7 @@ export default function AppLayout({ children, userRole, userName, userId, custom
   const [unreadCount, setUnreadCount] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+
   const canSeeItem = (item: { href: string; roles: string[] }) => {
     if (item.roles.includes(userRole)) return true
     if (customPermissions && customPermissions.length > 0) {
@@ -147,10 +148,12 @@ export default function AppLayout({ children, userRole, userName, userId, custom
             <div className="w-7 h-7 rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0">
               {userName?.[0]?.toUpperCase()}
             </div>
-            <div className="text-left min-w-0">
-              <p className="text-xs font-medium text-gray-700 truncate">{userName}</p>
-              <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
-            </div>
+            {!collapsed && (
+              <div className="text-left min-w-0">
+                <p className="text-xs font-medium text-gray-700 truncate">{userName}</p>
+                <p className="text-xs text-gray-400 capitalize">{customRoleName ?? userRole.replace(/_/g, ' ')}</p>
+              </div>
+            )}
           </button>
           {showProfile && !collapsed && (
             <div className="mt-2 bg-gray-50 rounded-xl p-3 space-y-2 border border-gray-100">
@@ -176,8 +179,8 @@ export default function AppLayout({ children, userRole, userName, userId, custom
                 badge={item.badge} unreadCount={unreadCount}/>
           )}
         </nav>
-        <div className={"border-t border-gray-50 flex items-center " + (collapsed ? "px-1 py-3 justify-center" : "px-4 py-3 justify-between")}>
-          {!collapsed && canSeeOnlineUsers && <OnlineUsers/>}
+        <div className={"border-t border-gray-50 flex items-center " + (collapsed ? "px-1 py-3 justify-center flex-col gap-2" : "px-4 py-3 justify-between")}>
+          {canSeeOnlineUsers && <OnlineUsers collapsed={collapsed}/>}
           {!collapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
           <button onClick={logout} title="Cerrar sesión" className={"flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 " + (collapsed ? "justify-center" : "")}>
             <LogOut size={13}/> {!collapsed && "Salir"}

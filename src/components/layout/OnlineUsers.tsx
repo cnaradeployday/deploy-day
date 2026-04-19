@@ -9,7 +9,7 @@ interface OnlineUser {
   online_at: string
 }
 
-export default function OnlineUsers() {
+export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {
   const [users, setUsers] = useState<OnlineUser[]>([])
   const [showTooltip, setShowTooltip] = useState(false)
   const [myId, setMyId] = useState<string | null>(null)
@@ -56,10 +56,42 @@ export default function OnlineUsers() {
 
   const count = users.length
 
+  if (collapsed) {
+    return (
+      <div
+        className="relative"
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+      >
+        <button className="w-8 h-8 flex items-center justify-center rounded-xl bg-green-50 hover:bg-green-100 transition-all relative">
+          <Users size={14} className="text-green-600"/>
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+            {count}
+          </span>
+        </button>
+        {showTooltip && count > 0 && (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-100 rounded-xl shadow-lg z-50 min-w-[160px] p-2">
+            <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
+            {users.map(u => (
+              <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
+                <span className="text-xs text-gray-700 truncate">
+                  {u.full_name} {u.user_id === myId ? <span className="text-gray-400">(vos)</span> : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <div className="relative"
+    <div
+      className="relative"
       onMouseEnter={() => setShowTooltip(true)}
-      onMouseLeave={() => setShowTooltip(false)}>
+      onMouseLeave={() => setShowTooltip(false)}
+    >
       <button className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-green-50 hover:bg-green-100 transition-all">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
         <span className="text-xs font-semibold text-green-700">{count}</span>
