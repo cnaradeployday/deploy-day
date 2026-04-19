@@ -211,7 +211,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
 
       {/* Modal nuevo chat */}
       {showNewChat && (
-        <div className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <p className="font-semibold text-gray-900">Nueva conversación</p>
