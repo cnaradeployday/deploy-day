@@ -43,7 +43,6 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   const [loading, setLoading] = useState<string | null>(null)
   const [tareasLocal, setTareasLocal] = useState<any[]>(tareas)
 
-  // Sincronizar cuando el server refresca los datos
   useEffect(() => { setTareasLocal(tareas) }, [tareas])
 
   const update = useCallback((key: string, value: string) => {
@@ -97,17 +96,12 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   async function advanceStatus(taskId: string, status: string) {
     if (!nextStatus[status] || loading) return
     setLoading(taskId)
-
     setTareasLocal(prev => prev.map(t =>
       t.id === taskId ? { ...t, status: nextStatus[status] } : t
     ))
-
     const { error } = await createClient().from('tasks').update({ status: nextStatus[status] }).eq('id', taskId)
-
     if (error) {
-      setTareasLocal(prev => prev.map(t =>
-        t.id === taskId ? { ...t, status } : t
-      ))
+      setTareasLocal(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
       alert('Error: ' + error.message)
     } else {
       router.refresh()
@@ -148,7 +142,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
   ]
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
@@ -229,8 +223,9 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         )}
       </div>
 
+      {/* Tabla desktop */}
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[960px]">
           <thead>
             <tr className="border-b border-gray-50">
               {cols.map(({ key, label }) => (
@@ -260,10 +255,10 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.project?.client?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.project?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-700 font-semibold whitespace-nowrap">{myHours > 0 ? myHours + 'h' : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
+                      <span className={'text-xs font-medium whitespace-nowrap ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
                       {pct !== null && (
                         <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
@@ -275,12 +270,15 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <td className={'px-4 py-3 text-xs whitespace-nowrap ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
                     {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
                   </td>
-                  <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
-                  <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
+                  <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + priorityColors[t.priority]}>{t.priority}</span></td>
+                  <td className="px-4 py-3"><span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                      <Link
+                        href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all"
+                        title="Cargar avances"
+                      >
                         <Clock size={13}/>
                       </Link>
                       {nextStatus[t.status] && (
@@ -288,7 +286,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                           onClick={() => advanceStatus(t.id, t.status)}
                           disabled={!!loading}
                           title={nextLabel[t.status]}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
                           {isLoading
                             ? <Loader2 size={13} className="animate-spin text-green-500"/>
                             : <CheckCircle size={13}/>}
@@ -303,6 +302,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
         </table>
       </div>
 
+      {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
@@ -318,7 +318,7 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                 <span className={`text-xs px-2 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                   {t.es_colaborador ? 'Colaborador' : 'Responsable'}
                 </span>
-                <span className="text-xs text-gray-400">{t.project?.client?.name} · {t.project?.name}</span>
+                <span className="text-xs text-gray-400 truncate">{t.project?.client?.name} · {t.project?.name}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
@@ -326,8 +326,11 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'} title="Cargar avances"
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
+                  <Link
+                    href={'/tareas/' + t.id + '?from=mis-tareas#avances'}
+                    title="Cargar avances"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50"
+                  >
                     <Clock size={14}/>
                   </Link>
                   {nextStatus[t.status] && (
@@ -335,7 +338,8 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
                       onClick={() => advanceStatus(t.id, t.status)}
                       disabled={!!loading}
                       title={nextLabel[t.status]}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
                       {isLoading
                         ? <Loader2 size={14} className="animate-spin text-green-500"/>
                         : <CheckCircle size={14}/>}
