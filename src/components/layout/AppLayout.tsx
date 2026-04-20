@@ -122,24 +122,18 @@ export default function AppLayout({
     setMounted(true)
   }, [])
 
-  // Aplicar margin al main solo en desktop via JS después de montar
   useEffect(() => {
     if (!mainRef.current || !mounted) return
     const isDesktop = window.innerWidth >= 768
-    if (isDesktop) {
-      mainRef.current.style.marginLeft = (collapsed ? 56 : 224) + 'px'
-    } else {
-      mainRef.current.style.marginLeft = '0px'
-    }
+    mainRef.current.style.marginLeft = isDesktop ? (collapsed ? '56px' : '224px') : '0px'
   }, [mounted, collapsed])
 
-  // Re-calcular en resize
   useEffect(() => {
     if (!mainRef.current) return
     function handleResize() {
       if (!mainRef.current) return
       const isDesktop = window.innerWidth >= 768
-      mainRef.current.style.marginLeft = isDesktop ? (collapsed ? 56 : 224) + 'px' : '0px'
+      mainRef.current.style.marginLeft = isDesktop ? (collapsed ? '56px' : '224px') : '0px'
     }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
@@ -149,9 +143,8 @@ export default function AppLayout({
     const next = !collapsed
     setCollapsed(next)
     localStorage.setItem('sidebar_collapsed', String(next))
-    // Actualizar main inmediatamente
     if (mainRef.current && window.innerWidth >= 768) {
-      mainRef.current.style.marginLeft = (next ? 56 : 224) + 'px'
+      mainRef.current.style.marginLeft = next ? '56px' : '224px'
     }
   }
 
@@ -195,7 +188,7 @@ export default function AppLayout({
     <div className="min-h-screen bg-[#f8f8f7]">
       {activeNews && <NewsBanner news={activeNews} userId={userId ?? ''}/>}
 
-      {/* Sidebar desktop */}
+      {/* Sidebar desktop — OnlineUsers SOLO aquí */}
       <aside
         style={{ top: newsPx, width: isCollapsed ? 56 : 224, height: `calc(100vh - ${newsPx}px)` }}
         className="hidden md:flex fixed left-0 bg-white border-r border-gray-100 flex-col z-30 transition-all duration-200"
@@ -258,7 +251,6 @@ export default function AppLayout({
           }
         </nav>
 
-        {/* Footer siempre visible */}
         <div className={`shrink-0 border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
           {canSeeOnlineUsers && <OnlineUsers collapsed={isCollapsed}/>}
           {!isCollapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
@@ -268,11 +260,10 @@ export default function AppLayout({
         </div>
       </aside>
 
-      {/* Header mobile */}
+      {/* Header mobile — SIN OnlineUsers para evitar doble canal */}
       <header style={{ top: newsPx }} className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30">
         <Image src="/logo.jpeg" alt="DDS" width={90} height={28} className="object-contain rounded-md"/>
         <div className="flex items-center gap-2">
-
           <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
             {unreadCount > 0 && !open && (
@@ -310,7 +301,7 @@ export default function AppLayout({
             </nav>
             <div className="px-4 py-4 border-t border-gray-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {canSeeOnlineUsers               <span className="text-xs text-gray-300">v{APP_VERSION}</span>              <span className="text-xs text-gray-300">v{APP_VERSION}</span> <OnlineUsers/>}
+                {canSeeOnlineUsers && <OnlineUsers/>}
                 <span className="text-xs text-gray-300">v{APP_VERSION}</span>
               </div>
               <button onClick={logout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-all">
@@ -330,7 +321,6 @@ export default function AppLayout({
         ))}
       </nav>
 
-      {/* Main — marginLeft solo en desktop via ref */}
       <main
         ref={mainRef}
         style={{ marginTop: newsPx }}
