@@ -29,7 +29,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  // Proyectos activos en el mes (por start_date/end_date)
+  // Proyectos activos en el mes (por fechas del proyecto)
   const { data: proyectos } = await supabase
     .from('projects')
     .select('id, name, sold_hours, start_date, end_date, client:clients(id, name)')
@@ -37,7 +37,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     .order('name')
 
   const proyectosDelMes = (proyectos ?? []).filter(p => {
-    if (!p.start_date) return true // sin fecha = incluir siempre
+    if (!p.start_date) return true
     if (p.start_date > ultimoDia) return false
     if (p.end_date && p.end_date < primerDia) return false
     return true
@@ -61,11 +61,12 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
         .from('tasks')
         .select('id, estimated_hours, project_id, due_date')
         .in('project_id', proyectoIds)
+        .not('status', 'in', '(presentado)')
     : { data: [] }
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
-  // Time entries del mes (independiente del due_date de la tarea)
+  // Time entries del mes (por entry_date, no por due_date)
   const { data: entries } = taskIds.length
     ? await supabase
         .from('time_entries')
@@ -75,44 +76,49 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
         .lte('entry_date', ultimoDia)
     : { data: [] }
 
-  // Tareas del mes = las que tienen due_date en el mes (para horas estimadas)
-  const tareasDelMes = (todasTareas ?? []).filter(t =>
-    t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-  )
-
   const clientes = [...new Map(
     proyectosDelMes.map(p => [(p.client as any)?.id, p.client])
   ).values()].filter(Boolean) as any[]
 
-  // Horas vendidas por proyecto (segmento o sold_hours como fallback)
+  // Horas vendidas: segmento del mes o sold_hours como fallback
   const horasPorSegmento: Record<string, number> = {}
-  ;(segmentos ?? []).forEach(s => {
+  ;(segmentos ?? []).forEach((s: any) => {
     horasPorSegmento[s.project_id] = (horasPorSegmento[s.project_id] ?? 0) + s.horas
   })
 
-  // Horas estimadas = suma de estimated_hours de tareas con due_date en el mes
+  // Horas estimadas del mes por proyecto:
+  // Para tareas con due_date en el mes → usar estimated_hours
+  // Para tareas sin due_date en el mes pero con segmento → usar horas del segmento
   const horasEstimadasPorProyecto: Record<string, number> = {}
-  tareasDelMes.forEach(t => {
+  const tareasConDueEnMes = (todasTareas ?? []).filter(t =>
+    t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
+  )
+  tareasConDueEnMes.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)
   })
+  // Para proyectos con segmento pero sin tareas en el mes, usar horas del segmento como estimadas
+  Object.entries(horasPorSegmento).forEach(([proyId, horas]) => {
+    if (horasEstimadasPorProyecto[proyId] === undefined) {
+      horasEstimadasPorProyecto[proyId] = horas
+    }
+  })
 
-  // Horas consumidas = time_entries del mes, agrupadas por proyecto via tarea
+  // Horas consumidas: time_entries del mes agrupadas por proyecto
   const taskToProject: Record<string, string> = {}
   ;(todasTareas ?? []).forEach(t => { taskToProject[t.id] = t.project_id })
 
   const consumidoPorProyecto: Record<string, number> = {}
-  ;(entries ?? []).forEach(e => {
+  ;(entries ?? []).forEach((e: any) => {
     const proyId = taskToProject[e.task_id]
     if (!proyId) return
     consumidoPorProyecto[proyId] = (consumidoPorProyecto[proyId] ?? 0) + e.hours_logged
   })
 
-  // Incluir proyectos con cualquier actividad: vendidas, estimadas o consumidas
+  // Incluir proyectos con cualquier actividad en el mes
   const proyectosConActividad = proyectosDelMes.filter(p =>
     horasPorSegmento[p.id] !== undefined ||
     horasEstimadasPorProyecto[p.id] !== undefined ||
-    consumidoPorProyecto[p.id] !== undefined ||
-    (p.sold_hours ?? 0) > 0
+    consumidoPorProyecto[p.id] !== undefined
   )
 
   const filas = proyectosConActividad.map(p => ({
