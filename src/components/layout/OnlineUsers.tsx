@@ -8,60 +8,80 @@ interface OnlineUser {
   full_name: string
 }
 
+// Singleton: compartir estado entre instancias del componente
+// (desktop sidebar + mobile header montan el mismo componente)
+let globalUsers: OnlineUser[] = []
+let globalListeners: Array<(users: OnlineUser[]) => void> = []
+let globalChannel: any = null
+let globalSb: any = null
+let globalMyId: string | null = null
+let initPromise: Promise<void> | null = null
+
+function notifyAll(users: OnlineUser[]) {
+  globalUsers = users
+  globalListeners.forEach(fn => fn(users))
+}
+
+async function initPresence() {
+  if (globalChannel) return // ya inicializado
+  const sb = createClient()
+  globalSb = sb
+
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) return
+  globalMyId = user.id
+
+  const { data: profile } = await sb.from('users').select('full_name').eq('id', user.id).single()
+  const myName = profile?.full_name ?? user.email ?? 'Usuario'
+
+  const channel = sb.channel('presence-online-v3', {
+    config: { presence: { key: user.id } }
+  })
+  globalChannel = channel
+
+  channel.on('presence', { event: 'sync' }, () => {
+    const state = channel.presenceState()
+    const online: OnlineUser[] = Object.entries(state).map(([uid, presences]: [string, any]) => ({
+      user_id: uid,
+      full_name: presences[0]?.full_name ?? 'Usuario',
+    }))
+    notifyAll(online)
+  })
+
+  channel.subscribe(async (status: string) => {
+    if (status === 'SUBSCRIBED') {
+      await channel.track({ full_name: myName, online_at: new Date().toISOString() })
+    }
+  })
+}
+
 export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {
-  const [users, setUsers] = useState<OnlineUser[]>([])
+  const [users, setUsers] = useState<OnlineUser[]>(globalUsers)
+  const [myId, setMyId] = useState<string | null>(globalMyId)
   const [showTooltip, setShowTooltip] = useState(false)
-  const [myId, setMyId] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
-  const sbRef = useRef<any>(null)
-  const channelRef = useRef<any>(null)
 
   useEffect(() => {
-    let cancelled = false
-    const sb = createClient()
-    sbRef.current = sb
+    // Registrar listener
+    const listener = (u: OnlineUser[]) => {
+      setUsers(u)
+      if (globalMyId) setMyId(globalMyId)
+    }
+    globalListeners.push(listener)
 
-    async function init() {
-      const { data: { user } } = await sb.auth.getUser()
-      if (!user || cancelled) return
-      setMyId(user.id)
-
-      const { data: profile } = await sb
-        .from('users').select('full_name').eq('id', user.id).single()
-      const myName = profile?.full_name ?? user.email ?? 'Usuario'
-
-      // Canal con nombre estable basado en el userId
-      const channel = sb.channel('presence-online-v2', {
-        config: { presence: { key: user.id } }
+    // Inicializar presencia (idempotente — solo crea canal una vez)
+    if (!initPromise) {
+      initPromise = initPresence().then(() => {
+        if (globalMyId) setMyId(globalMyId)
       })
-      channelRef.current = channel
-
-      channel.on('presence', { event: 'sync' }, () => {
-        if (cancelled) return
-        const state = channel.presenceState()
-        const online: OnlineUser[] = Object.entries(state).map(([uid, presences]: [string, any]) => ({
-          user_id: uid,
-          full_name: presences[0]?.full_name ?? 'Usuario',
-        }))
-        setUsers(online)
-      })
-
-      channel.subscribe(async (status: string) => {
-        if (cancelled) return
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ full_name: myName, online_at: new Date().toISOString() })
-        }
-      })
+    } else {
+      // Ya inicializado, actualizar state con datos actuales
+      setUsers(globalUsers)
+      if (globalMyId) setMyId(globalMyId)
     }
 
-    init()
-
     return () => {
-      cancelled = true
-      if (channelRef.current && sbRef.current) {
-        sbRef.current.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      globalListeners = globalListeners.filter(l => l !== listener)
     }
   }, [])
 
@@ -79,7 +99,7 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
     <div className={`absolute ${up ? 'bottom-full mb-2' : 'top-full mt-1'} left-0 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] min-w-[180px] p-2`}>
       <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
       {count === 0
-        ? <p className="text-xs text-gray-400 px-2 py-1">Nadie más en línea</p>
+        ? <p className="text-xs text-gray-400 px-2 py-1">Solo vos</p>
         : users.map(u => (
           <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
