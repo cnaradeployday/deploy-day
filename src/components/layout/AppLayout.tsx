@@ -8,7 +8,7 @@ import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, Us
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
-const APP_VERSION = '1.4.0'
+const APP_VERSION = '1.5.0'
 
 const navItems = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },

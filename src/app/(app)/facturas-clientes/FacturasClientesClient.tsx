@@ -155,9 +155,9 @@ export default function FacturasClientesClient({
       {/* KPIs en USD */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[
-          { label: 'Pendientes', count: pendientes.length, usd: sumUSD(pendientes), color: 'text-amber-600' },
-          { label: 'Cobradas',   count: cobradas.length,   usd: sumUSD(cobradas),   color: 'text-green-600' },
-          { label: 'Vencidas',   count: vencidas.length,   usd: sumUSD(vencidas),   color: 'text-red-500' },
+          { label: 'Pendientes',     count: pendientes.length, usd: sumUSD(pendientes), color: 'text-amber-600' },
+          { label: 'Total a cobrar', count: pendientes.length + vencidas.length, usd: sumUSD(pendientes) + sumUSD(vencidas), color: 'text-[#1B9BF0]' },
+          { label: 'Vencidas',       count: vencidas.length,   usd: sumUSD(vencidas),   color: 'text-red-500' },
         ].map(({ label, count, usd, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-4">
             <p className="text-xs text-gray-400">{label}</p>
@@ -236,10 +236,7 @@ export default function FacturasClientesClient({
                       {new Date(f.fecha_vencimiento).toLocaleDateString('es-AR')}
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900 whitespace-nowrap">
-                      {tipoCambio
-                        ? 'USD ' + Math.round(f.importe_usd).toLocaleString('es-AR')
-                        : (f.currency === 'USD' ? 'USD ' : '$') + Number(f.importe).toLocaleString('es-AR')
-                      }
+                      {(f.currency === 'USD' ? 'USD ' : '$') + Number(f.importe).toLocaleString('es-AR')}
                     </td>
                     <td className="px-4 py-3">
                       <span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + estadoColors[est]}>
