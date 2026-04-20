@@ -272,7 +272,7 @@ export default function AppLayout({
       <header style={{ top: newsPx }} className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30">
         <Image src="/logo.jpeg" alt="DDS" width={90} height={28} className="object-contain rounded-md"/>
         <div className="flex items-center gap-2">
-          {canSeeOnlineUsers && <OnlineUsers/>}
+
           <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
             {unreadCount > 0 && !open && (
@@ -309,7 +309,10 @@ export default function AppLayout({
               <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0} onClick={() => setOpen(false)}/>
             </nav>
             <div className="px-4 py-4 border-t border-gray-50 flex items-center justify-between">
-              <span className="text-xs text-gray-300">v{APP_VERSION}</span>
+              <div className="flex items-center gap-2">
+                {canSeeOnlineUsers               <span className="text-xs text-gray-300">v{APP_VERSION}</span>              <span className="text-xs text-gray-300">v{APP_VERSION}</span> <OnlineUsers/>}
+                <span className="text-xs text-gray-300">v{APP_VERSION}</span>
+              </div>
               <button onClick={logout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-all">
                 <LogOut size={15}/> Cerrar sesión
               </button>
