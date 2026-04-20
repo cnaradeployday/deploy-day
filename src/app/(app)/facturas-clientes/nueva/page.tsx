@@ -6,16 +6,32 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { Currency, CURRENCIES } from '@/lib/utils/currency'
 
+function generarMeses() {
+  const meses: { value: string; label: string }[] = []
+  const now = new Date()
+  for (let i = -3; i <= 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const label = d.toLocaleString('es-AR', { month: 'long', year: 'numeric' })
+    meses.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
+  }
+  return meses
+}
+
 export default function NuevaFacturaClientePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<any[]>([])
   const [proyectos, setProyectos] = useState<any[]>([])
+  const meses = generarMeses()
+  const mesActual = new Date().toISOString().slice(0, 7)
+
   const [form, setForm] = useState({
     client_id: '', project_id: '', numero: '',
     fecha_emision: new Date().toISOString().split('T')[0],
     fecha_vencimiento: '', importe: '',
-    currency: 'ARS' as Currency, notas: ''
+    currency: 'ARS' as Currency, notas: '',
+    mes_servicio: mesActual,
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -43,6 +59,7 @@ export default function NuevaFacturaClientePage() {
       importe: parseFloat(form.importe),
       currency: form.currency,
       notas: form.notas || null,
+      mes_servicio: form.mes_servicio || null,
       created_by: user?.id,
     })
     if (!error) router.push('/facturas-clientes')
@@ -74,6 +91,14 @@ export default function NuevaFacturaClientePage() {
             </select>
           </div>
         )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Mes del servicio</label>
+          <select value={form.mes_servicio} onChange={e => set('mes_servicio', e.target.value)}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white capitalize">
+            <option value="">Sin especificar</option>
+            {meses.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Número *</label>
           <input type="text" value={form.numero} onChange={e => set('numero', e.target.value)} required
