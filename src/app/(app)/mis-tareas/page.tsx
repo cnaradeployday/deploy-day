@@ -129,7 +129,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
   }))
 
-  const horasEstimadasDelMes = tareasFiltered
+  const horasEstimadasDelMes = tareasFiltered.filter((t: any) => !t.desde_segmento)
     .reduce((s: number, t: any) => s + (t.my_assigned_hours ?? 0), 0)
 
   const proyectosUnicos = [...new Map(tareasFiltered.map((t: any) => [t.project?.id, t.project])).values()]

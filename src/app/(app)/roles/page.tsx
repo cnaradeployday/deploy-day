@@ -12,6 +12,7 @@ const MODULES = [
   { key: 'mis_tareas',            label: 'Mis tareas' },
   { key: 'mis_horas',             label: 'Mis horas' },
   { key: 'chat',                  label: 'Chat' },
+  { key: 'resumen_mes',           label: 'Resumen del mes' },
   { key: 'reportes_tareas',       label: 'Reportes — Estado de tareas' },
   { key: 'reportes_horas',        label: 'Reportes — Horas por proyecto' },
   { key: 'reportes_ocupacion',    label: 'Reportes — Ocupación' },
@@ -23,6 +24,7 @@ const MODULES = [
   { key: 'cotizaciones',          label: 'Cotizaciones USD' },
   { key: 'equipo',                label: 'Equipo' },
   { key: 'roles',                 label: 'Roles y permisos' },
+  { key: 'logs',                  label: 'Logs de actividad' },
   { key: 'online_users',          label: 'Ver usuarios online' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
 ]

@@ -253,7 +253,7 @@ export default function MisTareasClient({
               const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
               return (
                 <tr key={t.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors' + (esOtroMes ? ' opacity-60' : '')}>
-                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate">
+                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate" title={t.title}>
                     {t.title}
                     {esOtroMes && t.due_date && <span className="ml-1 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">{t.due_date.slice(0,7)}</span>}
                   </td>

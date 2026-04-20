@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { X, Megaphone } from 'lucide-react'
+import { X } from 'lucide-react'
 
 interface NewsItem {
   id: string
@@ -32,14 +32,27 @@ export default function NewsBanner({ news, userId }: { news: NewsItem | null; us
   }
 
   return (
-    <div className="fixed top-0 inset-x-0 z-[60] bg-[#1B9BF0] text-white px-4 py-2.5 flex items-center justify-between gap-4 shadow-sm">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        <Megaphone size={14} className="shrink-0 opacity-80"/>
-        <p className="text-sm font-medium truncate">{news.content}</p>
+    <>
+      <style>{`
+        @keyframes marquee {
+          0%   { transform: translateX(100vw); }
+          100% { transform: translateX(-100%); }
+        }
+        .marquee-track { animation: marquee 18s linear infinite; white-space: nowrap; }
+      `}</style>
+      <div className="fixed top-0 inset-x-0 z-[60] bg-green-500 text-white h-10 flex items-center overflow-hidden shadow-sm">
+        <div className="flex-1 overflow-hidden relative h-full flex items-center">
+          <div className="marquee-track text-sm font-semibold tracking-wide px-4">
+            🔔 &nbsp; {news.content} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 🔔 &nbsp; {news.content}
+          </div>
+        </div>
+        <button
+          onClick={dismiss}
+          className="shrink-0 px-3 h-full flex items-center hover:bg-green-600 transition-all border-l border-green-400"
+        >
+          <X size={14}/>
+        </button>
       </div>
-      <button onClick={dismiss} className="shrink-0 p-1 rounded-lg hover:bg-white/20 transition-all">
-        <X size={14}/>
-      </button>
-    </div>
+    </>
   )
 }
