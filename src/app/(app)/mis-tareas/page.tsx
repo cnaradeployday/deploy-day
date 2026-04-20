@@ -16,7 +16,6 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const { data: profile } = await supabase
     .from('users').select('role, custom_role_id').eq('id', user?.id ?? '').single()
 
-  // Permiso para crear tareas
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
   let canCreateTask = isAdmin
   if (!canCreateTask && profile?.custom_role_id) {
@@ -26,6 +25,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     canCreateTask = perm?.can_read ?? false
   }
 
+  // Todas las tareas activas del usuario (sin filtro de mes)
   const { data: directas } = await supabase
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours, direct_hours,
@@ -64,6 +64,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
 
   const taskIds = allTasks.map(t => t.id)
 
+  // Horas cargadas en el mes (filtra por entry_date)
   const { data: timeEntries } = taskIds.length
     ? await supabase
         .from('time_entries').select('task_id, hours_logged, user_id')
@@ -83,6 +84,11 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
   }))
 
+  // Horas estimadas del mes = tareas con due_date en el mes
+  const horasEstimadasDelMes = allTasks
+    .filter(t => t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia)
+    .reduce((s, t) => s + ((t as any).my_assigned_hours ?? 0), 0)
+
   const proyectosUnicos = [...new Map(allTasks.map(t => [(t.project as any)?.id, t.project])).values()]
     .filter(Boolean).map((p: any) => ({ value: p.id, label: p.name }))
 
@@ -97,6 +103,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       filters={{ status, priority, proyecto, cliente, mes }}
       mesActual={mesActual}
       canCreateTask={canCreateTask}
+      horasEstimadasDelMes={Math.round(horasEstimadasDelMes * 10) / 10}
     />
   )
 }

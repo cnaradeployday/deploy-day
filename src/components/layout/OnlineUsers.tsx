@@ -13,39 +13,41 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
   const [showTooltip, setShowTooltip] = useState(false)
   const [myId, setMyId] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const sbRef = useRef<any>(null)
   const channelRef = useRef<any>(null)
 
   useEffect(() => {
+    let cancelled = false
     const sb = createClient()
+    sbRef.current = sb
 
     async function init() {
       const { data: { user } } = await sb.auth.getUser()
-      if (!user) return
+      if (!user || cancelled) return
       setMyId(user.id)
 
-      const { data: profile } = await sb.from('users').select('full_name').eq('id', user.id).single()
+      const { data: profile } = await sb
+        .from('users').select('full_name').eq('id', user.id).single()
       const myName = profile?.full_name ?? user.email ?? 'Usuario'
 
-      // Crear canal NUEVO cada vez — nunca reusar
-      const channelName = 'online-users-' + Math.random().toString(36).slice(2)
-      const channel = sb.channel(channelName, {
+      // Canal con nombre estable basado en el userId
+      const channel = sb.channel('presence-online-v2', {
         config: { presence: { key: user.id } }
       })
-
       channelRef.current = channel
 
-      // Registrar TODOS los listeners ANTES de subscribe
       channel.on('presence', { event: 'sync' }, () => {
+        if (cancelled) return
         const state = channel.presenceState()
-        const online: OnlineUser[] = Object.entries(state).map(([userId, presences]: [string, any]) => ({
-          user_id: userId,
+        const online: OnlineUser[] = Object.entries(state).map(([uid, presences]: [string, any]) => ({
+          user_id: uid,
           full_name: presences[0]?.full_name ?? 'Usuario',
         }))
         setUsers(online)
       })
 
-      // subscribe al final
       channel.subscribe(async (status: string) => {
+        if (cancelled) return
         if (status === 'SUBSCRIBED') {
           await channel.track({ full_name: myName, online_at: new Date().toISOString() })
         }
@@ -55,9 +57,9 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
     init()
 
     return () => {
-      if (channelRef.current) {
-        const sb2 = createClient()
-        sb2.removeChannel(channelRef.current)
+      cancelled = true
+      if (channelRef.current && sbRef.current) {
+        sbRef.current.removeChannel(channelRef.current)
         channelRef.current = null
       }
     }
@@ -76,14 +78,17 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
   const Tooltip = ({ up = false }: { up?: boolean }) => (
     <div className={`absolute ${up ? 'bottom-full mb-2' : 'top-full mt-1'} left-0 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] min-w-[180px] p-2`}>
       <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
-      {users.map(u => (
-        <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
-          <span className="text-xs text-gray-700 truncate">
-            {u.full_name}{u.user_id === myId ? ' (vos)' : ''}
-          </span>
-        </div>
-      ))}
+      {count === 0
+        ? <p className="text-xs text-gray-400 px-2 py-1">Nadie más en línea</p>
+        : users.map(u => (
+          <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
+            <span className="text-xs text-gray-700 truncate">
+              {u.full_name}{u.user_id === myId ? ' (vos)' : ''}
+            </span>
+          </div>
+        ))
+      }
     </div>
   )
 
@@ -97,7 +102,7 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
             {count}
           </span>
         </button>
-        {showTooltip && count > 0 && <Tooltip up/>}
+        {showTooltip && <Tooltip up/>}
       </div>
     )
   }
@@ -114,7 +119,7 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
         <span className="text-xs font-semibold text-green-700">{count}</span>
         <Users size={11} className="text-green-600"/>
       </button>
-      {showTooltip && count > 0 && (
+      {showTooltip && (
         <div onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
           <Tooltip/>
         </div>
