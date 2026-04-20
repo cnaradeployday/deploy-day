@@ -32,9 +32,10 @@ interface Props {
   clientes: { value: string; label: string }[]
   filters: Record<string, string | undefined>
   mesActual: string
+  canCreateTask?: boolean
 }
 
-export default function MisTareasClient({ tareas, proyectos, clientes, filters, mesActual }: Props) {
+export default function MisTareasClient({ tareas, proyectos, clientes, filters, mesActual, canCreateTask = true }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -60,11 +61,20 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     meses.push(d.toISOString().slice(0, 7))
   }
+  // Agregar mes siguiente también
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  meses.push(nextMonth.toISOString().slice(0, 7))
+
   function nombreMes(m: string) {
     return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
   }
 
   const mes = filters.mes ?? mesActual
+
+  // Primer y último día del mes seleccionado (para filtrar KPIs)
+  const [anio, mesNum] = mes.split('-').map(Number)
+  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
+  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -89,7 +99,12 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
-  const totalEstimadas = tareasLocal.reduce((s, t) => s + (t.my_assigned_hours ?? 0), 0)
+  // KPIs: solo tareas cuyo due_date cae en el mes seleccionado (o sin fecha = incluir)
+  // Horas usadas = hours_logged ya viene filtrado por mes desde el server
+  const tareasDelMes = tareasLocal.filter(t =>
+    !t.due_date || (t.due_date >= primerDia && t.due_date <= ultimoDia)
+  )
+  const totalEstimadas = tareasDelMes.reduce((s, t) => s + (t.my_assigned_hours ?? 0), 0)
   const totalUsadas = tareasLocal.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
   const totalRestantes = totalEstimadas - totalUsadas
 
@@ -138,17 +153,20 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
           <button onClick={exportar} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14}/> Excel
           </button>
-          <Link href="/tareas/nueva" className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
-            <Plus size={15}/> Nueva tarea
-          </Link>
+          {canCreateTask && (
+            <Link href="/tareas/nueva"
+              className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+              <Plus size={15}/> Nueva tarea
+            </Link>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         {[
-          { label: 'Horas estimadas', value: Math.round(totalEstimadas * 10) / 10, color: 'text-gray-900' },
-          { label: 'Horas usadas',    value: Math.round(totalUsadas * 10) / 10,    color: 'text-[#1B9BF0]' },
-          { label: 'Restantes',       value: Math.round(totalRestantes * 10) / 10,  color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
+          { label: 'Horas estimadas (mes)', value: Math.round(totalEstimadas * 10) / 10, color: 'text-gray-900' },
+          { label: 'Horas usadas (mes)',    value: Math.round(totalUsadas * 10) / 10,    color: 'text-[#1B9BF0]' },
+          { label: 'Restantes',             value: Math.round(totalRestantes * 10) / 10,  color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
             <p className="text-xs text-gray-400">{label}</p>
@@ -159,9 +177,6 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { key: 'status', label: 'Estado', options: Object.entries(statusLabels).map(([v,l]) => ({ v, l })), all: 'Todos' },
-          ].map(() => null)}
           <div>
             <label className="block text-xs text-gray-400 mb-1">Estado</label>
             <select value={filters.status ?? ''} onChange={e => update('status', e.target.value)}
@@ -232,15 +247,24 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
           </thead>
           <tbody>
             {!sorted.length ? (
-              <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas en {nombreMes(mes)}</td></tr>
+              <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               const isLoading = loading === t.id
+              // Marcar tareas de otro mes
+              const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
               return (
-                <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate">{t.title}</td>
+                <tr key={t.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors' + (esOtroMes ? ' opacity-60' : '')}>
+                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate">
+                    {t.title}
+                    {esOtroMes && t.due_date && (
+                      <span className="ml-1 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">
+                        {t.due_date.slice(0,7)}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-3">
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                       {t.es_colaborador ? 'Colab.' : 'Resp.'}
@@ -293,10 +317,16 @@ export default function MisTareasClient({ tareas, proyectos, clientes, filters, 
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
           const myHours = t.my_assigned_hours ?? 0
           const isLoading = loading === t.id
+          const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
           return (
-            <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
+            <div key={t.id} className={'bg-white rounded-2xl border p-4 ' + (esOtroMes ? 'border-gray-50 opacity-70' : 'border-gray-100')}>
               <div className="flex items-start justify-between mb-2">
-                <p className="text-sm font-medium text-gray-900 flex-1 pr-2">{t.title}</p>
+                <div className="flex-1 pr-2">
+                  <p className="text-sm font-medium text-gray-900">{t.title}</p>
+                  {esOtroMes && t.due_date && (
+                    <span className="text-[10px] text-gray-400">{t.due_date.slice(0,7)}</span>
+                  )}
+                </div>
                 <span className={'text-xs px-2 py-0.5 rounded-full shrink-0 ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
               </div>
               <div className="flex items-center gap-2 mb-2">

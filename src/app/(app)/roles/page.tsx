@@ -8,6 +8,7 @@ const MODULES = [
   { key: 'proyectos',             label: 'Proyectos' },
   { key: 'proyectos_mes',         label: 'Proyectos del mes' },
   { key: 'tareas',                label: 'Tareas' },
+  { key: 'crear_tareas',          label: 'Crear tareas' },
   { key: 'mis_tareas',            label: 'Mis tareas' },
   { key: 'mis_horas',             label: 'Mis horas' },
   { key: 'chat',                  label: 'Chat' },

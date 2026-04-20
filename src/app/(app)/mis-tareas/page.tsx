@@ -13,8 +13,19 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  // Tareas donde soy responsable directo
-  // NO filtramos por due_date — mostramos todas las activas del usuario
+  const { data: profile } = await supabase
+    .from('users').select('role, custom_role_id').eq('id', user?.id ?? '').single()
+
+  // Permiso para crear tareas
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canCreateTask = isAdmin
+  if (!canCreateTask && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'crear_tareas').single()
+    canCreateTask = perm?.can_read ?? false
+  }
+
   const { data: directas } = await supabase
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours, direct_hours,
@@ -24,7 +35,6 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .not('status', 'in', '(presentado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
-  // Tareas donde soy colaborador
   const { data: colaboraciones } = await supabase
     .from('task_collaborators')
     .select(`assigned_hours, task:tasks(id, title, status, priority, due_date, estimated_hours,
@@ -54,14 +64,11 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
 
   const taskIds = allTasks.map(t => t.id)
 
-  // Horas cargadas en el mes seleccionado (esto sí filtra por mes)
   const { data: timeEntries } = taskIds.length
     ? await supabase
-        .from('time_entries')
-        .select('task_id, hours_logged, user_id')
+        .from('time_entries').select('task_id, hours_logged, user_id')
         .in('task_id', taskIds)
-        .gte('entry_date', primerDia)
-        .lte('entry_date', ultimoDia)
+        .gte('entry_date', primerDia).lte('entry_date', ultimoDia)
     : { data: [] }
 
   const misHorasPorTarea: Record<string, number> = {}
@@ -89,6 +96,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       clientes={clientesUnicos}
       filters={{ status, priority, proyecto, cliente, mes }}
       mesActual={mesActual}
+      canCreateTask={canCreateTask}
     />
   )
 }
