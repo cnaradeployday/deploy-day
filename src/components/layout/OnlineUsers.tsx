@@ -8,36 +8,36 @@ interface OnlineUser {
   full_name: string
 }
 
-// Singleton: compartir estado entre instancias del componente
-// (desktop sidebar + mobile header montan el mismo componente)
-let globalUsers: OnlineUser[] = []
-let globalListeners: Array<(users: OnlineUser[]) => void> = []
-let globalChannel: any = null
-let globalSb: any = null
-let globalMyId: string | null = null
-let initPromise: Promise<void> | null = null
+// ── Singleton global ──────────────────────────────────────────────────────────
+// El componente se monta DOS veces (sidebar desktop + header mobile).
+// Usamos variables fuera del módulo para que compartan un único canal de presencia.
+let _channel: any = null
+let _myId: string | null = null
+let _users: OnlineUser[] = []
+let _listeners: Set<(u: OnlineUser[]) => void> = new Set()
+let _ready = false
 
-function notifyAll(users: OnlineUser[]) {
-  globalUsers = users
-  globalListeners.forEach(fn => fn(users))
+function broadcast(users: OnlineUser[]) {
+  _users = users
+  _listeners.forEach(fn => fn(users))
 }
 
-async function initPresence() {
-  if (globalChannel) return // ya inicializado
-  const sb = createClient()
-  globalSb = sb
+async function ensureChannel() {
+  if (_ready) return
+  _ready = true // marcar antes de await para evitar doble init
 
+  const sb = createClient()
   const { data: { user } } = await sb.auth.getUser()
-  if (!user) return
-  globalMyId = user.id
+  if (!user) { _ready = false; return }
+  _myId = user.id
 
   const { data: profile } = await sb.from('users').select('full_name').eq('id', user.id).single()
   const myName = profile?.full_name ?? user.email ?? 'Usuario'
 
-  const channel = sb.channel('presence-online-v3', {
+  const channel = sb.channel('dd-presence-v4', {
     config: { presence: { key: user.id } }
   })
-  globalChannel = channel
+  _channel = channel
 
   channel.on('presence', { event: 'sync' }, () => {
     const state = channel.presenceState()
@@ -45,7 +45,7 @@ async function initPresence() {
       user_id: uid,
       full_name: presences[0]?.full_name ?? 'Usuario',
     }))
-    notifyAll(online)
+    broadcast(online)
   })
 
   channel.subscribe(async (status: string) => {
@@ -54,43 +54,38 @@ async function initPresence() {
     }
   })
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {
-  const [users, setUsers] = useState<OnlineUser[]>(globalUsers)
-  const [myId, setMyId] = useState<string | null>(globalMyId)
+  const [users, setUsers] = useState<OnlineUser[]>(_users)
+  const [myId, setMyId] = useState<string | null>(_myId)
   const [showTooltip, setShowTooltip] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Registrar listener
+    // Suscribirse a updates del singleton
     const listener = (u: OnlineUser[]) => {
-      setUsers(u)
-      if (globalMyId) setMyId(globalMyId)
+      setUsers([...u])
+      setMyId(_myId)
     }
-    globalListeners.push(listener)
+    _listeners.add(listener)
 
-    // Inicializar presencia (idempotente — solo crea canal una vez)
-    if (!initPromise) {
-      initPromise = initPresence().then(() => {
-        if (globalMyId) setMyId(globalMyId)
-      })
-    } else {
-      // Ya inicializado, actualizar state con datos actuales
-      setUsers(globalUsers)
-      if (globalMyId) setMyId(globalMyId)
-    }
+    // Arrancar el canal (idempotente)
+    ensureChannel().then(() => {
+      setMyId(_myId)
+      setUsers([..._users])
+    })
 
-    return () => {
-      globalListeners = globalListeners.filter(l => l !== listener)
-    }
+    return () => { _listeners.delete(listener) }
   }, [])
 
+  // Cerrar tooltip al clickear afuera
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setShowTooltip(false)
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   const count = users.length
@@ -99,10 +94,10 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
     <div className={`absolute ${up ? 'bottom-full mb-2' : 'top-full mt-1'} left-0 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] min-w-[180px] p-2`}>
       <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
       {count === 0
-        ? <p className="text-xs text-gray-400 px-2 py-1">Solo vos</p>
+        ? <p className="text-xs text-gray-400 px-2 py-1">Solo vos en este momento</p>
         : users.map(u => (
           <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"/>
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0"/>
             <span className="text-xs text-gray-700 truncate">
               {u.full_name}{u.user_id === myId ? ' (vos)' : ''}
             </span>

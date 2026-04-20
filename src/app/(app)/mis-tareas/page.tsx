@@ -25,7 +25,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     canCreateTask = perm?.can_read ?? false
   }
 
-  // Todas las tareas activas asignadas al usuario
+  // Todas las tareas activas del usuario (sin filtro de mes en due_date)
   const { data: directas } = await supabase
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours, direct_hours, project_id,
@@ -57,57 +57,50 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const colabSinDuplicar = colabTasks.filter((t: any) => !directasIds.has(t.id))
   const allTasksRaw = [...directasMapped, ...colabSinDuplicar]
 
-  // Obtener segmentos de los proyectos de las tareas para el mes actual
-  const proyectosIds = [...new Set(allTasksRaw.map(t => (t as any).project_id).filter(Boolean))]
+  // Segmentos del mes para los proyectos de las tareas
+  const proyectosIds = [...new Set(allTasksRaw.map((t: any) => t.project_id).filter(Boolean))]
+
   const { data: segmentosMes } = proyectosIds.length
     ? await supabase
         .from('project_hour_segments')
-        .select('project_id, horas, desde, hasta')
+        .select('project_id, horas')
         .in('project_id', proyectosIds)
         .lte('desde', ultimoDia)
         .gte('hasta', primerDia)
     : { data: [] }
 
-  // Mapa: project_id → horas del segmento del mes
-  const segmentosPorProyecto: Record<string, number> = {}
-  ;(segmentosMes ?? []).forEach(s => {
-    segmentosPorProyecto[s.project_id] = (segmentosPorProyecto[s.project_id] ?? 0) + s.horas
+  // Horas del segmento del mes por proyecto
+  const segPorProyecto: Record<string, number> = {}
+  ;(segmentosMes ?? []).forEach((s: any) => {
+    segPorProyecto[s.project_id] = (segPorProyecto[s.project_id] ?? 0) + s.horas
   })
 
-  // Una tarea aparece en el mes si:
-  // 1. Su due_date está en el mes, O
-  // 2. Su proyecto tiene un segmento en el mes Y la tarea no está terminada/presentada
-  const allTasks = allTasksRaw.filter(t => {
-    const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-    const proyectoEnMes = segmentosPorProyecto[(t as any).project_id] !== undefined
-    return dueEnMes || proyectoEnMes
-  }).map(t => {
-    // Si la tarea viene de segmento (no tiene due_date en el mes),
-    // mostrar las horas del segmento del proyecto como referencia
-    const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-    const horasSegmento = segmentosPorProyecto[(t as any).project_id]
-    return {
-      ...t,
-      // Si tiene due_date en el mes, usar my_assigned_hours normal
-      // Si viene por segmento, mostrar horas del segmento
-      my_assigned_hours: dueEnMes
-        ? (t as any).my_assigned_hours
-        : horasSegmento ?? (t as any).my_assigned_hours,
-      // Marcar si viene de segmento para mostrar distintivo
-      desde_segmento: !dueEnMes && horasSegmento !== undefined,
-    }
-  })
+  // Incluir tarea si: due_date en el mes, O su proyecto tiene segmento en el mes
+  const allTasks = allTasksRaw
+    .filter((t: any) => {
+      const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
+      const proyEnMes = segPorProyecto[t.project_id] !== undefined
+      return dueEnMes || proyEnMes
+    })
+    .map((t: any) => {
+      const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
+      const horasSeg = segPorProyecto[t.project_id]
+      return {
+        ...t,
+        // Si viene por segmento (no por due_date), usar horas del segmento
+        my_assigned_hours: dueEnMes ? t.my_assigned_hours : (horasSeg ?? t.my_assigned_hours),
+        desde_segmento: !dueEnMes && horasSeg !== undefined,
+      }
+    })
 
-  // Aplicar filtros del usuario
   let tareasFiltered = [...allTasks]
-  if (status) tareasFiltered = tareasFiltered.filter(t => t.status === status)
-  if (priority) tareasFiltered = tareasFiltered.filter(t => t.priority === priority)
-  if (proyecto) tareasFiltered = tareasFiltered.filter(t => (t.project as any)?.id === proyecto)
-  if (cliente) tareasFiltered = tareasFiltered.filter(t => ((t.project as any)?.client as any)?.id === cliente)
+  if (status) tareasFiltered = tareasFiltered.filter((t: any) => t.status === status)
+  if (priority) tareasFiltered = tareasFiltered.filter((t: any) => t.priority === priority)
+  if (proyecto) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.id === proyecto)
+  if (cliente) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.client?.id === cliente)
 
-  const taskIds = tareasFiltered.map(t => t.id)
+  const taskIds = tareasFiltered.map((t: any) => t.id)
 
-  // Horas cargadas en el mes por entry_date
   const { data: timeEntries } = taskIds.length
     ? await supabase
         .from('time_entries').select('task_id, hours_logged, user_id')
@@ -116,25 +109,24 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     : { data: [] }
 
   const misHorasPorTarea: Record<string, number> = {}
-  timeEntries?.forEach(e => {
+  timeEntries?.forEach((e: any) => {
     if (e.user_id === user?.id) {
       misHorasPorTarea[e.task_id] = (misHorasPorTarea[e.task_id] ?? 0) + e.hours_logged
     }
   })
 
-  const tareasConHoras = tareasFiltered.map(t => ({
+  const tareasConHoras = tareasFiltered.map((t: any) => ({
     ...t,
     hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
   }))
 
-  // KPI horas estimadas = suma de my_assigned_hours de las tareas del mes
   const horasEstimadasDelMes = tareasFiltered
-    .reduce((s, t) => s + ((t as any).my_assigned_hours ?? 0), 0)
+    .reduce((s: number, t: any) => s + (t.my_assigned_hours ?? 0), 0)
 
-  const proyectosUnicos = [...new Map(tareasFiltered.map(t => [(t.project as any)?.id, t.project])).values()]
+  const proyectosUnicos = [...new Map(tareasFiltered.map((t: any) => [t.project?.id, t.project])).values()]
     .filter(Boolean).map((p: any) => ({ value: p.id, label: p.name }))
 
-  const clientesUnicos = [...new Map(tareasFiltered.map(t => [((t.project as any)?.client as any)?.id, (t.project as any)?.client])).values()]
+  const clientesUnicos = [...new Map(tareasFiltered.map((t: any) => [t.project?.client?.id, t.project?.client])).values()]
     .filter(Boolean).map((c: any) => ({ value: c.id, label: c.name }))
 
   return (
