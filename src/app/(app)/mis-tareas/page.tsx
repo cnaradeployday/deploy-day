@@ -25,21 +25,31 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     canCreateTask = perm?.can_read ?? false
   }
 
-  // Todas las tareas activas del usuario (sin filtro de mes en due_date)
+  // Tareas donde soy responsable — incluye project_id explícito para segmentos
   const { data: directas } = await supabase
     .from('tasks')
-    .select(`id, title, status, priority, due_date, estimated_hours, direct_hours, project_id,
+    .select(`
+      id, title, status, priority, due_date, estimated_hours, direct_hours,
+      project_id,
       project:projects(id, name, client:clients(id, name)),
-      direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)`)
+      direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)
+    `)
     .eq('direct_responsible_id', user?.id)
     .not('status', 'in', '(presentado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
+  // Tareas donde soy colaborador — incluye project_id explícito
   const { data: colaboraciones } = await supabase
     .from('task_collaborators')
-    .select(`assigned_hours, task:tasks(id, title, status, priority, due_date, estimated_hours, project_id,
-      project:projects(id, name, client:clients(id, name)),
-      direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name))`)
+    .select(`
+      assigned_hours,
+      task:tasks(
+        id, title, status, priority, due_date, estimated_hours,
+        project_id,
+        project:projects(id, name, client:clients(id, name)),
+        direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)
+      )
+    `)
     .eq('user_id', user?.id)
 
   const colabTasks = (colaboraciones ?? [])
@@ -47,19 +57,20 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .filter(Boolean)
     .filter((t: any) => t.status !== 'presentado')
 
-  const directasMapped = (directas ?? []).map(t => ({
+  const directasMapped = (directas ?? []).map((t: any) => ({
     ...t,
-    my_assigned_hours: (t as any).direct_hours ?? null,
+    my_assigned_hours: t.direct_hours ?? null,
     es_colaborador: false,
   }))
 
-  const directasIds = new Set(directasMapped.map(t => t.id))
+  const directasIds = new Set(directasMapped.map((t: any) => t.id))
   const colabSinDuplicar = colabTasks.filter((t: any) => !directasIds.has(t.id))
   const allTasksRaw = [...directasMapped, ...colabSinDuplicar]
 
-  // Segmentos del mes para los proyectos de las tareas
+  // Recopilar project_ids — ahora sí disponibles en el resultado
   const proyectosIds = [...new Set(allTasksRaw.map((t: any) => t.project_id).filter(Boolean))]
 
+  // Segmentos del mes para esos proyectos
   const { data: segmentosMes } = proyectosIds.length
     ? await supabase
         .from('project_hour_segments')
@@ -69,35 +80,33 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
         .gte('hasta', primerDia)
     : { data: [] }
 
-  // Horas del segmento del mes por proyecto
   const segPorProyecto: Record<string, number> = {}
   ;(segmentosMes ?? []).forEach((s: any) => {
     segPorProyecto[s.project_id] = (segPorProyecto[s.project_id] ?? 0) + s.horas
   })
 
-  // Incluir tarea si: due_date en el mes, O su proyecto tiene segmento en el mes
+  // Incluir tarea si: due_date en el mes, O proyecto tiene segmento en el mes
   const allTasks = allTasksRaw
     .filter((t: any) => {
       const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-      const proyEnMes = segPorProyecto[t.project_id] !== undefined
+      const proyEnMes = t.project_id && segPorProyecto[t.project_id] !== undefined
       return dueEnMes || proyEnMes
     })
     .map((t: any) => {
       const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-      const horasSeg = segPorProyecto[t.project_id]
+      const horasSeg = t.project_id ? segPorProyecto[t.project_id] : undefined
       return {
         ...t,
-        // Si viene por segmento (no por due_date), usar horas del segmento
         my_assigned_hours: dueEnMes ? t.my_assigned_hours : (horasSeg ?? t.my_assigned_hours),
         desde_segmento: !dueEnMes && horasSeg !== undefined,
       }
     })
 
   let tareasFiltered = [...allTasks]
-  if (status) tareasFiltered = tareasFiltered.filter((t: any) => t.status === status)
+  if (status)   tareasFiltered = tareasFiltered.filter((t: any) => t.status === status)
   if (priority) tareasFiltered = tareasFiltered.filter((t: any) => t.priority === priority)
   if (proyecto) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.id === proyecto)
-  if (cliente) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.client?.id === cliente)
+  if (cliente)  tareasFiltered = tareasFiltered.filter((t: any) => t.project?.client?.id === cliente)
 
   const taskIds = tareasFiltered.map((t: any) => t.id)
 

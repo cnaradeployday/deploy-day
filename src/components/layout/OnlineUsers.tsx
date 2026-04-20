@@ -8,36 +8,44 @@ interface OnlineUser {
   full_name: string
 }
 
-// ── Singleton global ──────────────────────────────────────────────────────────
-// El componente se monta DOS veces (sidebar desktop + header mobile).
-// Usamos variables fuera del módulo para que compartan un único canal de presencia.
-let _channel: any = null
-let _myId: string | null = null
-let _users: OnlineUser[] = []
-let _listeners: Set<(u: OnlineUser[]) => void> = new Set()
-let _ready = false
-
-function broadcast(users: OnlineUser[]) {
-  _users = users
-  _listeners.forEach(fn => fn(users))
+const _state = {
+  channel: null as any,
+  myId: null as string | null,
+  users: [] as OnlineUser[],
+  listeners: new Set<(u: OnlineUser[]) => void>(),
+  initialized: false,
 }
 
-async function ensureChannel() {
-  if (_ready) return
-  _ready = true // marcar antes de await para evitar doble init
+function broadcast(users: OnlineUser[]) {
+  _state.users = users
+  _state.listeners.forEach(fn => fn([...users]))
+}
+
+async function init() {
+  if (_state.initialized) return
+  _state.initialized = true
 
   const sb = createClient()
   const { data: { user } } = await sb.auth.getUser()
-  if (!user) { _ready = false; return }
-  _myId = user.id
+  if (!user) { _state.initialized = false; return }
+  _state.myId = user.id
 
   const { data: profile } = await sb.from('users').select('full_name').eq('id', user.id).single()
   const myName = profile?.full_name ?? user.email ?? 'Usuario'
 
-  const channel = sb.channel('dd-presence-v4', {
+  // Canal compartido — todos los usuarios deben usar el mismo nombre
+  const CHANNEL_NAME = 'deployday-online-users'
+
+  // Remover canal anterior si existe (por hot reload en dev)
+  if (_state.channel) {
+    try { await sb.removeChannel(_state.channel) } catch {}
+    _state.channel = null
+  }
+
+  const channel = sb.channel(CHANNEL_NAME, {
     config: { presence: { key: user.id } }
   })
-  _channel = channel
+  _state.channel = channel
 
   channel.on('presence', { event: 'sync' }, () => {
     const state = channel.presenceState()
@@ -54,32 +62,26 @@ async function ensureChannel() {
     }
   })
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {
-  const [users, setUsers] = useState<OnlineUser[]>(_users)
-  const [myId, setMyId] = useState<string | null>(_myId)
+  const [users, setUsers] = useState<OnlineUser[]>(_state.users)
+  const [myId, setMyId] = useState<string | null>(_state.myId)
   const [showTooltip, setShowTooltip] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Suscribirse a updates del singleton
     const listener = (u: OnlineUser[]) => {
-      setUsers([...u])
-      setMyId(_myId)
+      setUsers(u)
+      setMyId(_state.myId)
     }
-    _listeners.add(listener)
-
-    // Arrancar el canal (idempotente)
-    ensureChannel().then(() => {
-      setMyId(_myId)
-      setUsers([..._users])
+    _state.listeners.add(listener)
+    init().then(() => {
+      setMyId(_state.myId)
+      setUsers([..._state.users])
     })
-
-    return () => { _listeners.delete(listener) }
+    return () => { _state.listeners.delete(listener) }
   }, [])
 
-  // Cerrar tooltip al clickear afuera
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setShowTooltip(false)
@@ -93,7 +95,7 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
   const Tooltip = ({ up = false }: { up?: boolean }) => (
     <div className={`absolute ${up ? 'bottom-full mb-2' : 'top-full mt-1'} left-0 bg-white border border-gray-100 rounded-xl shadow-xl z-[999] min-w-[180px] p-2`}>
       <p className="text-xs font-medium text-gray-400 px-2 pb-1 border-b border-gray-50 mb-1">En línea ahora</p>
-      {count === 0
+      {users.length === 0
         ? <p className="text-xs text-gray-400 px-2 py-1">Solo vos en este momento</p>
         : users.map(u => (
           <div key={u.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50">
