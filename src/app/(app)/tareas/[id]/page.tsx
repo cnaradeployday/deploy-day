@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import TaskActions from './TaskActions'
 import TaskTimer from './TaskTimer'
+import TaskAttachments from './TaskAttachments'
 import TaskComments from './TaskComments'
 
 const statusColors: Record<string, string> = {
@@ -63,6 +64,12 @@ export default async function TareaDetailPage({ params, searchParams }: { params
     .from('task_comments')
     .select('id, content, created_at, user:users(id, full_name)')
     .eq('task_id', id)
+
+  const { data: attachments } = await supabase
+    .from('task_attachments')
+    .select('*')
+    .eq('task_id', id)
+    .order('created_at', { ascending: false })
     .order('created_at', { ascending: true })
 
   return (
@@ -162,6 +169,14 @@ export default async function TareaDetailPage({ params, searchParams }: { params
           </div>
         )}
       </div>
+
+      <TaskAttachments
+        taskId={t.id}
+        userId={user?.id ?? ''}
+        userName={profile?.full_name ?? ''}
+        canUpload={isAssigned || isAdmin}
+        initialAttachments={attachments ?? []}
+      />
 
       <TaskComments
         taskId={t.id}

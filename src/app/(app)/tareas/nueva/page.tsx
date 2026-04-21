@@ -1,6 +1,6 @@
 'use client'
 import { logActivity } from '@/lib/logActivity'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -31,6 +31,8 @@ export default function NuevaTareaPage() {
   const [proyectos, setProyectos] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [colaboradores, setColaboradores] = useState<Colab[]>([])
+  const [briefFiles, setBriefFiles] = useState<File[]>([])
+  const briefInputRef = useRef<HTMLInputElement>(null)
   const [proyectoInfo, setProyectoInfo] = useState<ProyectoInfo | null>(null)
   const [usuariosInfo, setUsuariosInfo] = useState<Record<string, UsuarioInfo>>({})
   const [form, setForm] = useState({
@@ -181,6 +183,23 @@ export default function NuevaTareaPage() {
       await supabase.from('task_collaborators').insert(
         colaboradores.map(c => ({ task_id: task.id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
       )
+    }
+    // Subir archivos de brief si los hay
+    if (briefFiles.length > 0 && task) {
+      const sb2 = createClient()
+      const { data: { user: u } } = await sb2.auth.getUser()
+      const { data: prof } = await sb2.from('users').select('full_name').eq('id', u?.id ?? '').single()
+      for (const file of briefFiles) {
+        const path = `${task.id}/brief/${Date.now()}-${file.name}`
+        const { error: upErr } = await sb2.storage.from('task-files').upload(path, file)
+        if (!upErr) {
+          await sb2.from('task_attachments').insert({
+            task_id: task.id, user_id: u?.id, user_name: prof?.full_name,
+            file_name: file.name, file_path: path,
+            file_size: file.size, file_type: file.type, category: 'brief'
+          })
+        }
+      }
     }
     logActivity({ action: 'crear tarea', section: 'tareas', entityName: form.title, detail: 'Nueva tarea creada' })
     router.push('/tareas')
@@ -342,6 +361,29 @@ export default function NuevaTareaPage() {
             </span>
           </div>
         )}
+
+        {/* Archivos de brief */}
+        <div className="border border-gray-100 rounded-2xl p-4 space-y-3">
+          <p className="text-sm font-medium text-gray-700">Brief / Archivos de referencia</p>
+          <input ref={briefInputRef} type="file" multiple className="hidden"
+            onChange={e => setBriefFiles(prev => [...prev, ...Array.from(e.target.files ?? [])])}/>
+          {briefFiles.length > 0 && (
+            <div className="space-y-1.5">
+              {briefFiles.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl">
+                  <span className="text-xs text-gray-600 flex-1 truncate">{f.name}</span>
+                  <span className="text-xs text-gray-400">{(f.size/1024).toFixed(0)}KB</span>
+                  <button type="button" onClick={() => setBriefFiles(prev => prev.filter((_, j) => j !== i))}
+                    className="text-gray-300 hover:text-red-400 text-xs">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={() => briefInputRef.current?.click()}
+            className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-200 rounded-xl text-xs text-gray-400 hover:border-[#1B9BF0] hover:text-[#1B9BF0] transition-all w-full justify-center">
+            + Adjuntar archivos
+          </button>
+        </div>
 
         {error && <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl">{error}</div>}
 
