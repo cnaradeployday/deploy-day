@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, FileText, Trash2, ChevronUp, ChevronDown, X, AlertTriangle } from 'lucide-react'
+import { Plus, FileText, Trash2, ChevronUp, ChevronDown, X, AlertTriangle, Pencil, CheckCircle } from 'lucide-react'
 
 function formatMes(mes: string | null) {
   if (!mes) return '—'
@@ -49,6 +49,8 @@ export default function FacturasClientesClient({
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [cobrandoId, setCobrandoId] = useState<string | null>(null)
+  const [fechaCobro, setFechaCobro] = useState(new Date().toISOString().split('T')[0])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -93,6 +95,15 @@ export default function FacturasClientesClient({
 
   const sumUSD = (arr: any[]) => arr.reduce((s, f) => s + f.importe_usd, 0)
   const fmtUSD = (n: number) => 'USD ' + Math.round(n).toLocaleString('es-AR')
+
+  async function marcarCobrada(id: string) {
+    setCobrandoId(id)
+    await createClient().from('facturas_clientes').update({
+      estado: 'cobrada', fecha_cobro: fechaCobro
+    }).eq('id', id)
+    setCobrandoId(null)
+    router.refresh()
+  }
 
   async function handleDelete(id: string) {
     setDeletingId(id)
@@ -249,6 +260,17 @@ export default function FacturasClientesClient({
                       {f.fecha_cobro ? new Date(f.fecha_cobro).toLocaleDateString('es-AR') : '—'}
                     </td>
                     <td className="px-4 py-3">
+                      <Link href={'/facturas-clientes/' + f.id + '/editar'}
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                        <Pencil size={13}/>
+                      </Link>
+                      {est !== 'cobrada' && (
+                        <button onClick={() => marcarCobrada(f.id)} disabled={cobrandoId === f.id}
+                          title="Marcar cobrada"
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40">
+                          <CheckCircle size={13}/>
+                        </button>
+                      )}
                       <button onClick={() => setConfirmId(f.id)}
                         className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
                         <Trash2 size={13}/>
