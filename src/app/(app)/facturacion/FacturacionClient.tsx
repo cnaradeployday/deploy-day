@@ -21,7 +21,7 @@ export default function FacturacionClient({ filas, mes, mesActual, tipoCambio, f
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
   const meses: string[] = []
   const now = new Date()
-  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); meses.push(d.toISOString().slice(0, 7)) }
+  for (let i = 5; i >= -6; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); meses.push(d.toISOString().slice(0, 7)) }
   const toggle = (id: string) => setExpandidos(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   function exportar() {
