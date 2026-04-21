@@ -25,6 +25,8 @@ const MODULES = [
   { key: 'equipo',                label: 'Equipo' },
   { key: 'roles',                 label: 'Roles y permisos' },
   { key: 'logs',                  label: 'Logs de actividad' },
+  { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
+  { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
   { key: 'online_users',          label: 'Ver usuarios online' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
 ]

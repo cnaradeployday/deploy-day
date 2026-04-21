@@ -38,12 +38,22 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   if (!t) notFound()
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('users').select('role, full_name').eq('id', user?.id ?? '').single()
+  const { data: profile } = await supabase.from('users').select('role, full_name, custom_role_id').eq('id', user?.id ?? '').single()
 
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
+
+  // Permiso cargar horas en nombre de otros
+  let canCargarHorasOtros = isAdmin
+  if (!canCargarHorasOtros && profile?.custom_role_id) {
+    const { data: permHoras } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'cargar_horas_otros').single()
+    canCargarHorasOtros = permHoras?.can_read ?? false
+  }
+
   const isDirectResponsible = t.direct_responsible_id === user?.id
   const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
@@ -127,6 +137,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
             task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
             userId={user?.id ?? ''}
             userRole={profile?.role ?? 'colaborador'}
+            canCargarHorasOtros={canCargarHorasOtros}
             timeEntries={(t.time_entries as any[]) ?? []}
             isDirectResponsible={isDirectResponsible}
           />

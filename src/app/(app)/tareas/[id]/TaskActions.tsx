@@ -1,16 +1,17 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2 } from 'lucide-react'
+import { Loader2, UserCheck } from 'lucide-react'
 import { logActivity } from '@/lib/logActivity'
 
-export default function TaskActions({ task, userId, userRole, timeEntries, isDirectResponsible }: {
+export default function TaskActions({ task, userId, userRole, timeEntries, isDirectResponsible, canCargarHorasOtros = false }: {
   task: { id: string; status: string; estimated_hours: number | null }
   userId: string
   userRole: string
   timeEntries: any[]
   isDirectResponsible?: boolean
+  canCargarHorasOtros?: boolean
 }) {
   const router = useRouter()
   const [hours, setHours] = useState('')
@@ -18,10 +19,23 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [targetUserId, setTargetUserId] = useState(userId)
+  const [usuarios, setUsuarios] = useState<{ id: string; full_name: string }[]>([])
 
   const isAdmin = userRole === 'admin'
   const isGerente = userRole === 'gerente_operaciones'
   const canManage = isAdmin || isGerente
+  const showUserSelector = canCargarHorasOtros || canManage
+
+  useEffect(() => {
+    if (!showUserSelector) return
+    createClient()
+      .from('users')
+      .select('id, full_name')
+      .eq('is_active', true)
+      .order('full_name')
+      .then(({ data }) => setUsuarios(data ?? []))
+  }, [showUserSelector])
 
   const transitions: Record<string, { next: string; label: string; who: 'all' | 'manage' | 'responsible' }> = {
     creado:    { next: 'estimado',   label: 'Iniciar tarea',          who: 'all' },
@@ -41,15 +55,9 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
     if (!t) return
     setLoading(true)
     setErrorMsg(null)
-    const { error } = await createClient()
-      .from('tasks')
-      .update({ status: t.next })
-      .eq('id', task.id)
-    if (error) {
-      setErrorMsg('Error al cambiar estado: ' + error.message)
-      setLoading(false)
-      return
-    }
+    const { error } = await createClient().from('tasks').update({ status: t.next }).eq('id', task.id)
+    if (error) { setErrorMsg('Error al cambiar estado: ' + error.message); setLoading(false); return }
+    logActivity({ action: 'cambiar estado', section: 'tareas', entityId: task.id, detail: task.status + ' → ' + t.next })
     router.refresh()
     setLoading(false)
   }
@@ -58,16 +66,27 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
     if (!hours || parseFloat(hours) <= 0) return
     setLoading(true)
     setErrorMsg(null)
+
+    const finalUserId = showUserSelector ? targetUserId : userId
+    const targetUser = usuarios.find(u => u.id === finalUserId)
+    const isLoadingForOther = finalUserId !== userId
+
     const { error } = await createClient().from('time_entries').insert({
-      task_id: task.id, user_id: userId,
+      task_id: task.id,
+      user_id: finalUserId,
       hours_logged: parseFloat(hours),
-      entry_date: date, notes: notes || null
+      entry_date: date,
+      notes: notes || null
     })
-    if (error) {
-      setErrorMsg('Error al registrar horas: ' + error.message)
-      setLoading(false)
-      return
-    }
+    if (error) { setErrorMsg('Error al registrar horas: ' + error.message); setLoading(false); return }
+
+    logActivity({
+      action: 'cargar horas',
+      section: 'horas',
+      entityId: task.id,
+      detail: hours + 'h' + (isLoadingForOther ? ' para ' + (targetUser?.full_name ?? finalUserId) : '')
+    })
+
     setHours(''); setNotes('')
     router.refresh()
     setLoading(false)
@@ -99,6 +118,32 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
       {task.status === 'en_proceso' && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-medium text-gray-700 mb-3">Cargar horas</p>
+
+          {/* Selector de usuario — solo si tiene permiso */}
+          {showUserSelector && usuarios.length > 0 && (
+            <div className="mb-3">
+              <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
+                <UserCheck size={11}/> Cargar para
+              </label>
+              <select
+                value={targetUserId}
+                onChange={e => setTargetUserId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white"
+              >
+                {usuarios.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.full_name}{u.id === userId ? ' (yo)' : ''}
+                  </option>
+                ))}
+              </select>
+              {targetUserId !== userId && (
+                <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 px-2 py-1 rounded-lg">
+                  Estás cargando horas en nombre de otro usuario
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Horas *</label>
