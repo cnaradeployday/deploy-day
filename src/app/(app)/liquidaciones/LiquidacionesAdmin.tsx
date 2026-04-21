@@ -241,7 +241,7 @@ export default function LiquidacionesAdmin({
                   <div className="grid grid-cols-5 px-5 py-4 items-center">
                     <div className="col-span-2">
                       <p className="text-sm font-medium text-gray-900">{liq.user?.full_name ?? '—'}</p>
-                      <p className="text-xs text-gray-400">${liq.valor_hora}/h · ${Number(liq.monto_total ?? 0).toLocaleString()} total</p>
+                      <p className="text-xs text-gray-400">{liq.user?.currency === "USD" ? "USD " : "$"}{liq.valor_hora}/h · {liq.user?.currency === "USD" ? "USD " : "$"}{Number(liq.monto_total ?? 0).toLocaleString()} total</p>
                     </div>
                     <p className="text-sm text-gray-600 text-center capitalize">{nombreMes(liq.mes)}</p>
                     <p className="text-sm font-semibold text-gray-900 text-center">{liq.total_horas}h</p>
@@ -304,8 +304,8 @@ export default function LiquidacionesAdmin({
                     <p className="font-semibold text-gray-900 capitalize">{nombreMes(liq.mes)}</p>
                     <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                       <span className="flex items-center gap-1"><Clock size={13} /> {liq.total_horas}h</span>
-                      <span className="flex items-center gap-1"><DollarSign size={13} /> ${liq.valor_hora}/h</span>
-                      <span className="font-bold text-gray-900">${Number(liq.monto_total ?? 0).toLocaleString()} monto a facturar</span>
+                      <span className="flex items-center gap-1"><DollarSign size={13} /> {liq.user?.currency === "USD" ? "USD " : "$"}{liq.valor_hora}/h</span>
+                      <span className="font-bold text-gray-900">{liq.user?.currency === "USD" ? "USD " : "$"}{Number(liq.monto_total ?? 0).toLocaleString()} monto a facturar</span>
                     </div>
                   </div>
                   <span className={'text-xs px-2.5 py-1 rounded-full ' + (estadoColors[liq.estado] ?? 'bg-gray-100 text-gray-500')}>
@@ -331,7 +331,7 @@ export default function LiquidacionesAdmin({
                 {liq.estado === 'aprobado_gerente' && (
                   <div className="space-y-3">
                     <div className="bg-amber-50 rounded-xl px-4 py-3 text-sm text-amber-700 font-medium">
-                      ¡Aprobado! Facturá por <strong>${Number(liq.monto_total ?? 0).toLocaleString()}</strong>
+                      ¡Aprobado! Facturá por <strong>{liq.user?.currency === "USD" ? "USD " : "$"}{Number(liq.monto_total ?? 0).toLocaleString()}</strong>
                     </div>
                     {editBanco === liq.id ? (
                       <div className="space-y-2 border border-gray-200 rounded-xl p-4">
@@ -432,8 +432,8 @@ export default function LiquidacionesAdmin({
                         <p className="text-xs text-gray-400 capitalize">{nombreMes(liq.mes)}</p>
                       </div>
                       <p className="text-sm text-gray-700 text-center">{liq.total_horas}h</p>
-                      <p className="text-sm text-gray-700 text-center">${liq.valor_hora}</p>
-                      <p className="text-sm font-bold text-gray-900 text-center">${Number(liq.monto_total ?? 0).toLocaleString()}</p>
+                      <p className="text-sm text-gray-700 text-center">{liq.user?.currency === "USD" ? "USD " : "$"}{liq.valor_hora}</p>
+                      <p className="text-sm font-bold text-gray-900 text-center">{liq.user?.currency === "USD" ? "USD " : "$"}{Number(liq.monto_total ?? 0).toLocaleString()}</p>
                       <div className="text-center">
                         {aprobador ? (
                           <div>
