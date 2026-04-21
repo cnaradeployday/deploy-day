@@ -1,4 +1,5 @@
 'use client'
+import { logActivity } from '@/lib/logActivity'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -112,6 +113,7 @@ export default function MisTareasClient({
       t.id === taskId ? { ...t, status: nextStatus[status] } : t
     ))
     const { error } = await createClient().from('tasks').update({ status: nextStatus[status] }).eq('id', taskId)
+    if (!error) logActivity({ action: 'cambiar estado', section: 'tareas', entityId: taskId, detail: status + ' → ' + nextStatus[status] })
     if (error) {
       setTareasLocal(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
       alert('Error: ' + error.message)

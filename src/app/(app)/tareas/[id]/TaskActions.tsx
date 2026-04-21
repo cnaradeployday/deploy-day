@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Loader2 } from 'lucide-react'
+import { logActivity } from '@/lib/logActivity'
 
 export default function TaskActions({ task, userId, userRole, timeEntries, isDirectResponsible }: {
   task: { id: string; status: string; estimated_hours: number | null }

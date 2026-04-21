@@ -1,4 +1,5 @@
 'use client'
+import { logActivity } from '@/lib/logActivity'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -97,6 +98,7 @@ export default function FacturasClientesClient({
     setDeletingId(id)
     const { error } = await createClient().from('facturas_clientes').delete().eq('id', id)
     if (error) { alert('Error: ' + error.message); setDeletingId(null); return }
+    logActivity({ action: 'eliminar factura', section: 'facturas', detail: 'Factura eliminada id: ' + id })
     setConfirmId(null)
     setDeletingId(null)
     router.refresh()

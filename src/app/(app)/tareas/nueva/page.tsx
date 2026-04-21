@@ -1,4 +1,5 @@
 'use client'
+import { logActivity } from '@/lib/logActivity'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -181,6 +182,7 @@ export default function NuevaTareaPage() {
         colaboradores.map(c => ({ task_id: task.id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
       )
     }
+    logActivity({ action: 'crear tarea', section: 'tareas', entityName: form.title, detail: 'Nueva tarea creada' })
     router.push('/tareas')
   }
 
