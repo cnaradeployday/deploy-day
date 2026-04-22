@@ -8,7 +8,7 @@ import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, Us
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
-const APP_VERSION = '1.5.0'
+const APP_VERSION = '1.6.0'
 
 const navItems = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
@@ -20,6 +20,7 @@ const navItems = [
   { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
+  { href: '/ocupacion-equipo',   label: 'Ocupación equipo',   icon: Users,           roles: ['admin','gerente_operaciones'] },
   { href: '/reportes',          label: 'Reportes',           icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
   { href: '/solicitudes',       label: 'Solicitudes',        icon: AlertCircle,     roles: ['admin','gerente_operaciones'] },
   { href: '/facturacion',       label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
