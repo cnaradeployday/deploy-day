@@ -87,7 +87,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14}/> Excel
           </button>
-          <button onClick={() => router.refresh()}
+          <button onClick={() => { router.refresh(); window.location.reload() }}
             title="Refrescar datos"
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all">
             <RefreshCw size={14}/>
