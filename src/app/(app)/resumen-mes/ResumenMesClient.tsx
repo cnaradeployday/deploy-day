@@ -19,12 +19,16 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
 }) {
   const router = useRouter()
 
-  const meses: string[] = []
-  const now = new Date()
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    meses.push(d.toISOString().slice(0, 7))
-  }
+  // Usar meses del server (basados en segmentos reales) o fallback a 6 meses
+  const meses: string[] = mesesDisponibles.length > 0 ? mesesDisponibles : (() => {
+    const arr: string[] = []
+    const now = new Date()
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      arr.push(d.toISOString().slice(0, 7))
+    }
+    return arr
+  })()
 
   function navTo(params: Record<string, string>) {
     const p = new URLSearchParams()
