@@ -16,6 +16,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
   mesActual: string
   clientes: any[]
   filterCliente: string
+  mesesDisponibles?: string[]
 }) {
   const router = useRouter()
 
