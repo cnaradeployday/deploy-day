@@ -7,7 +7,7 @@ function nombreMes(m: string) {
   return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
 }
 
-export default function ResumenMesClient({ filas, mes, mesActual, clientes, filterCliente }: {
+export default function ResumenMesClient({ filas, mes, mesActual, clientes, filterCliente, mesesDisponibles = [] }: {
   filas: {
     id: string; nombre: string; cliente: string; clienteId: string
     horasVendidas: number; horasEstimadas: number; horasConsumidas: number
