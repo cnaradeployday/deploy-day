@@ -88,11 +88,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   tareasConDueEnMes.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)
   })
-  Object.entries(horasPorSegmento).forEach(([proyId, horas]) => {
-    if (horasEstimadasPorProyecto[proyId] === undefined) {
-      horasEstimadasPorProyecto[proyId] = horas
-    }
-  })
+  // Sin fallback a segmentos - estimadas vienen SOLO de tareas con due_date en el mes
 
   const taskToProject: Record<string, string> = {}
   ;(todasTareas ?? []).forEach(t => { taskToProject[t.id] = t.project_id })
