@@ -67,10 +67,22 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
     e.preventDefault()
     if (!availForm.desde || !availForm.hasta || !availForm.horas) return
     setLoading(true)
-    await createClient().from('user_availability').insert({
-      user_id: miembro.id, desde: availForm.desde, hasta: availForm.hasta,
-      horas: parseFloat(availForm.horas), notas: availForm.notas || null, created_by: adminId,
-    })
+    const sb = createClient()
+    // Buscar si ya existe un registro para ese rango
+    const { data: existing } = await sb.from('user_availability')
+      .select('id').eq('user_id', miembro.id)
+      .eq('desde', availForm.desde).eq('hasta', availForm.hasta).single()
+
+    if (existing) {
+      await sb.from('user_availability').update({
+        horas: parseFloat(availForm.horas), notas: availForm.notas || null,
+      }).eq('id', existing.id)
+    } else {
+      await sb.from('user_availability').insert({
+        user_id: miembro.id, desde: availForm.desde, hasta: availForm.hasta,
+        horas: parseFloat(availForm.horas), notas: availForm.notas || null, created_by: adminId,
+      })
+    }
     setAvailForm({ desde: '', hasta: '', horas: '', notas: '' })
     router.refresh(); setLoading(false)
   }
