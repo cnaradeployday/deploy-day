@@ -3,7 +3,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { X, ChevronUp, ChevronDown, CheckCircle, Trash2, Pencil } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, RefreshCw, CheckCircle, Trash2, Pencil } from 'lucide-react'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',

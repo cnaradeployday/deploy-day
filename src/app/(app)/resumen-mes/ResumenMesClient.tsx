@@ -1,6 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { Download, BarChart3, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Download, BarChart3, TrendingUp, TrendingDown, Minus , RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 function nombreMes(m: string) {
@@ -86,6 +86,11 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
           <button onClick={exportar}
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14}/> Excel
+          </button>
+          <button onClick={() => router.refresh()}
+            title="Refrescar datos"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-all">
+            <RefreshCw size={14}/>
           </button>
         </div>
       </div>
