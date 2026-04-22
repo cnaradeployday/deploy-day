@@ -46,6 +46,15 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
+  // Permiso editar tareas
+  let canEditTask = isAdmin
+  if (!canEditTask && profile?.custom_role_id) {
+    const { data: permEdit } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'tareas').single()
+    canEditTask = permEdit?.can_read ?? false
+  }
+
   // Permiso cargar horas en nombre de otros
   let canCargarHorasOtros = isAdmin
   if (!canCargarHorasOtros && profile?.custom_role_id) {
@@ -87,7 +96,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <span className={'text-xs px-2 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span>
           <span className={'text-xs px-2.5 py-1 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
-          {isAdmin && (
+          {canEditTask && (
             <Link href={'/tareas/' + t.id + '/editar'}
               className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
               <Pencil size={14}/>
