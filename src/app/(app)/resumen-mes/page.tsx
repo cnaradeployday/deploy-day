@@ -29,7 +29,6 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  // Proyectos activos en el mes (por fechas del proyecto)
   const { data: proyectos } = await supabase
     .from('projects')
     .select('id, name, sold_hours, start_date, end_date, client:clients(id, name)')
@@ -45,7 +44,6 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const proyectoIds = proyectosDelMes.map(p => p.id)
 
-  // Segmentos de horas vendidas del mes
   const { data: segmentos } = proyectoIds.length
     ? await supabase
         .from('project_hour_segments')
@@ -55,7 +53,6 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
         .gte('hasta', primerDia)
     : { data: [] }
 
-  // TODAS las tareas de los proyectos (sin filtrar por due_date)
   const { data: todasTareas } = proyectoIds.length
     ? await supabase
         .from('tasks')
@@ -66,7 +63,6 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
-  // Time entries del mes (por entry_date, no por due_date)
   const { data: entries } = taskIds.length
     ? await supabase
         .from('time_entries')
@@ -80,15 +76,11 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     proyectosDelMes.map(p => [(p.client as any)?.id, p.client])
   ).values()].filter(Boolean) as any[]
 
-  // Horas vendidas: segmento del mes o sold_hours como fallback
   const horasPorSegmento: Record<string, number> = {}
   ;(segmentos ?? []).forEach((s: any) => {
     horasPorSegmento[s.project_id] = (horasPorSegmento[s.project_id] ?? 0) + s.horas
   })
 
-  // Horas estimadas del mes por proyecto:
-  // Para tareas con due_date en el mes → usar estimated_hours
-  // Para tareas sin due_date en el mes pero con segmento → usar horas del segmento
   const horasEstimadasPorProyecto: Record<string, number> = {}
   const tareasConDueEnMes = (todasTareas ?? []).filter(t =>
     t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
@@ -96,14 +88,12 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   tareasConDueEnMes.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)
   })
-  // Para proyectos con segmento pero sin tareas en el mes, usar horas del segmento como estimadas
   Object.entries(horasPorSegmento).forEach(([proyId, horas]) => {
     if (horasEstimadasPorProyecto[proyId] === undefined) {
       horasEstimadasPorProyecto[proyId] = horas
     }
   })
 
-  // Horas consumidas: time_entries del mes agrupadas por proyecto
   const taskToProject: Record<string, string> = {}
   ;(todasTareas ?? []).forEach(t => { taskToProject[t.id] = t.project_id })
 
@@ -114,51 +104,11 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     consumidoPorProyecto[proyId] = (consumidoPorProyecto[proyId] ?? 0) + e.hours_logged
   })
 
-  // Incluir proyectos con cualquier actividad en el mes
   const proyectosConActividad = proyectosDelMes.filter(p =>
     horasPorSegmento[p.id] !== undefined ||
     horasEstimadasPorProyecto[p.id] !== undefined ||
     consumidoPorProyecto[p.id] !== undefined
   )
-
-  // Meses disponibles basados en segmentos existentes
-  const { data: todosSegmentos } = await supabase
-    .from('project_hour_segments')
-    .select('desde')
-    .order('desde', { ascending: false })
-
-  const mesesDisponibles = [...new Set(
-    (todosSegmentos ?? []).map(s => s.desde?.slice(0, 7)).filter(Boolean)
-  )].sort().reverse() as string[]
-
-  // Asegurar que el mes actual siempre esté
-  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
-
-  // Meses disponibles basados en segmentos existentes
-  const { data: todosSegmentos } = await supabase
-    .from('project_hour_segments')
-    .select('desde')
-    .order('desde', { ascending: false })
-
-  const mesesDisponibles = [...new Set(
-    (todosSegmentos ?? []).map(s => s.desde?.slice(0, 7)).filter(Boolean)
-  )].sort().reverse() as string[]
-
-  // Asegurar que el mes actual siempre esté
-  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
-
-  // Meses disponibles basados en segmentos existentes
-  const { data: todosSegmentos } = await supabase
-    .from('project_hour_segments')
-    .select('desde')
-    .order('desde', { ascending: false })
-
-  const mesesDisponibles = [...new Set(
-    (todosSegmentos ?? []).map(s => s.desde?.slice(0, 7)).filter(Boolean)
-  )].sort().reverse() as string[]
-
-  // Asegurar que el mes actual siempre esté
-  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
 
   const filas = proyectosConActividad.map(p => ({
     id: p.id,
@@ -171,6 +121,18 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     horasEstimadas: Math.round((horasEstimadasPorProyecto[p.id] ?? 0) * 10) / 10,
     horasConsumidas: Math.round((consumidoPorProyecto[p.id] ?? 0) * 10) / 10,
   }))
+
+  // Meses disponibles desde segmentos reales
+  const { data: todosSegmentos } = await supabase
+    .from('project_hour_segments')
+    .select('desde')
+    .order('desde', { ascending: false })
+
+  const mesesDisponibles = [...new Set(
+    (todosSegmentos ?? []).map((s: any) => s.desde?.slice(0, 7)).filter(Boolean)
+  )].sort().reverse() as string[]
+
+  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
 
   return (
     <ResumenMesClient
