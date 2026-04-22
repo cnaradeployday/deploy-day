@@ -147,6 +147,19 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   // Asegurar que el mes actual siempre esté
   if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
 
+  // Meses disponibles basados en segmentos existentes
+  const { data: todosSegmentos } = await supabase
+    .from('project_hour_segments')
+    .select('desde')
+    .order('desde', { ascending: false })
+
+  const mesesDisponibles = [...new Set(
+    (todosSegmentos ?? []).map(s => s.desde?.slice(0, 7)).filter(Boolean)
+  )].sort().reverse() as string[]
+
+  // Asegurar que el mes actual siempre esté
+  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
+
   const filas = proyectosConActividad.map(p => ({
     id: p.id,
     nombre: p.name,
