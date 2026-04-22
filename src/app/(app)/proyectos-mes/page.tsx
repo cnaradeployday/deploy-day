@@ -69,12 +69,47 @@ export default async function ProyectosMesPage({ searchParams }: { searchParams:
     isActive: p.is_active,
   }))
 
+
+  // Meses disponibles desde segmentos de proyectos
+  const { data: todosSegmentos } = await supabase
+    .from('project_hour_segments')
+    .select('desde')
+    .order('desde', { ascending: false })
+
+  const mesesSet = new Set<string>()
+
+  // Agregar meses de segmentos
+  ;(todosSegmentos ?? []).forEach((s: any) => {
+    if (s.desde) mesesSet.add(s.desde.slice(0, 7))
+  })
+
+  // Agregar meses de fechas de proyectos activos
+  const { data: proyFechas } = await supabase
+    .from('projects')
+    .select('start_date, end_date')
+    .eq('is_active', true)
+
+  ;(proyFechas ?? []).forEach((p: any) => {
+    if (p.start_date) {
+      let d = new Date(p.start_date.slice(0, 7) + '-01')
+      const fin = p.end_date ? new Date(p.end_date.slice(0, 7) + '-01') : new Date(new Date().getFullYear(), new Date().getMonth() + 6, 1)
+      while (d <= fin) {
+        mesesSet.add(d.toISOString().slice(0, 7))
+        d = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+      }
+    }
+  })
+
+  const mesesDisponibles = [...mesesSet].sort().reverse()
+  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.unshift(mesActual)
+
   return (
     <ProyectosMesClient
       filas={filas}
       clientes={clientes}
       mes={mes}
       mesActual={mesActual}
+      mesesDisponibles={mesesDisponibles}
     />
   )
 }

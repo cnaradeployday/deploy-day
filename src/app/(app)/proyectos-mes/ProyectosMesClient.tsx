@@ -53,8 +53,8 @@ function MultiSelect({ label, options, selected, onChange }: {
 
 type SortKey = 'nombre' | 'cliente' | 'servicio' | 'horasMes' | 'soldHours' | 'startDate' | 'endDate'
 
-export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: {
-  filas: any[]; clientes: any[]; mes: string; mesActual: string
+export default function ProyectosMesClient({ filas, clientes, mes, mesActual, mesesDisponibles = [] }: {
+  filas: any[]; clientes: any[]; mes: string; mesActual: string; mesesDisponibles?: string[]
 }) {
   const router = useRouter()
   const [sortKey, setSortKey] = useState<SortKey>('nombre')
@@ -63,12 +63,15 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual }: 
   const [selServicio, setSelServicio] = useState<string[]>([])
   const [selActivo, setSelActivo] = useState<string[]>([])
 
-  const meses: string[] = []
-  const now = new Date()
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    meses.push(d.toISOString().slice(0, 7))
-  }
+  const meses: string[] = mesesDisponibles.length > 0 ? mesesDisponibles : (() => {
+    const arr: string[] = []
+    const now = new Date()
+    for (let i = 11; i >= -6; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      arr.push(d.toISOString().slice(0, 7))
+    }
+    return arr
+  })()
 
   function toggleSort(k: SortKey) {
     if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
