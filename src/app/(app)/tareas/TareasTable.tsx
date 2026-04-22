@@ -179,6 +179,15 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
 
   return (
     <div>
+      {/* Botón refrescar */}
+      <div className="flex justify-end mb-3">
+        <button
+          onClick={() => router.push(pathname + (params.toString() ? '?' + params.toString() : ''))}
+          title="Refrescar datos manteniendo filtros"
+          className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 bg-white transition-all">
+          <RefreshCw size={14}/> Refrescar
+        </button>
+      </div>
       {/* Contadores */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[
