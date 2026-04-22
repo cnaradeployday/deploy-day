@@ -71,12 +71,14 @@ export default function NuevaTareaPage() {
         .gte('hasta', primerDiaMes)
       const horasMes = (seg ?? []).reduce((s: number, x: any) => s + x.horas, 0)
 
-      // Horas ya asignadas a tareas activas del proyecto (sin filtrar por due_date)
+      // Horas ya asignadas a tareas del proyecto con due_date en el mes
       const { data: tareasProy } = await sb
         .from('tasks')
         .select('id, direct_hours, task_collaborators(assigned_hours)')
         .eq('project_id', form.project_id)
         .not('status', 'in', '(presentado)')
+        .gte('due_date', primerDiaMes)
+        .lte('due_date', ultimoDiaMes)
       const horasAsignadas = (tareasProy ?? []).reduce((s: number, t: any) => {
         const dh = t.direct_hours ?? 0
         const ch = (t.task_collaborators ?? []).reduce((cs: number, c: any) => cs + (c.assigned_hours ?? 0), 0)
