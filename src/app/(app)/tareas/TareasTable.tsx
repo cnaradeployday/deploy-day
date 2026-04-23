@@ -124,7 +124,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   }
 
   function exportToExcel() {
-    const rows = sorted.map(t => ({ Mes: mesDeDate(t.due_date) ? new Date(mesDeDate(t.due_date) + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' }) : '—', Tarea: t.title, Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—', Responsable: t.direct_responsible?.full_name ?? '—', Colaboradores: (t.task_collaborators ?? []).map(c => c.user?.full_name ?? '').filter(Boolean).join(', ') || '—', 'Horas estimadas': t.estimated_hours ?? '', 'Horas usadas': t.hours_logged, Vencimiento: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', Prioridad: t.priority, Estado: statusLabels[t.status] ?? t.status }))
+    const rows = sorted.map(t => ({ Mes: mesDeDate(t.due_date) ? new Date(mesDeDate(t.due_date) + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' }) : '—', Tarea: t.title, Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—', Responsable: t.direct_responsible?.full_name ?? '—', Colaboradores: (t.task_collaborators ?? []).map((c: any) => c.user?.full_name ?? '').filter(Boolean).join(', ') || '—', 'Horas estimadas': t.estimated_hours ?? '', 'Horas usadas': t.hours_logged, Vencimiento: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', Prioridad: t.priority, Estado: statusLabels[t.status] ?? t.status }))
     const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Tareas'); XLSX.writeFile(wb, 'tareas.xlsx')
   }
 
@@ -211,7 +211,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
             <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
               <div className="flex items-start justify-between mb-2"><p className="text-sm font-medium text-gray-900 flex-1 pr-2">{t.title}</p><span className={'text-xs px-2 py-0.5 rounded-full shrink-0 ' + statusColors[t.status]}>{statusLabels[t.status]}</span></div>
               <p className="text-xs text-gray-400 mb-1">{t.project?.client?.name} · {t.project?.name}</p>
-              {collabs.length > 0 && <p className="text-xs text-gray-400 mb-2">Colaboradores: {collabs.map(c => c.user?.full_name?.split(' ')[0]).filter(Boolean).join(', ')}</p>}
+              {collabs.length > 0 && <p className="text-xs text-gray-400 mb-2">Colaboradores: {collabs.map((c: any) => c.user?.full_name?.split(' ')[0]).filter(Boolean).join(', ')}</p>}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
