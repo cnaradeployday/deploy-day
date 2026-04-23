@@ -1,14 +1,4 @@
-python3 - << 'PYEOF'
-import urllib.request, os
-# O simplemente copiá el archivo que ya está en /tmp si tenés acceso
-PYEOF
-# Fix 1: redirect
-sed -i "s|router.push('/mis-tareas')|router.push('/tareas')|g" \
-  src/app/\(app\)/tareas/nueva/page.tsx
-
-# Fix 2: crear TimeEntriesList.tsx
-python3 - << 'EOF'
-content = r"""'use client'
+'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -80,18 +70,18 @@ export default function TimeEntriesList({
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Horas</label>
                       <input type="number" min="0.5" step="0.5" value={editHours}
-                        onChange={e => setEditHours(e.target.value)}
+                        onChange={ev => setEditHours(ev.target.value)}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
                     </div>
                     <div>
                       <label className="block text-xs text-gray-400 mb-1">Fecha</label>
                       <input type="date" value={editDate}
-                        onChange={e => setEditDate(e.target.value)}
+                        onChange={ev => setEditDate(ev.target.value)}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
                     </div>
                   </div>
                   <input type="text" value={editNotes} placeholder="Notas (opcional)"
-                    onChange={e => setEditNotes(e.target.value)}
+                    onChange={ev => setEditNotes(ev.target.value)}
                     className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
                   <div className="flex gap-2">
                     <button onClick={() => saveEdit(e.id)} disabled={loading}
@@ -137,7 +127,3 @@ export default function TimeEntriesList({
     </div>
   )
 }
-"""
-with open("src/app/(app)/tareas/[id]/TimeEntriesList.tsx", "w") as f:
-    f.write(content)
-print("TimeEntriesList.tsx OK")
