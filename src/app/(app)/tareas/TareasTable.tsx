@@ -92,7 +92,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     if (selMes.length && !selMes.includes(mesDeDate(t.due_date))) return false
     if (search.trim()) {
       const q = search.trim().toLowerCase()
-      if (!t.title.toLowerCase().includes(q) && !(t.project?.client?.name ?? '').toLowerCase().includes(q) && !(t.project?.name ?? '').toLowerCase().includes(q) && !(t.direct_responsible?.full_name ?? '').toLowerCase().includes(q) && !(t.task_collaborators ?? []).some(c => (c.user?.full_name ?? '').toLowerCase().includes(q))) return false
+      if (!t.title.toLowerCase().includes(q) && !(t.project?.client?.name ?? '').toLowerCase().includes(q) && !(t.project?.name ?? '').toLowerCase().includes(q) && !(t.direct_responsible?.full_name ?? '').toLowerCase().includes(q) && !(t.task_collaborators ?? []).some((c: any) => (c.user?.full_name ?? '').toLowerCase().includes(q))) return false
     }
     return true
   }), [tareas, selStatus, selPriority, selCliente, selProyecto, selResponsable, selMes, search])
