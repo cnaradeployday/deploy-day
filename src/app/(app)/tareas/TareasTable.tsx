@@ -35,6 +35,47 @@ function nombreMes(m: string) {
   return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
 }
 
+function PersonWithTooltip({ name, userId, tareas, role }: {
+  name: string | null
+  userId: string | null
+  tareas: Tarea[]
+  role: 'responsable' | 'colaborador'
+}) {
+  if (!name || !userId) return <span className="text-gray-300">—</span>
+
+  const asignadas = tareas.filter(t => {
+    if (role === 'responsable') return t.direct_responsible?.id === userId
+    return (t.task_collaborators ?? []).some((col: any) => col.user?.id === userId)
+  }).length
+  const usadas = tareas
+    .filter(t => {
+      if (role === 'responsable') return t.direct_responsible?.id === userId
+      return (t.task_collaborators ?? []).some((col: any) => col.user?.id === userId)
+    })
+    .reduce((s, t) => s + (t.hours_logged ?? 0), 0)
+
+  const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
+
+  return (
+    <div className="relative group inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 cursor-default" title={name}>
+        <span className="w-5 h-5 rounded-full bg-[#E8F4FE] text-[#1B9BF0] text-[9px] font-bold flex items-center justify-center shrink-0">
+          {initials}
+        </span>
+        <span className="truncate max-w-[80px]">{name.split(' ')[0]}</span>
+      </span>
+      <div className="absolute bottom-full left-0 mb-1.5 z-50 hidden group-hover:block pointer-events-none">
+        <div className="bg-gray-900 text-white text-xs rounded-xl px-3 py-2 whitespace-nowrap shadow-lg">
+          <p className="font-semibold mb-1">{name}</p>
+          <p className="text-gray-300">Tareas asignadas: <span className="text-white font-medium">{asignadas}</span></p>
+          <p className="text-gray-300">Horas usadas: <span className="text-white font-medium">{Math.round(usadas * 10) / 10}h</span></p>
+        </div>
+        <div className="w-2 h-2 bg-gray-900 rotate-45 ml-3 -mt-1"/>
+      </div>
+    </div>
+  )
+}
+
 function MultiSelect({ label, options, selected, onChange }: {
   label: string
   options: { value: string; label: string }[]
@@ -76,6 +117,7 @@ interface Tarea {
   id: string; title: string; status: string; priority: string
   due_date: string; estimated_hours: number | null; hours_logged: number
   project: any; direct_responsible: any
+  task_collaborators?: { id: string; assigned_hours: number | null; user: { id: string; full_name: string } | null }[]
 }
 
 export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: {
@@ -193,6 +235,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
       Cliente: t.project?.client?.name ?? '—',
       Proyecto: t.project?.name ?? '—',
       Responsable: t.direct_responsible?.full_name ?? '—',
+      Colaboradores: (t.task_collaborators ?? []).map((col: any) => col.user?.full_name ?? '').filter(Boolean).join(', ') || '—',
       'Horas estimadas': t.estimated_hours ?? '',
       'Horas usadas': t.hours_logged,
       'Vencimiento': t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
@@ -262,6 +305,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                 { key: 'client', label: 'Cliente', show: show('client') },
                 { key: 'project', label: 'Proyecto', show: show('project') },
                 { key: 'responsible', label: 'Responsable', show: show('responsible') },
+                { key: 'collaborators', label: 'Colaboradores', show: show('collaborators') },
                 { key: 'estimated_hours', label: 'Est.', show: true },
                 { key: 'hours_logged', label: 'Usado', show: true },
                 { key: 'due_date', label: 'Vence', show: true },
@@ -291,7 +335,35 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                   <td className="px-3 py-2.5 text-sm font-medium text-gray-900 max-w-[180px] truncate">{t.title}</td>
                   {show('client') && <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{t.project?.client?.name ?? '—'}</td>}
                   {show('project') && <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{t.project?.name ?? '—'}</td>}
-                  {show('responsible') && <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{t.direct_responsible?.full_name ?? '—'}</td>}
+                  {show('responsible') && (
+                    <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                      <PersonWithTooltip
+                        name={t.direct_responsible?.full_name ?? null}
+                        userId={t.direct_responsible?.id ?? null}
+                        tareas={tareas}
+                        role="responsable"
+                      />
+                    </td>
+                  )}
+                  {show('collaborators') && (
+                    <td className="px-3 py-2.5 text-xs text-gray-500">
+                      {(t.task_collaborators ?? []).length === 0 ? (
+                        <span className="text-gray-300">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {(t.task_collaborators ?? []).map((col: any) => (
+                            <PersonWithTooltip
+                              key={col.id}
+                              name={col.user?.full_name ?? null}
+                              userId={col.user?.id ?? null}
+                              tareas={tareas}
+                              role="colaborador"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-2.5 text-xs text-gray-500">{t.estimated_hours ? t.estimated_hours + 'h' : '—'}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1.5">
