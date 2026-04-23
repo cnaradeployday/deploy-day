@@ -252,25 +252,6 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const hasFilters = selStatus.length || selPriority.length || selCliente.length ||
     selProyecto.length || selResponsable.length || selMes.length
 
-  function exportToExcel() {
-    const rows = sorted.map(t => ({
-      Mes: mesDeDate(t.due_date) ? new Date(mesDeDate(t.due_date) + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' }) : '—',
-      Tarea: t.title,
-      Cliente: t.project?.client?.name ?? '—',
-      Proyecto: t.project?.name ?? '—',
-      Responsable: t.direct_responsible?.full_name ?? '—',
-      Colaboradores: (t.task_collaborators ?? []).map((col: any) => col.user?.full_name ?? '').filter(Boolean).join(', ') || '—',
-      'Horas estimadas': t.estimated_hours ?? '',
-      'Horas usadas': t.hours_logged,
-      'Vencimiento': t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
-      Prioridad: t.priority,
-      Estado: statusLabels[t.status] ?? t.status,
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Tareas')
-    XLSX.writeFile(wb, 'tareas.xlsx')
-  }
 
   return (
     <div>
