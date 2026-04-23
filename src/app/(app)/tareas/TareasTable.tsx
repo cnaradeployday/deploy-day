@@ -3,7 +3,8 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { X, ChevronUp, ChevronDown, RefreshCw, CheckCircle, Trash2, Pencil } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, RefreshCw, CheckCircle, Trash2, Pencil, Search, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -99,10 +100,11 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const [selProyecto, setSelProyecto] = useState<string[]>([])
   const [selResponsable, setSelResponsable] = useState<string[]>([])
   const [selMes, setSelMes] = useState<string[]>([])
+  const [search, setSearch] = useState('')
 
   const clear = () => {
     setSelStatus([]); setSelPriority([]); setSelCliente([])
-    setSelProyecto([]); setSelResponsable([]); setSelMes([])
+    setSelProyecto([]); setSelResponsable([]); setSelMes([]); setSearch('')
     router.push(pathname)
   }
 
@@ -124,9 +126,16 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
       if (selProyecto.length && !selProyecto.includes(t.project?.id ?? '')) return false
       if (selResponsable.length && !selResponsable.includes(t.direct_responsible?.id ?? '')) return false
       if (selMes.length && !selMes.includes(mesDeDate(t.due_date))) return false
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        if (!t.title.toLowerCase().includes(q) &&
+            !(t.project?.client?.name ?? '').toLowerCase().includes(q) &&
+            !(t.project?.name ?? '').toLowerCase().includes(q) &&
+            !(t.direct_responsible?.full_name ?? '').toLowerCase().includes(q)) return false
+      }
       return true
     })
-  }, [tareas, selStatus, selPriority, selCliente, selProyecto, selResponsable, selMes])
+  }, [tareas, selStatus, selPriority, selCliente, selProyecto, selResponsable, selMes, search])
 
   const sorted = [...filtered].sort((a, b) => {
     // Columnas numéricas
@@ -177,9 +186,28 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const hasFilters = selStatus.length || selPriority.length || selCliente.length ||
     selProyecto.length || selResponsable.length || selMes.length
 
+  function exportToExcel() {
+    const rows = sorted.map(t => ({
+      Mes: mesDeDate(t.due_date) ? new Date(mesDeDate(t.due_date) + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' }) : '—',
+      Tarea: t.title,
+      Cliente: t.project?.client?.name ?? '—',
+      Proyecto: t.project?.name ?? '—',
+      Responsable: t.direct_responsible?.full_name ?? '—',
+      'Horas estimadas': t.estimated_hours ?? '',
+      'Horas usadas': t.hours_logged,
+      'Vencimiento': t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
+      Prioridad: t.priority,
+      Estado: statusLabels[t.status] ?? t.status,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Tareas')
+    XLSX.writeFile(wb, 'tareas.xlsx')
+  }
+
   return (
     <div>
-      {/* Botón refrescar */}
+      {/* Buscador + Refrescar + Export */}
       <div className="flex justify-end mb-3">
         <button
           onClick={() => router.push(pathname + (params.toString() ? '?' + params.toString() : ''))}

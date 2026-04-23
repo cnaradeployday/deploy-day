@@ -6,6 +6,7 @@ import TaskActions from './TaskActions'
 import TaskTimer from './TaskTimer'
 import TaskAttachments from './TaskAttachments'
 import TaskComments from './TaskComments'
+import TimeEntriesList from './TimeEntriesList'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -158,25 +159,11 @@ export default async function TareaDetailPage({ params, searchParams }: { params
             isDirectResponsible={isDirectResponsible}
           />
         </div>
-        {(t.time_entries as any[])?.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3">Historial de horas</p>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {(t.time_entries as any[]).map((e: any) => (
-                <div key={e.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
-                  <div>
-                    <p className="text-xs font-medium text-gray-700">{e.user?.full_name}</p>
-                    {e.notes && <p className="text-xs text-gray-400 mt-0.5">{e.notes}</p>}
-                  </div>
-                  <div className="text-right shrink-0 ml-3">
-                    <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
-                    <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <TimeEntriesList
+          entries={(t.time_entries as any[]) ?? []}
+          canEdit={isAdmin}
+          currentUserId={user?.id ?? ''}
+        />
       </div>
 
       <TaskAttachments

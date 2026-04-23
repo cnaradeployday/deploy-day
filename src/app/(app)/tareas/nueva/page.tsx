@@ -204,7 +204,7 @@ export default function NuevaTareaPage() {
       }
     }
     logActivity({ action: 'crear tarea', section: 'tareas', entityName: form.title, detail: 'Nueva tarea creada' })
-    router.push('/mis-tareas')
+    router.push('/tareas')
   }
 
   const availableColabs = usuarios.filter(u => u.id !== form.direct_responsible_id && !colaboradores.find(c => c.uid === u.id))
