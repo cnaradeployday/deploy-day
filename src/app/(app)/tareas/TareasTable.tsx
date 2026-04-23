@@ -71,7 +71,7 @@ function MultiSelect({ label, options, selected, onChange }: { label: string; op
   )
 }
 
-export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: { tareas: Tarea[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number }) {
+export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number }) {
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams()
   const [sortKey, setSortKey] = useState('due_date'); const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null); const [search, setSearch] = useState('')
