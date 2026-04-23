@@ -16,7 +16,8 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours,
       project:projects(id, name, client:clients(id, name)),
-      direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)`)
+      direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
+      task_collaborators(id, assigned_hours, user:users(id, full_name))`)
     .order('due_date', { ascending: true })
 
   if (status) query = query.eq('status', status)
@@ -68,7 +69,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     : proyectosAll
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Tareas</h1>
