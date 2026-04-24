@@ -85,22 +85,9 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     segPorProyecto[s.project_id] = (segPorProyecto[s.project_id] ?? 0) + s.horas
   })
 
-  // Incluir tarea si: due_date en el mes, O proyecto tiene segmento en el mes
   const allTasks = allTasksRaw
-    .filter((t: any) => {
-      const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-      const proyEnMes = t.project_id && segPorProyecto[t.project_id] !== undefined
-      return dueEnMes || proyEnMes
-    })
-    .map((t: any) => {
-      const dueEnMes = t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
-      const horasSeg = t.project_id ? segPorProyecto[t.project_id] : undefined
-      return {
-        ...t,
-        my_assigned_hours: dueEnMes ? t.my_assigned_hours : (horasSeg ?? t.my_assigned_hours),
-        desde_segmento: !dueEnMes && horasSeg !== undefined,
-      }
-    })
+    .filter((t: any) => t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia)
+    .map((t: any) => ({ ...t, desde_segmento: false }))
 
   let tareasFiltered = [...allTasks]
   if (status)   tareasFiltered = tareasFiltered.filter((t: any) => t.status === status)
