@@ -59,7 +59,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
   const cols: { key: SortKey; label: string; title?: string }[] = [
     { key: 'nombre',         label: 'Nombre' },
     { key: 'disponibilidad', label: 'Disponibilidad', title: 'Horas cargadas en el perfil del usuario' },
-    { key: 'programadas',    label: 'Estimadas',    title: 'Horas asignadas en tareas del mes' },
+    { key: 'programadas',    label: 'Estimadas',    title: 'Horas estimadas en tareas del mes' },
     { key: 'disponibles',    label: 'Disponibles',    title: 'Disponibilidad − Programadas' },
     { key: 'realizadas',     label: 'Realizadas',     title: 'Horas cargadas en time entries del mes' },
   ]
