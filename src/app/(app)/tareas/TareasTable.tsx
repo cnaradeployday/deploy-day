@@ -104,6 +104,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     else if (sortKey === 'project') { va = a.project?.name ?? ''; vb = b.project?.name ?? '' }
     else if (sortKey === 'responsible') { va = a.direct_responsible?.full_name ?? ''; vb = b.direct_responsible?.full_name ?? '' }
     else if (sortKey === 'mes') { va = mesDeDate(a.due_date); vb = mesDeDate(b.due_date) }
+    else if (sortKey === 'collaborators') { va = (a.task_collaborators ?? []).map((c: any) => c.user?.full_name ?? '').join(','); vb = (b.task_collaborators ?? []).map((c: any) => c.user?.full_name ?? '').join(',') }
     else { va = String((a as any)[sortKey] ?? ''); vb = String((b as any)[sortKey] ?? '') }
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
@@ -142,7 +143,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
         </div>
         <div className="flex items-center gap-2 ml-auto">
           <button onClick={exportToExcel} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 bg-white transition-all whitespace-nowrap"><Download size={14}/> Excel</button>
-          <a href={pathname + (params.toString() ? '?' + params.toString() : '')} title="Refrescar" className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 bg-white transition-all"><RefreshCw size={14}/></a>
+          <button onClick={() => router.refresh()} title="Refrescar" className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 bg-white transition-all"><RefreshCw size={14}/></button>
         </div>
       </div>
       <div className="grid grid-cols-4 gap-3 mb-4">

@@ -38,7 +38,7 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
     : { data: [] }
 
   const { data: tareasDirectas } = await supabase
-    .from('tasks').select('direct_responsible_id, direct_hours')
+    .from('tasks').select('direct_responsible_id, estimated_hours')
     .not('status', 'in', '(presentado)')
     .gte('due_date', primerDia).lte('due_date', ultimoDia)
     .not('direct_responsible_id', 'is', null)
@@ -59,8 +59,8 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
 
   const programadasPorUser: Record<string, number> = {}
   ;(tareasDirectas ?? []).forEach((t: any) => {
-    if (t.direct_responsible_id && t.direct_hours)
-      programadasPorUser[t.direct_responsible_id] = (programadasPorUser[t.direct_responsible_id] ?? 0) + t.direct_hours
+    if (t.direct_responsible_id && t.estimated_hours)
+      programadasPorUser[t.direct_responsible_id] = (programadasPorUser[t.direct_responsible_id] ?? 0) + t.estimated_hours
   })
   ;(tareasColab ?? []).filter((c: any) => {
     const dd = c.task?.due_date

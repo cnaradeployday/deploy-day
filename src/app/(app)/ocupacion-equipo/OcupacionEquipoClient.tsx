@@ -45,10 +45,10 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
     const data = [
       ...sorted.map(f => ({
         'Nombre': f.nombre, 'Disponibilidad (h)': f.disponibilidad,
-        'Programadas (h)': f.programadas, 'Disponibles (h)': f.disponibles, 'Realizadas (h)': f.realizadas,
+        'Estimadas (h)': f.programadas, 'Disponibles (h)': f.disponibles, 'Realizadas (h)': f.realizadas,
       })),
       { 'Nombre': 'TOTAL', 'Disponibilidad (h)': totales.disponibilidad,
-        'Programadas (h)': totales.programadas, 'Disponibles (h)': totales.disponibles, 'Realizadas (h)': totales.realizadas },
+        'Estimadas (h)': totales.programadas, 'Disponibles (h)': totales.disponibles, 'Realizadas (h)': totales.realizadas },
     ]
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
@@ -59,7 +59,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
   const cols: { key: SortKey; label: string; title?: string }[] = [
     { key: 'nombre',         label: 'Nombre' },
     { key: 'disponibilidad', label: 'Disponibilidad', title: 'Horas cargadas en el perfil del usuario' },
-    { key: 'programadas',    label: 'Programadas',    title: 'Horas asignadas en tareas del mes' },
+    { key: 'programadas',    label: 'Estimadas',    title: 'Horas asignadas en tareas del mes' },
     { key: 'disponibles',    label: 'Disponibles',    title: 'Disponibilidad − Programadas' },
     { key: 'realizadas',     label: 'Realizadas',     title: 'Horas cargadas en time entries del mes' },
   ]
@@ -92,7 +92,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Disponibilidad total', value: totales.disponibilidad, color: 'text-gray-900' },
-          { label: 'Horas programadas',    value: totales.programadas,    color: 'text-amber-600' },
+          { label: 'Horas estimadas',    value: totales.programadas,    color: 'text-amber-600' },
           { label: 'Horas disponibles',    value: totales.disponibles,    color: totales.disponibles < 0 ? 'text-red-500' : 'text-green-600' },
           { label: 'Horas realizadas',     value: totales.realizadas,     color: 'text-[#1B9BF0]' },
         ].map(({ label, value, color }) => (
