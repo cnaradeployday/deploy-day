@@ -46,6 +46,8 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   const { data: tareasColab } = await supabase
     .from('task_collaborators')
     .select('user_id, assigned_hours, task:tasks(due_date, status)')
+    .gte('task.due_date', primerDia)
+    .lte('task.due_date', ultimoDia)
 
   const { data: timeEntries } = userIds.length ? await supabase
     .from('time_entries').select('user_id, hours_logged')
