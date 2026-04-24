@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
 
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -76,10 +76,6 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
           <p className="text-sm text-gray-400 mt-0.5">{tareasConHoras.length} tareas</p>
         </div>
         <div className="flex items-center gap-2">
-          <a href={'/tareas?' + new URLSearchParams(Object.fromEntries(Object.entries({ status, priority, cliente, proyecto, responsable, mes }).filter(([,v]) => v))).toString()}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 bg-white">
-            <RefreshCw size={14}/>
-          </a>
           <Link href="/tareas/nueva"
             className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Nueva tarea

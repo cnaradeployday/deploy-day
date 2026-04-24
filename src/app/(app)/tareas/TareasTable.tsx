@@ -123,7 +123,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     await sb.from('task_comments').delete().eq('task_id', taskId)
     await sb.from('hour_requests').delete().eq('task_id', taskId)
     const { error } = await sb.from('tasks').delete().eq('id', taskId)
-    console.log('delete error:', error, 'taskId:', taskId)
+    // debug removed
     if (error) { alert('Error al eliminar: ' + error.message); setLoading(null); return }
     setLoading(null)
     router.refresh()
