@@ -115,13 +115,17 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
 
   async function advanceStatus(taskId: string, currentStatus: string) { if (!nextStatus[currentStatus]) return; setLoading(taskId); await createClient().from('tasks').update({ status: nextStatus[currentStatus] }).eq('id', taskId); router.refresh(); setLoading(null) }
   async function deleteTask(taskId: string) {
-    if (!confirm('Eliminar esta tarea?')) return; setLoading(taskId)
+    if (!confirm('Eliminar esta tarea?')) return
+    setLoading(taskId)
     const sb = createClient()
     await sb.from('time_entries').delete().eq('task_id', taskId)
     await sb.from('task_collaborators').delete().eq('task_id', taskId)
     await sb.from('task_comments').delete().eq('task_id', taskId)
-    await sb.from('tasks').delete().eq('id', taskId)
-    router.refresh(); setLoading(null)
+    await sb.from('hour_requests').delete().eq('task_id', taskId)
+    const { error } = await sb.from('tasks').delete().eq('id', taskId)
+    if (error) { alert('Error al eliminar: ' + error.message); setLoading(null); return }
+    setLoading(null)
+    router.refresh()
   }
 
   function exportToExcel() {
