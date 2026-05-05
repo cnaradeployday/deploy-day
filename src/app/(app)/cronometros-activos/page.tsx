@@ -10,12 +10,24 @@ export default async function CronometrosActivosPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('role')
+    .select('role, custom_role_id')
     .eq('id', user.id)
     .single()
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
-  if (!isAdmin) redirect('/dashboard')
+  let canAccess = isAdmin
+
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions')
+      .select('can_read')
+      .eq('role_id', profile.custom_role_id)
+      .eq('module', 'cronometros_activos')
+      .single()
+    canAccess = perm?.can_read ?? false
+  }
+
+  if (!canAccess) redirect('/dashboard')
 
   return (
     <div className="p-6 max-w-3xl mx-auto">

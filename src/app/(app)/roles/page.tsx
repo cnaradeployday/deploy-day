@@ -27,8 +27,8 @@ const MODULES = [
   { key: 'logs',                  label: 'Logs de actividad' },
   { key: 'ocupacion_equipo',      label: 'Ocupación del equipo' },
   { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
-  { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
   { key: 'online_users',          label: 'Ver usuarios online' },
+  { key: 'cronometros_activos',   label: 'Cronómetros activos' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
 ]
 
