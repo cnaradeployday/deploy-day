@@ -4,27 +4,36 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Play, Square, Clock } from 'lucide-react'
 import { formatTimerSeconds } from '@/hooks/useGlobalTimer'
+import { trackTimerActive, trackTimerInactive } from '@/lib/activeTimersChannel'
 
-const TIMER_CHANNEL = 'deployday-active-timers'
-let _presenceChannel: any = null
+// Max sensible duration: 16 hours in seconds
+const MAX_SECONDS = 16 * 3600
 
-async function getPresenceChannel(userId: string): Promise<any> {
-  if (_presenceChannel) return _presenceChannel
-  const sb = createClient()
-  const ch = sb.channel(TIMER_CHANNEL, { config: { presence: { key: userId } } })
-  _presenceChannel = ch
-  await new Promise<void>(res => ch.subscribe(s => { if (s === 'SUBSCRIBED') res() }))
-  return ch
-}
+function parseStoredTimer(raw: string): { seconds: number; fakeStartTime: Date } | null {
+  try {
+    const data = JSON.parse(raw)
 
-async function trackTimerStart(userId: string, fullName: string, taskId: string, taskTitle: string) {
-  const ch = await getPresenceChannel(userId)
-  await ch.track({ has_timer: true, full_name: fullName, task_id: taskId, task_title: taskTitle, started_at: new Date().toISOString() })
-}
+    // Old format had isPaused: true with start: null — discard
+    if (data.isPaused) return null
 
-async function trackTimerStop(userId: string, fullName: string) {
-  const ch = await getPresenceChannel(userId)
-  await ch.track({ has_timer: false, full_name: fullName })
+    // Must have a valid start timestamp
+    if (!data.start) return null
+    const startDate = new Date(data.start)
+    if (isNaN(startDate.getTime())) return null
+
+    const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
+    const accumulated = typeof data.accumulatedSeconds === 'number' ? data.accumulatedSeconds : 0
+    const total = accumulated + elapsed
+
+    // Sanity cap: discard if over 16h (most likely a stale/corrupt entry)
+    if (total > MAX_SECONDS) return null
+
+    // Encode total into a fake start time so the tick formula (Date.now() - startTime) works
+    const fakeStartTime = new Date(Date.now() - total * 1000)
+    return { seconds: total, fakeStartTime }
+  } catch {
+    return null
+  }
 }
 
 export default function TaskTimer({
@@ -43,27 +52,26 @@ export default function TaskTimer({
   const router = useRouter()
   const storageKey = `timer_${taskId}_${userId}`
 
-  // Restore from localStorage on mount
+  // Restore from localStorage on mount — validates and clears corrupt entries
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey)
-    if (saved) {
-      try {
-        const { start, accumulatedSeconds } = JSON.parse(saved)
-        const startDate = new Date(start)
-        const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
-        const total = (accumulatedSeconds ?? 0) + elapsed
-        setStartTime(startDate)
-        setSeconds(total)
-        setRunning(true)
-        // Re-broadcast presence in case of page reload
-        trackTimerStart(userId, userName, taskId, taskTitle)
-      } catch {
-        localStorage.removeItem(storageKey)
-      }
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return
+
+    const parsed = parseStoredTimer(raw)
+    if (!parsed) {
+      // Invalid / stale / paused-old-format — clear it
+      localStorage.removeItem(storageKey)
+      return
     }
+
+    setStartTime(parsed.fakeStartTime)
+    setSeconds(parsed.seconds)
+    setRunning(true)
+    // Re-broadcast presence in case of page reload
+    trackTimerActive(userId, userName, taskId, taskTitle)
   }, [storageKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live tick
+  // Live tick: seconds = elapsed since startTime
   useEffect(() => {
     if (running && startTime) {
       intervalRef.current = setInterval(() => {
@@ -85,7 +93,7 @@ export default function TaskTimer({
       start: now.toISOString(),
       accumulatedSeconds: 0,
     }))
-    trackTimerStart(userId, userName, taskId, taskTitle)
+    trackTimerActive(userId, userName, taskId, taskTitle)
   }
 
   async function stopAndSave() {
@@ -113,7 +121,7 @@ export default function TaskTimer({
     setStartTime(null)
     localStorage.removeItem(storageKey)
     localStorage.removeItem(`task_title_${taskId}`)
-    trackTimerStop(userId, userName)
+    trackTimerInactive(userId, userName)
     router.refresh()
     setLoading(false)
   }

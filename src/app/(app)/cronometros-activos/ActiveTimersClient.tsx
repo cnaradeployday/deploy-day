@@ -1,60 +1,29 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { getActiveTimers, subscribeToChanges, ActiveTimerEntry } from '@/lib/activeTimersChannel'
 import { Timer, Clock, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { formatTimerSeconds } from '@/hooks/useGlobalTimer'
 
-interface ActiveTimerUser {
-  userId: string
-  fullName: string
-  taskId: string
-  taskTitle: string
-  startedAt: string
-  secondsElapsed: number
-}
-
 export default function ActiveTimersClient({ currentUserId }: { currentUserId: string }) {
-  const [users, setUsers] = useState<ActiveTimerUser[]>([])
+  const [users, setUsers] = useState<ActiveTimerEntry[]>([])
   const [now, setNow] = useState(Date.now())
 
-  // Tick every second to update elapsed times
+  // Tick every second to update elapsed times in the UI
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [])
 
+  // Subscribe to the shared presence channel (no new channel created here)
   useEffect(() => {
-    const sb = createClient()
-    const channel = sb.channel('deployday-active-timers', {
-      config: { presence: { key: currentUserId } },
-    })
-
-    function sync() {
-      const state = channel.presenceState()
-      const active: ActiveTimerUser[] = []
-      for (const [uid, presences] of Object.entries(state)) {
-        const p = (presences as any[])[0]
-        if (!p?.has_timer) continue
-        active.push({
-          userId: uid,
-          fullName: p.full_name ?? 'Usuario',
-          taskId: p.task_id ?? '',
-          taskTitle: p.task_title ?? 'Tarea',
-          startedAt: p.started_at ?? new Date().toISOString(),
-          secondsElapsed: Math.floor((Date.now() - new Date(p.started_at ?? Date.now()).getTime()) / 1000),
-        })
-      }
-      setUsers(active)
+    function refresh() {
+      setUsers(getActiveTimers())
     }
-
-    channel.on('presence', { event: 'sync' }, sync)
-    channel.on('presence', { event: 'join' }, sync)
-    channel.on('presence', { event: 'leave' }, sync)
-
-    channel.subscribe()
-
-    return () => { sb.removeChannel(channel) }
+    // Initial load after channel syncs
+    refresh()
+    const unsub = subscribeToChanges(currentUserId, refresh)
+    return unsub
   }, [currentUserId])
 
   function elapsed(startedAt: string) {
@@ -76,6 +45,7 @@ export default function ActiveTimersClient({ currentUserId }: { currentUserId: s
         <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
           <Timer size={32} className="mx-auto text-gray-200 mb-3" />
           <p className="text-sm text-gray-400">Ningún usuario tiene un cronómetro activo en este momento</p>
+          <p className="text-xs text-gray-300 mt-1">Los cronómetros aparecen acá en tiempo real cuando alguien los inicia</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -92,9 +62,9 @@ export default function ActiveTimersClient({ currentUserId }: { currentUserId: s
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <Clock size={11} className="text-gray-400" />
+                  <Clock size={11} className="text-gray-400 shrink-0" />
                   <Link href={`/tareas/${u.taskId}`} className="text-xs text-gray-500 hover:text-[#1B9BF0] hover:underline truncate max-w-[200px]">
-                    {u.taskTitle}
+                    {u.taskTitle || 'Tarea'}
                   </Link>
                   <ExternalLink size={9} className="text-gray-300 shrink-0" />
                 </div>

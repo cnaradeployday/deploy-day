@@ -1,6 +1,7 @@
 'use client'
 import { useGlobalTimer, formatTimerSeconds } from '@/hooks/useGlobalTimer'
 import { createClient } from '@/lib/supabase/client'
+import { trackTimerInactive } from '@/lib/activeTimersChannel'
 import { useRouter } from 'next/navigation'
 import { Timer, Square } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -30,17 +31,23 @@ export default function ActiveTimerWidget({ userId }: { userId: string }) {
     if (!timer || stopping) return
     setStopping(true)
     const hoursLogged = Math.round((timer.seconds / 3600) * 100) / 100
-    if (hoursLogged > 0) {
-      await createClient().from('time_entries').insert({
+    if (hoursLogged > 0 && hoursLogged <= 16) {
+      const { error } = await createClient().from('time_entries').insert({
         task_id: timer.taskId,
         user_id: userId,
         hours_logged: hoursLogged,
         entry_date: new Date().toISOString().split('T')[0],
         notes: 'Registrado con cronómetro',
       })
+      if (error) {
+        alert('Error al guardar: ' + error.message)
+        setStopping(false)
+        return
+      }
     }
     localStorage.removeItem(timer.storageKey)
     localStorage.removeItem(`task_title_${timer.taskId}`)
+    trackTimerInactive(userId, '')
     router.refresh()
     setStopping(false)
   }

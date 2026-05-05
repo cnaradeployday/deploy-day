@@ -9,6 +9,8 @@ export interface GlobalTimerState {
   storageKey: string
 }
 
+const MAX_SECONDS = 16 * 3600
+
 const _listeners = new Set<(t: GlobalTimerState | null) => void>()
 let _current: GlobalTimerState | null = null
 let _intervalId: ReturnType<typeof setInterval> | null = null
@@ -26,21 +28,38 @@ function scan(): GlobalTimerState | null {
       const raw = localStorage.getItem(key)
       if (!raw) continue
       const data = JSON.parse(raw)
-      const parts = key.split('_')
-      if (parts.length < 3) continue
-      const taskId = parts[1] // timer_{taskId}_{userId}
-      const taskTitle = localStorage.getItem(`task_title_${taskId}`) ?? ''
 
-      let seconds = 0
-      if (data.isPaused) {
-        seconds = data.accumulatedSeconds ?? 0
-      } else if (data.start) {
-        const elapsed = Math.floor((Date.now() - new Date(data.start).getTime()) / 1000)
-        seconds = (data.accumulatedSeconds ?? 0) + elapsed
+      // Reject old paused-format or missing start
+      if (data.isPaused || !data.start) {
+        localStorage.removeItem(key)
+        continue
       }
 
-      return { taskId, taskTitle, seconds, isRunning: !data.isPaused && !!data.start, storageKey: key }
-    } catch {}
+      const startDate = new Date(data.start)
+      if (isNaN(startDate.getTime())) {
+        localStorage.removeItem(key)
+        continue
+      }
+
+      const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
+      const accumulated = typeof data.accumulatedSeconds === 'number' ? data.accumulatedSeconds : 0
+      const total = accumulated + elapsed
+
+      // Discard stale/corrupt entries
+      if (total > MAX_SECONDS) {
+        localStorage.removeItem(key)
+        continue
+      }
+
+      const parts = key.split('_')
+      if (parts.length < 3) continue
+      const taskId = parts[1]
+      const taskTitle = localStorage.getItem(`task_title_${taskId}`) ?? ''
+
+      return { taskId, taskTitle, seconds: total, isRunning: true, storageKey: key }
+    } catch {
+      localStorage.removeItem(key)
+    }
   }
   return null
 }
@@ -53,7 +72,6 @@ export function useGlobalTimer() {
   const [timer, setTimer] = useState<GlobalTimerState | null>(null)
 
   useEffect(() => {
-    // Set initial value synchronously after mount (localStorage not available during SSR)
     const initial = scan()
     setTimer(initial)
     _current = initial
