@@ -1,10 +1,10 @@
 'use client'
 import { logActivity } from '@/lib/logActivity'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
+import { Download, Clock, X, Plus, ChevronUp, ChevronDown, Loader2, Play } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -20,12 +20,24 @@ const priorityColors: Record<string, string> = {
   baja: 'bg-gray-100 text-gray-400', media: 'bg-blue-50 text-blue-500',
   alta: 'bg-amber-50 text-amber-600', critica: 'bg-red-50 text-red-600'
 }
+// Only allow transitions up to en_proceso from the list view
+// Terminar / Presentar are only accessible inside the task
+const nextStatusFromList: Record<string, string> = {
+  creado: 'estimado',
+  estimado: 'en_proceso',
+}
+const nextLabelFromList: Record<string, string> = {
+  creado: 'Iniciar',
+  estimado: 'En proceso',
+}
+
+// All transitions (used for optimistic UI rollback)
 const nextStatus: Record<string, string> = {
   creado: 'estimado', estimado: 'en_proceso', en_proceso: 'terminado', terminado: 'presentado'
 }
-const nextLabel: Record<string, string> = {
-  creado: 'Iniciar', estimado: 'En proceso', en_proceso: 'Terminar', terminado: 'Presentar'
-}
+
+// Default column widths in px
+const DEFAULT_WIDTHS = [200, 82, 108, 148, 138, 58, 88, 82, 88, 100, 130]
 
 interface Props {
   tareas: any[]
@@ -49,7 +61,43 @@ export default function MisTareasClient({
   const [loading, setLoading] = useState<string | null>(null)
   const [tareasLocal, setTareasLocal] = useState<any[]>(tareas)
 
+  // Column resize state
+  const [colWidths, setColWidths] = useState<number[]>(DEFAULT_WIDTHS)
+  const resizingRef = useRef<{ idx: number; startX: number; startW: number } | null>(null)
+  const didResizeRef = useRef(false)
+  const tableRef = useRef<HTMLTableElement>(null)
+
   useEffect(() => { setTareasLocal(tareas) }, [tareas])
+
+  // Global mouse handlers for column resize
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!resizingRef.current) return
+      didResizeRef.current = true
+      const dx = e.clientX - resizingRef.current.startX
+      const newW = Math.max(48, resizingRef.current.startW + dx)
+      const idx = resizingRef.current.idx
+      setColWidths(prev => prev.map((w, i) => i === idx ? newW : w))
+    }
+    function onMouseUp() {
+      resizingRef.current = null
+      // Keep didResizeRef true briefly so click handler can check it
+      setTimeout(() => { didResizeRef.current = false }, 50)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
+  function startResize(e: React.MouseEvent, idx: number) {
+    e.preventDefault()
+    e.stopPropagation()
+    resizingRef.current = { idx, startX: e.clientX, startW: colWidths[idx] }
+    didResizeRef.current = false
+  }
 
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
@@ -79,13 +127,14 @@ export default function MisTareasClient({
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
   function toggleSort(key: string) {
+    if (didResizeRef.current) return
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
 
   const SortIcon = ({ k }: { k: string }) => {
-    if (sortKey !== k) return <ChevronUp size={11} className="opacity-20"/>
-    return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
+    if (sortKey !== k) return <ChevronUp size={11} className="opacity-20 shrink-0"/>
+    return sortDir === 'asc' ? <ChevronUp size={11} className="shrink-0"/> : <ChevronDown size={11} className="shrink-0"/>
   }
 
   const sorted = [...tareasLocal].sort((a, b) => {
@@ -101,19 +150,17 @@ export default function MisTareasClient({
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
-  // KPIs: estimadas vienen del server (tareas con due_date en el mes)
-  // Usadas: hours_logged ya filtrado por entry_date del mes desde el server
   const totalUsadas = tareasLocal.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
   const totalRestantes = horasEstimadasDelMes - totalUsadas
 
   async function advanceStatus(taskId: string, status: string) {
-    if (!nextStatus[status] || loading) return
+    if (!nextStatusFromList[status] || loading) return
     setLoading(taskId)
     setTareasLocal(prev => prev.map(t =>
-      t.id === taskId ? { ...t, status: nextStatus[status] } : t
+      t.id === taskId ? { ...t, status: nextStatusFromList[status] } : t
     ))
-    const { error } = await createClient().from('tasks').update({ status: nextStatus[status] }).eq('id', taskId)
-    if (!error) logActivity({ action: 'cambiar estado', section: 'tareas', entityId: taskId, detail: status + ' → ' + nextStatus[status] })
+    const { error } = await createClient().from('tasks').update({ status: nextStatusFromList[status] }).eq('id', taskId)
+    if (!error) logActivity({ action: 'cambiar estado', section: 'tareas', entityId: taskId, detail: status + ' → ' + nextStatusFromList[status] })
     if (error) {
       setTareasLocal(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
       alert('Error: ' + error.message)
@@ -136,6 +183,20 @@ export default function MisTareasClient({
     XLSX.utils.book_append_sheet(wb, ws, 'Mis tareas')
     XLSX.writeFile(wb, 'mis-tareas-' + mes + '.xlsx')
   }
+
+  const columns = [
+    { key: 'title',             label: 'Tarea' },
+    { key: 'es_colaborador',    label: 'Rol' },
+    { key: 'client',            label: 'Cliente' },
+    { key: 'project',           label: 'Proyecto' },
+    { key: 'responsible',       label: 'Responsable' },
+    { key: 'my_assigned_hours', label: 'Est.' },
+    { key: 'hours_logged',      label: 'Usado' },
+    { key: 'due_date',          label: 'Vence' },
+    { key: 'priority',          label: 'Prioridad' },
+    { key: 'status',            label: 'Estado' },
+    { key: 'avances',           label: 'Cargar avances' },
+  ]
 
   return (
     <div className="p-4 md:p-6 max-w-full">
@@ -218,28 +279,31 @@ export default function MisTareasClient({
         )}
       </div>
 
-      {/* Tabla desktop */}
-      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <table className="w-full table-fixed">
+      {/* Tabla desktop — overflow-x-auto para permitir columnas más anchas y resize */}
+      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-x-auto">
+        <table ref={tableRef} style={{ tableLayout: 'fixed', minWidth: colWidths.reduce((a, b) => a + b, 0) + 'px', width: '100%' }}>
           <colgroup>
-            <col style={{width:'14%'}}/><col style={{width:'8%'}}/><col style={{width:'9%'}}/>
-            <col style={{width:'13%'}}/><col style={{width:'12%'}}/><col style={{width:'5%'}}/>
-            <col style={{width:'8%'}}/><col style={{width:'7%'}}/><col style={{width:'7%'}}/>
-            <col style={{width:'9%'}}/><col style={{width:'8%'}}/>
+            {colWidths.map((w, i) => <col key={i} style={{ width: w + 'px' }}/>)}
           </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
-              {[
-                { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
-                { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
-                { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
-                { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
-                { key: 'actions', label: '' },
-              ].map(({ key, label }) => (
-                <th key={key} onClick={() => key !== 'actions' && toggleSort(key)}
-                  className={'px-3 py-3 text-left text-xs font-medium text-gray-400 ' + (key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : '')}>
-                  <div className="flex items-center gap-1">{label}{key !== 'actions' && <SortIcon k={key}/>}</div>
+              {columns.map(({ key, label }, i) => (
+                <th
+                  key={key}
+                  onClick={() => key !== 'avances' && toggleSort(key)}
+                  style={{ position: 'relative', userSelect: 'none' }}
+                  className={'px-3 py-3 text-left text-xs font-medium text-gray-400 ' + (key !== 'avances' ? 'cursor-pointer hover:text-gray-600' : '')}
+                >
+                  <div className="flex items-center gap-1 overflow-hidden">
+                    <span className="truncate">{label}</span>
+                    {key !== 'avances' && <SortIcon k={key}/>}
+                  </div>
+                  {/* Resize handle */}
+                  <div
+                    onMouseDown={e => startResize(e, i)}
+                    className="absolute right-0 top-0 h-full w-2 cursor-col-resize hover:bg-blue-300 opacity-0 hover:opacity-100 transition-opacity z-10"
+                    title="Arrastrar para redimensionar"
+                  />
                 </th>
               ))}
             </tr>
@@ -253,47 +317,68 @@ export default function MisTareasClient({
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               const isLoading = loading === t.id
               const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
+              const canAdvance = !!nextStatusFromList[t.status]
               return (
                 <tr key={t.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors' + (esOtroMes ? ' opacity-60' : '')}>
-                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate" title={t.title}>
-                    {t.title}
-                    {esOtroMes && t.due_date && <span className="ml-1 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">{t.due_date.slice(0,7)}</span>}
+                  <td className="px-3 py-3 text-sm font-medium text-gray-900 overflow-hidden">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="truncate" title={t.title}>{t.title}</span>
+                      {esOtroMes && t.due_date && (
+                        <span className="shrink-0 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">{t.due_date.slice(0,7)}</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-3">
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full whitespace-nowrap ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                       {t.es_colaborador ? 'Colab.' : 'Resp.'}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate" title={t.project?.client?.name}>{t.project?.client?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate" title={t.project?.name}>{t.project?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate" title={t.direct_responsible?.full_name}>{t.direct_responsible?.full_name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold whitespace-nowrap">{myHours > 0 ? myHours + 'h' : '—'}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
-                      <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
+                      <span className={'text-xs font-medium whitespace-nowrap ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
                       {pct !== null && (
-                        <div className="w-8 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="w-8 h-1.5 bg-gray-100 rounded-full overflow-hidden shrink-0">
                           <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')} style={{ width: Math.min(100, pct) + '%' }}/>
                         </div>
                       )}
                     </div>
                   </td>
-                  <td className={'px-3 py-3 text-xs ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
+                  <td className={'px-3 py-3 text-xs whitespace-nowrap ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
                     {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
                   </td>
-                  <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
-                  <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-0.5">
-                      <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'} title="Cargar avances"
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
-                        <Clock size={13}/>
+                    <span className={'text-xs px-1.5 py-0.5 rounded-full whitespace-nowrap ' + priorityColors[t.priority]}>{t.priority}</span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={'text-xs px-1.5 py-0.5 rounded-full whitespace-nowrap ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      {/* Cargar avances — botón visible con texto */}
+                      <Link
+                        href={'/tareas/' + t.id + '?from=mis-tareas'}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1B9BF0] rounded-xl text-xs font-medium transition-all whitespace-nowrap"
+                        title="Ir a la tarea para cargar avances y cronómetro"
+                      >
+                        <Clock size={12}/> Cargar
                       </Link>
-                      {nextStatus[t.status] && (
-                        <button onClick={() => advanceStatus(t.id, t.status)} disabled={!!loading}
-                          title={nextLabel[t.status]}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                          {isLoading ? <Loader2 size={13} className="animate-spin text-green-500"/> : <CheckCircle size={13}/>}
+                      {/* Avanzar estado — solo Iniciar o En proceso, NO Terminar */}
+                      {canAdvance && (
+                        <button
+                          onClick={() => advanceStatus(t.id, t.status)}
+                          disabled={!!loading}
+                          title={nextLabelFromList[t.status]}
+                          className="flex items-center gap-1 px-2 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 rounded-xl text-xs font-medium transition-all disabled:opacity-40 whitespace-nowrap"
+                        >
+                          {isLoading
+                            ? <Loader2 size={11} className="animate-spin"/>
+                            : <Play size={10}/>
+                          }
+                          {nextLabelFromList[t.status]}
                         </button>
                       )}
                     </div>
@@ -312,6 +397,7 @@ export default function MisTareasClient({
           const myHours = t.my_assigned_hours ?? 0
           const isLoading = loading === t.id
           const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
+          const canAdvance = !!nextStatusFromList[t.status]
           return (
             <div key={t.id} className={'bg-white rounded-2xl border p-4 ' + (esOtroMes ? 'border-gray-50 opacity-70' : 'border-gray-100')}>
               <div className="flex items-start justify-between mb-2">
@@ -321,7 +407,7 @@ export default function MisTareasClient({
                 </div>
                 <span className={'text-xs px-2 py-0.5 rounded-full shrink-0 ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
               </div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                   {t.es_colaborador ? 'Colaborador' : 'Responsable'}
                 </span>
@@ -332,16 +418,20 @@ export default function MisTareasClient({
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Link href={'/tareas/' + t.id + '?from=mis-tareas#avances'} title="Cargar avances"
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50">
-                    <Clock size={14}/>
+                <div className="flex items-center gap-2">
+                  <Link href={'/tareas/' + t.id + '?from=mis-tareas'}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1B9BF0] rounded-xl text-xs font-medium transition-all">
+                    <Clock size={13}/> Cargar avances
                   </Link>
-                  {nextStatus[t.status] && (
-                    <button onClick={() => advanceStatus(t.id, t.status)} disabled={!!loading}
-                      title={nextLabel[t.status]}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                      {isLoading ? <Loader2 size={14} className="animate-spin text-green-500"/> : <CheckCircle size={14}/>}
+                  {canAdvance && (
+                    <button
+                      onClick={() => advanceStatus(t.id, t.status)}
+                      disabled={!!loading}
+                      title={nextLabelFromList[t.status]}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 rounded-xl text-xs font-medium disabled:opacity-40"
+                    >
+                      {isLoading ? <Loader2 size={13} className="animate-spin"/> : <Play size={11}/>}
+                      {nextLabelFromList[t.status]}
                     </button>
                   )}
                 </div>

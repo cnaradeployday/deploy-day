@@ -53,6 +53,13 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
 
   async function changeStatus() {
     if (!t) return
+    // Require confirmation before marking as terminado
+    if (t.next === 'terminado') {
+      const ok = window.confirm(
+        '¿Confirmás que esta tarea está terminada?\n\nAsegurate de haber cargado todas las horas antes de marcar como terminada. Esta acción solo la puede revertir un administrador.'
+      )
+      if (!ok) return
+    }
     setLoading(true)
     setErrorMsg(null)
     const { error } = await createClient().from('tasks').update({ status: t.next }).eq('id', task.id)
