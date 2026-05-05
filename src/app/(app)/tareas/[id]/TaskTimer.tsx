@@ -12,28 +12,40 @@ const MAX_SECONDS = 16 * 3600
 function parseStoredTimer(raw: string): { seconds: number; fakeStartTime: Date } | null {
   try {
     const data = JSON.parse(raw)
-
-    // Old format had isPaused: true with start: null — discard
     if (data.isPaused) return null
-
-    // Must have a valid start timestamp
     if (!data.start) return null
     const startDate = new Date(data.start)
     if (isNaN(startDate.getTime())) return null
-
     const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
     const accumulated = typeof data.accumulatedSeconds === 'number' ? data.accumulatedSeconds : 0
     const total = accumulated + elapsed
-
-    // Sanity cap: discard if over 16h (most likely a stale/corrupt entry)
     if (total > MAX_SECONDS) return null
-
-    // Encode total into a fake start time so the tick formula (Date.now() - startTime) works
     const fakeStartTime = new Date(Date.now() - total * 1000)
     return { seconds: total, fakeStartTime }
   } catch {
     return null
   }
+}
+
+// Returns the title of an already-running timer for this user (different task), or null
+function findOtherRunningTimer(userId: string, currentTaskId: string): string | null {
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith('timer_')) continue
+    if (!key.endsWith(`_${userId}`)) continue
+    // Skip the current task's own key
+    if (key === `timer_${currentTaskId}_${userId}`) continue
+    const raw = localStorage.getItem(key)
+    if (!raw) continue
+    const parsed = parseStoredTimer(raw)
+    if (!parsed) {
+      localStorage.removeItem(key) // clean up invalid entries
+      continue
+    }
+    const taskId = key.split('_')[1]
+    return localStorage.getItem(`task_title_${taskId}`) ?? 'otra tarea'
+  }
+  return null
 }
 
 export default function TaskTimer({
@@ -48,6 +60,7 @@ export default function TaskTimer({
   const [seconds, setSeconds] = useState(0)
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [loading, setLoading] = useState(false)
+  const [conflictTask, setConflictTask] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const router = useRouter()
   const storageKey = `timer_${taskId}_${userId}`
@@ -84,6 +97,12 @@ export default function TaskTimer({
   }, [running, startTime])
 
   function startTimer() {
+    const other = findOtherRunningTimer(userId, taskId)
+    if (other) {
+      setConflictTask(other)
+      return
+    }
+    setConflictTask(null)
     const now = new Date()
     setStartTime(now)
     setRunning(true)
@@ -128,15 +147,23 @@ export default function TaskTimer({
 
   if (!running) {
     return (
-      <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
-        <Clock size={14} className="text-gray-400 shrink-0" />
-        <span className="text-xs text-gray-400 flex-1">Cronómetro</span>
-        <button
-          onClick={startTimer}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all"
-        >
-          <Play size={11} /> Iniciar
-        </button>
+      <div className="space-y-2">
+        <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
+          <Clock size={14} className="text-gray-400 shrink-0" />
+          <span className="text-xs text-gray-400 flex-1">Cronómetro</span>
+          <button
+            onClick={startTimer}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all"
+          >
+            <Play size={11} /> Iniciar
+          </button>
+        </div>
+        {conflictTask && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+            <p className="font-semibold mb-0.5">Ya tenés un cronómetro activo</p>
+            <p>Detené el cronómetro de <span className="font-medium">"{conflictTask}"</span> antes de iniciar uno nuevo.</p>
+          </div>
+        )}
       </div>
     )
   }
