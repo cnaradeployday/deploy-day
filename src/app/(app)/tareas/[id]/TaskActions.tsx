@@ -115,7 +115,7 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
         </div>
       )}
 
-      {task.status === 'en_proceso' && (
+      {['estimado', 'en_proceso'].includes(task.status) && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-medium text-gray-700 mb-3">Cargar horas</p>
 
@@ -147,7 +147,7 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Horas *</label>
-              <input type="number" min="0.5" step="0.5" value={hours}
+              <input type="number" min="0.01" step="0.25" value={hours}
                 onChange={e => setHours(e.target.value)} placeholder="2"
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
             </div>

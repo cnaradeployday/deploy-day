@@ -35,7 +35,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       project:projects(id, name, client:clients(name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
       task_collaborators(id, assigned_hours, user:users(id, full_name)),
-      time_entries(id, hours_logged, entry_date, notes, user:users(full_name))`)
+      time_entries(id, user_id, hours_logged, entry_date, notes, user:users(full_name))`)
     .eq('id', id).single()
   if (!t) notFound()
 
@@ -148,7 +148,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div className="space-y-4">
           {canUseTimer && (
-            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status}/>
+            <TaskTimer taskId={t.id} taskTitle={t.title} userId={user?.id ?? ''} userName={profile?.full_name ?? ''}/>
           )}
           <TaskActions
             task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}

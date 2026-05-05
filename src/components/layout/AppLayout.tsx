@@ -4,7 +4,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
+import ActiveTimerWidget from './ActiveTimerWidget'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, Hourglass } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -30,6 +31,7 @@ const navItems = [
   { href: '/roles',             label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
   { href: '/logs',              label: 'Logs',               icon: Activity,        roles: ['admin'] },
   { href: '/equipo',            label: 'Equipo',             icon: UserCircle,      roles: ['admin','gerente_operaciones'] },
+  { href: '/cronometros-activos', label: 'Cronómetros activos', icon: Hourglass,   roles: ['admin','gerente_operaciones'] },
 ]
 
 const bottomNav = [
@@ -263,10 +265,11 @@ export default function AppLayout({
       </aside>
 
       {/* Header mobile — SIN OnlineUsers para evitar doble canal */}
-      <header style={{ top: newsPx }} className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30">
-        <Image src="/logo.jpeg" alt="DDS" width={90} height={28} className="object-contain rounded-md"/>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
+      <header style={{ top: newsPx }} className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30 gap-2">
+        <Image src="/logo.jpeg" alt="DDS" width={90} height={28} className="object-contain rounded-md shrink-0"/>
+        <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+          {userId && <ActiveTimerWidget userId={userId}/>}
+          <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative shrink-0">
             {open ? <X size={20}/> : <Menu size={20}/>}
             {unreadCount > 0 && !open && (
               <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
@@ -328,6 +331,14 @@ export default function AppLayout({
         style={{ marginTop: newsPx }}
         className={`min-h-screen pt-14 md:pt-0 pb-20 md:pb-0 transition-all duration-200${isChat ? ' flex flex-col' : ''}`}
       >
+        {/* Desktop timer bar — only visible when a timer is running */}
+        {userId && (
+          <div className="hidden md:block sticky top-0 z-20 px-4 pt-3 pb-0 pointer-events-none">
+            <div className="flex justify-end pointer-events-auto">
+              <ActiveTimerWidget userId={userId}/>
+            </div>
+          </div>
+        )}
         {children}
       </main>
     </div>

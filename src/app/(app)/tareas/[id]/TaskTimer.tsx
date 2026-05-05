@@ -2,211 +2,163 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Play, Square, Pause, Save, Clock } from 'lucide-react'
+import { Play, Square, Clock } from 'lucide-react'
+import { formatTimerSeconds } from '@/hooks/useGlobalTimer'
 
-export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: string; userId: string; taskStatus?: string }) {
+const TIMER_CHANNEL = 'deployday-active-timers'
+let _presenceChannel: any = null
+
+async function getPresenceChannel(userId: string): Promise<any> {
+  if (_presenceChannel) return _presenceChannel
+  const sb = createClient()
+  const ch = sb.channel(TIMER_CHANNEL, { config: { presence: { key: userId } } })
+  _presenceChannel = ch
+  await new Promise<void>(res => ch.subscribe(s => { if (s === 'SUBSCRIBED') res() }))
+  return ch
+}
+
+async function trackTimerStart(userId: string, fullName: string, taskId: string, taskTitle: string) {
+  const ch = await getPresenceChannel(userId)
+  await ch.track({ has_timer: true, full_name: fullName, task_id: taskId, task_title: taskTitle, started_at: new Date().toISOString() })
+}
+
+async function trackTimerStop(userId: string, fullName: string) {
+  const ch = await getPresenceChannel(userId)
+  await ch.track({ has_timer: false, full_name: fullName })
+}
+
+export default function TaskTimer({
+  taskId, taskTitle, userId, userName = '',
+}: {
+  taskId: string
+  taskTitle: string
+  userId: string
+  userName?: string
+}) {
   const [running, setRunning] = useState(false)
-  const [paused, setPaused] = useState(false)
   const [seconds, setSeconds] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [startTime, setStartTime] = useState<Date | null>(null)
-  const [pausedSeconds, setPausedSeconds] = useState(0) // acumula tiempo pausado
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [loading, setLoading] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const router = useRouter()
   const storageKey = `timer_${taskId}_${userId}`
 
-  // Restaurar timer de localStorage al montar
+  // Restore from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
       try {
-        const { start, accumulatedSeconds, isPaused } = JSON.parse(saved)
-        if (isPaused) {
-          // Estaba pausado — restaurar segundos acumulados sin correr
-          setSeconds(accumulatedSeconds ?? 0)
-          setPausedSeconds(accumulatedSeconds ?? 0)
-          setRunning(true)
-          setPaused(true)
-        } else {
-          // Estaba corriendo — calcular tiempo transcurrido desde start
-          const startDate = new Date(start)
-          const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
-          const total = (accumulatedSeconds ?? 0) + elapsed
-          setStartTime(startDate)
-          setSeconds(total)
-          setPausedSeconds(accumulatedSeconds ?? 0)
-          setRunning(true)
-          setPaused(false)
-        }
+        const { start, accumulatedSeconds } = JSON.parse(saved)
+        const startDate = new Date(start)
+        const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
+        const total = (accumulatedSeconds ?? 0) + elapsed
+        setStartTime(startDate)
+        setSeconds(total)
+        setRunning(true)
+        // Re-broadcast presence in case of page reload
+        trackTimerStart(userId, userName, taskId, taskTitle)
       } catch {
         localStorage.removeItem(storageKey)
       }
     }
-  }, [storageKey])
+  }, [storageKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tick del intervalo
+  // Live tick
   useEffect(() => {
-    if (running && !paused && startTime) {
+    if (running && startTime) {
       intervalRef.current = setInterval(() => {
-        setSeconds(pausedSeconds + Math.floor((Date.now() - startTime.getTime()) / 1000))
+        setSeconds(Math.floor((Date.now() - startTime.getTime()) / 1000))
       }, 1000)
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [running, paused, startTime, pausedSeconds])
-
-  function formatTime(s: number) {
-    const h = Math.floor(s / 3600)
-    const m = Math.floor((s % 3600) / 60)
-    const sec = s % 60
-    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`
-  }
+  }, [running, startTime])
 
   function startTimer() {
     const now = new Date()
     setStartTime(now)
     setRunning(true)
-    setPaused(false)
     setSeconds(0)
-    setPausedSeconds(0)
+    localStorage.setItem(`task_title_${taskId}`, taskTitle)
     localStorage.setItem(storageKey, JSON.stringify({
-      start: now.toISOString(), accumulatedSeconds: 0, isPaused: false
+      start: now.toISOString(),
+      accumulatedSeconds: 0,
     }))
+    trackTimerStart(userId, userName, taskId, taskTitle)
   }
 
-  function pauseTimer() {
-    // Congela los segundos actuales y guarda estado pausado
-    setPaused(true)
-    setPausedSeconds(seconds)
-    setStartTime(null)
-    localStorage.setItem(storageKey, JSON.stringify({
-      start: null, accumulatedSeconds: seconds, isPaused: true
-    }))
-  }
-
-  function resumeTimer() {
-    const now = new Date()
-    setStartTime(now)
-    setPaused(false)
-    localStorage.setItem(storageKey, JSON.stringify({
-      start: now.toISOString(), accumulatedSeconds: pausedSeconds, isPaused: false
-    }))
-  }
-
-  async function saveEntry(andStop: boolean) {
-    const hoursLogged = Math.round((seconds / 3600) * 100) / 100
-    if (hoursLogged <= 0) return
+  async function stopAndSave() {
+    if (loading) return
     setLoading(true)
+    const hoursLogged = Math.round((seconds / 3600) * 100) / 100
 
-    const { error } = await createClient().from('time_entries').insert({
-      task_id: taskId,
-      user_id: userId,
-      hours_logged: hoursLogged,
-      entry_date: new Date().toISOString().split('T')[0],
-      notes: 'Registrado con cronómetro'
-    })
-
-    if (error) {
-      alert('Error al guardar: ' + error.message)
-      setLoading(false)
-      return
+    if (hoursLogged > 0) {
+      const { error } = await createClient().from('time_entries').insert({
+        task_id: taskId,
+        user_id: userId,
+        hours_logged: hoursLogged,
+        entry_date: new Date().toISOString().split('T')[0],
+        notes: 'Registrado con cronómetro',
+      })
+      if (error) {
+        alert('Error al guardar: ' + error.message)
+        setLoading(false)
+        return
+      }
     }
 
-    if (andStop) {
-      // Detener y limpiar
-      setRunning(false)
-      setPaused(false)
-      setSeconds(0)
-      setPausedSeconds(0)
-      setStartTime(null)
-      localStorage.removeItem(storageKey)
-      router.refresh()
-    } else {
-      // Guardar parcial — reiniciar contador sin detener
-      const now = new Date()
-      setStartTime(now)
-      setPausedSeconds(0)
-      setSeconds(0)
-      setPaused(false)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-      localStorage.setItem(storageKey, JSON.stringify({
-        start: now.toISOString(), accumulatedSeconds: 0, isPaused: false
-      }))
-      router.refresh()
-    }
-
+    setRunning(false)
+    setSeconds(0)
+    setStartTime(null)
+    localStorage.removeItem(storageKey)
+    localStorage.removeItem(`task_title_${taskId}`)
+    trackTimerStop(userId, userName)
+    router.refresh()
     setLoading(false)
   }
-
-  const hoursLogged = Math.round((seconds / 3600) * 100) / 100
 
   if (!running) {
     return (
       <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
-        <Clock size={14} className="text-gray-400 shrink-0"/>
+        <Clock size={14} className="text-gray-400 shrink-0" />
         <span className="text-xs text-gray-400 flex-1">Cronómetro</span>
-        <button onClick={startTimer}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all">
-          <Play size={11}/> Iniciar
+        <button
+          onClick={startTimer}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all"
+        >
+          <Play size={11} /> Iniciar
         </button>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 space-y-3">
-      {/* Tiempo + estado */}
+    <div className="bg-white rounded-2xl border border-green-200 px-4 py-3 space-y-3">
       <div className="flex items-center gap-3">
-        <Clock size={14} className={paused ? 'text-amber-400' : 'text-green-500'} />
+        <Clock size={14} className="text-green-500 animate-pulse" />
         <span className="text-lg font-mono font-bold text-gray-900 tabular-nums flex-1">
-          {formatTime(seconds)}
+          {formatTimerSeconds(seconds)}
         </span>
-        {paused
-          ? <span className="text-xs text-amber-500 font-medium bg-amber-50 px-2 py-0.5 rounded-full">Pausado</span>
-          : <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">Corriendo</span>
-        }
+        <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">
+          Corriendo
+        </span>
       </div>
 
-      {/* Horas actuales */}
       {seconds > 0 && (
         <p className="text-xs text-gray-400">
-          {hoursLogged}h a registrar
+          {Math.round((seconds / 3600) * 100) / 100}h a registrar al detener
         </p>
       )}
 
-      {/* Botones */}
-      <div className="flex gap-2">
-        {paused ? (
-          <button onClick={resumeTimer}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all">
-            <Play size={11}/> Reanudar
-          </button>
-        ) : (
-          <button onClick={pauseTimer}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-400 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all">
-            <Pause size={11}/> Pausar
-          </button>
-        )}
-
-        <button
-          onClick={() => saveEntry(false)}
-          disabled={loading || seconds < 60}
-          title="Guardar horas y seguir contando"
-          className="flex items-center justify-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-xs font-medium disabled:opacity-40 transition-all">
-          <Save size={12}/> {saved ? '¡Guardado!' : 'Guardar'}
-        </button>
-
-        <button
-          onClick={() => saveEntry(true)}
-          disabled={loading || seconds < 10}
-          title="Guardar y detener"
-          className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50 transition-all">
-          <Square size={11}/> {loading ? '...' : 'Detener'}
-        </button>
-      </div>
+      <button
+        onClick={stopAndSave}
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all"
+      >
+        <Square size={13} />
+        {loading ? 'Guardando...' : 'Detener y guardar'}
+      </button>
     </div>
   )
 }
