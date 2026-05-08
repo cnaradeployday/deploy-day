@@ -101,7 +101,6 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     ? await supabase
         .from('time_entries').select('task_id, hours_logged, user_id')
         .in('task_id', taskIds)
-        .gte('entry_date', primerDia).lte('entry_date', ultimoDia)
     : { data: [] }
 
   const misHorasPorTarea: Record<string, number> = {}

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import OcupacionEquipoClient from './OcupacionEquipoClient'
 
@@ -49,7 +50,8 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
     .gte('task.due_date', primerDia)
     .lte('task.due_date', ultimoDia)
 
-  const { data: timeEntries } = userIds.length ? await supabase
+  const adminClient = createAdminClient()
+  const { data: timeEntries } = userIds.length ? await adminClient
     .from('time_entries').select('user_id, hours_logged')
     .in('user_id', userIds).gte('entry_date', primerDia).lte('entry_date', ultimoDia)
     : { data: [] }

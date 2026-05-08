@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
@@ -50,8 +51,9 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
   const totalVendidas = (segmentosMes ?? []).reduce((s, seg) => s + seg.horas, 0)
 
   const taskIds = tareas?.map(t => t.id) ?? []
+  const adminClient = createAdminClient()
   const { data: timeEntries } = taskIds.length
-    ? await supabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
+    ? await adminClient.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
     : { data: [] }
 
   const horasPorTarea: Record<string, number> = {}

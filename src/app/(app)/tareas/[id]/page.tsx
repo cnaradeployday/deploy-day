@@ -34,8 +34,9 @@ export default async function TareaDetailPage({ params, searchParams }: { params
     .select(`*,
       project:projects(id, name, client:clients(name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
-      task_collaborators(id, assigned_hours, user:users(id, full_name)),
-      time_entries(id, hours_logged, entry_date, notes, user:users(full_name))`)
+      task_collaborators(id, user_id, assigned_hours, user:users(id, full_name)),
+      time_entries(id, hours_logged, entry_date, notes, user_id, user:users(id, full_name))`)
+
     .eq('id', id).single()
   if (!t) notFound()
 
@@ -66,7 +67,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   }
 
   const isDirectResponsible = t.direct_responsible_id === user?.id
-  const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
+  const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user_id === user?.id || c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
   const canUseTimer = ['estimado','en_proceso'].includes(t.status) && isAssigned
 
