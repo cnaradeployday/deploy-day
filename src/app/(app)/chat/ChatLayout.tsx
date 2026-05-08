@@ -3,14 +3,16 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Hash, Plus, Users, MessageSquare, X, Check, Search, ArrowLeft, Lock } from 'lucide-react'
 import ChatWindow from './ChatWindow'
+import { subscribeToOnlineUsers } from '@/components/layout/OnlineUsers'
 
-export default function ChatLayout({ currentUserId, users, tasks, projects, globalMessages, conversations }: {
+export default function ChatLayout({ currentUserId, users, tasks, projects, globalMessages, conversations, canSeeOnlineChat }: {
   currentUserId: string
   users: { id: string; full_name: string }[]
   tasks: { id: string; title: string }[]
   projects: { id: string; name: string }[]
   globalMessages: any[]
   conversations: any[]
+  canSeeOnlineChat?: boolean
 }) {
   const [activeChat, setActiveChat] = useState<{ type: 'global' | 'conversation'; id?: string; name: string } | null>(null)
   const [globalMsgs, setGlobalMsgs] = useState<any[]>(globalMessages)
@@ -22,24 +24,28 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   const [isGroup, setIsGroup] = useState(false)
   const [creating, setCreating] = useState(false)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
-  // partner's last_read_at per conversation_id (for double ticks)
   const [partnerLastReadAt, setPartnerLastReadAt] = useState<Record<string, string | null>>({})
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([])
   const supabase = createClient()
   const activeChatRef = useRef(activeChat)
 
+  const audioCtxRef = useRef<AudioContext | null>(null)
   function playNotifSound() {
     try {
-      const ctx = new AudioContext()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.frequency.setValueAtTime(880, ctx.currentTime)
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1)
-      gain.gain.setValueAtTime(0.3, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
-      osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 0.3)
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
+      const ctx = audioCtxRef.current
+      const play = () => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain); gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(880, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15)
+        gain.gain.setValueAtTime(0.4, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+        osc.start(); osc.stop(ctx.currentTime + 0.4)
+      }
+      ctx.state === 'suspended' ? ctx.resume().then(play) : play()
     } catch {}
   }
   useEffect(() => { activeChatRef.current = activeChat }, [activeChat])
@@ -124,12 +130,16 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
     return () => { supabase.removeChannel(readChannel) }
   }, [currentUserId])
 
-  // Update localStorage when user opens global chat
   useEffect(() => {
     if (activeChat?.type === 'global') {
       localStorage.setItem('chat_last_read', new Date().toISOString())
     }
   }, [activeChat?.type])
+
+  useEffect(() => {
+    if (!canSeeOnlineChat) return
+    return subscribeToOnlineUsers(setOnlineUserIds)
+  }, [canSeeOnlineChat])
 
   async function markRead(convId: string) {
     await supabase.from('conversation_members')
@@ -267,6 +277,8 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
               const messages: any[] = activeChat.type === 'global'
                 ? globalMsgs
                 : (convMessages[activeChat.id ?? ''] ?? [])
+              const partner = !isGroupChat && cm ? (cm.members ?? []).find((m: any) => m.user_id !== currentUserId) : null
+              const isPartnerOnline = canSeeOnlineChat && partner ? onlineUserIds.includes(partner.user_id) : false
               return (
                 <ChatWindow
                   key={activeChat.id ?? 'global'}
@@ -281,6 +293,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
                   onNewMessage={handleNewMessage}
                   partnerLastReadAt={pLastRead}
                   isGroup={isGroupChat}
+                  isPartnerOnline={isPartnerOnline}
                 />
               )
             })()}

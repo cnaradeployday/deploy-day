@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { CheckSquare, Clock, AlertCircle, FolderKanban, ArrowRight } from 'lucide-react'
-import ActiveTimers from './ActiveTimers'
+import ActiveTimers from '@/components/ActiveTimers'
 
 export default async function DashboardPage() {
   const supabase = await createClient()

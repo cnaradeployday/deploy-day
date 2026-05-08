@@ -5,6 +5,15 @@ export default async function ChatPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  const { data: profile } = await supabase.from('users').select('role, custom_role_id').eq('id', user?.id ?? '').single()
+  const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
+  let canSeeOnlineChat = isAdmin
+  if (!canSeeOnlineChat && profile?.custom_role_id) {
+    const { data: perm } = await supabase.from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'online_chat').single()
+    canSeeOnlineChat = perm?.can_read ?? false
+  }
+
   const { data: users } = await supabase
     .from('users')
     .select('id, full_name')
@@ -54,6 +63,7 @@ export default async function ChatPage() {
       projects={projects ?? []}
       globalMessages={globalMessages ?? []}
       conversations={convsWithMembers}
+      canSeeOnlineChat={canSeeOnlineChat}
     />
   )
 }

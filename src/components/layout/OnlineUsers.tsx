@@ -61,6 +61,23 @@ async function init() {
       await channel.track({ full_name: myName, online_at: new Date().toISOString() })
     }
   })
+
+  // Re-track when tab regains visibility (handles tab switching / reconnects)
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && _state.channel) {
+        _state.channel.track({ full_name: myName, online_at: new Date().toISOString() }).catch(() => {})
+      }
+    })
+  }
+}
+
+// Subscribe to online user IDs — used by other components without creating extra channels
+export function subscribeToOnlineUsers(fn: (ids: string[]) => void): () => void {
+  const wrapped = (users: OnlineUser[]) => fn(users.map(u => u.user_id))
+  _state.listeners.add(wrapped)
+  init().then(() => fn(_state.users.map(u => u.user_id)))
+  return () => { _state.listeners.delete(wrapped) }
 }
 
 export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {
@@ -138,7 +155,7 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
       </button>
       {showTooltip && (
         <div onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
-          <Tooltip/>
+          <Tooltip up/>
         </div>
       )}
     </div>

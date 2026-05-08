@@ -26,9 +26,11 @@ const MODULES = [
   { key: 'roles',                 label: 'Roles y permisos' },
   { key: 'logs',                  label: 'Logs de actividad' },
   { key: 'ocupacion_equipo',      label: 'Ocupación del equipo' },
-  { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
+  { key: 'cronometros',           label: 'Cronómetros en curso' },
+  { key: 'performance_equipo',    label: 'Performance equipo' },
   { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
   { key: 'online_users',          label: 'Ver usuarios online' },
+  { key: 'online_chat',           label: 'Ver estado online en chat' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
 ]
 

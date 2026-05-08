@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, Award } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -22,6 +22,8 @@ const navItems = [
   { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
   { href: '/ocupacion-equipo',   label: 'Ocupación equipo',   icon: Users,           roles: ['admin','gerente_operaciones'] },
+  { href: '/cronometros',        label: 'Cronómetros',        icon: Timer,           roles: ['admin','gerente_operaciones'] },
+  { href: '/performance-equipo', label: 'Performance equipo', icon: Award,           roles: ['admin','gerente_operaciones'] },
   { href: '/reportes',          label: 'Reportes',           icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
   { href: '/solicitudes',       label: 'Solicitudes',        icon: AlertCircle,     roles: ['admin','gerente_operaciones'] },
   { href: '/facturacion',       label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
@@ -204,6 +206,11 @@ export default function AppLayout({
   useEffect(() => {
     if (isChat) { localStorage.setItem('chat_last_read', new Date().toISOString()); setUnreadCount(0) }
   }, [isChat])
+
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\) /, '') || 'Deploy Day'
+    document.title = unreadCount > 0 && !isChat ? `(${unreadCount}) ${base}` : base
+  }, [unreadCount, isChat])
 
   async function logout() {
     await createClient().auth.signOut()

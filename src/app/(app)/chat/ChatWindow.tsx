@@ -21,7 +21,7 @@ function MessageTicks({ status }: { status: TickStatus }) {
 export default function ChatWindow({
   conversationId, isGlobal, name, currentUserId,
   users, tasks, projects, messages, onNewMessage,
-  partnerLastReadAt, isGroup,
+  partnerLastReadAt, isGroup, isPartnerOnline,
 }: {
   conversationId: string | null
   isGlobal: boolean
@@ -34,6 +34,7 @@ export default function ChatWindow({
   onNewMessage: (msg: any) => void
   partnerLastReadAt?: string | null
   isGroup?: boolean
+  isPartnerOnline?: boolean
 }) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -132,8 +133,18 @@ export default function ChatWindow({
     <div className="flex flex-col h-full">
       <div className="bg-white border-b border-gray-100 px-5 py-3.5 shrink-0 flex items-center gap-2">
         {isGlobal ? <Hash size={16} className="text-[#1B9BF0]"/> : <Lock size={16} className="text-gray-400"/>}
-        <p className="text-sm font-semibold text-gray-900">{name}</p>
-        {!isGlobal && <span className="text-xs text-gray-400 ml-1">· privado</span>}
+        <div className="flex flex-col min-w-0">
+          <p className="text-sm font-semibold text-gray-900">{name}</p>
+          {!isGlobal && !isGroup && (
+            <span className="flex items-center gap-1 text-xs">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isPartnerOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}/>
+              <span className={isPartnerOnline ? 'text-green-600' : 'text-gray-400'}>
+                {isPartnerOnline ? 'En línea' : 'Desconectado'}
+              </span>
+            </span>
+          )}
+        </div>
+        {!isGlobal && isGroup && <span className="text-xs text-gray-400 ml-1">· grupo</span>}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">

@@ -23,8 +23,22 @@ export default async function EquipoPage() {
   const { data: customRoles } = await supabase
     .from('roles').select('id, name').eq('is_system', false)
 
-  const rolesMap = Object.fromEntries((customRoles ?? []).map(r => [r.id, r.name]))
+  const userIds = (equipo ?? []).map((u: any) => u.id)
+  const { data: loginLogs } = userIds.length ? await supabase
+    .from('activity_logs')
+    .select('user_id, created_at')
+    .eq('section', 'login')
+    .in('user_id', userIds)
+    .order('created_at', { ascending: false })
+    .limit(500)
+    : { data: [] }
 
+  const lastLoginMap: Record<string, string> = {}
+  ;(loginLogs ?? []).forEach((l: any) => {
+    if (!lastLoginMap[l.user_id]) lastLoginMap[l.user_id] = l.created_at
+  })
+
+  const rolesMap = Object.fromEntries((customRoles ?? []).map(r => [r.id, r.name]))
   const isAdmin = profile?.role === 'admin'
 
   function getRoleLabel(m: any) {
@@ -65,6 +79,11 @@ export default async function EquipoPage() {
                   {m.currency === 'USD' ? 'USD ' : '$'}{m.hourly_cost}/h
                 </span>
               )}
+              <span className="text-xs text-gray-400 hidden md:block">
+                {lastLoginMap[m.id]
+                  ? new Date(lastLoginMap[m.id]).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
+                  : '—'}
+              </span>
               <span className={'text-xs px-2.5 py-1 rounded-full ' + (m.custom_role_id ? 'bg-amber-50 text-amber-600' : roleColors[m.role] ?? 'bg-gray-100 text-gray-500')}>
                 {getRoleLabel(m)}
               </span>
