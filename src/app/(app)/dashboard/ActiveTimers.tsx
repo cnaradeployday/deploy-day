@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -17,33 +17,100 @@ export default function ActiveTimers() {
   const [timers, setTimers] = useState<TimerEntry[]>([])
   const [, setTick] = useState(0)
 
+  const selfRef = useRef<TimerEntry | null>(null)
+  const othersRef = useRef<TimerEntry[]>([])
+  const userIdRef = useRef<string | null>(null)
+  const userNameRef = useRef<string>('')
+  const taskCacheRef = useRef<Record<string, string>>({})
+
+  function updateDisplay() {
+    const self = selfRef.current
+    const others = othersRef.current.filter(o => !self || o.userId !== self.userId)
+    setTimers(self ? [self, ...others] : others)
+  }
+
   useEffect(() => {
     const sb = createClient()
-    const ch = sb.channel('deployday-timers')
+    const chRef = { current: null as ReturnType<typeof sb.channel> | null }
 
-    ch.on('presence', { event: 'sync' }, () => {
-      const state = ch.presenceState()
-      const entries: TimerEntry[] = []
-      for (const [uid, presences] of Object.entries(state)) {
-        const p = (presences as any[])[0]
-        if (p?.task_id) {
-          entries.push({
+    async function getTaskTitle(taskId: string): Promise<string> {
+      if (taskCacheRef.current[taskId]) return taskCacheRef.current[taskId]
+      const { data } = await sb.from('tasks').select('title').eq('id', taskId).single()
+      const t = data?.title ?? 'Tarea'
+      taskCacheRef.current[taskId] = t
+      return t
+    }
+
+    const pollSelf = setInterval(async () => {
+      const uid = userIdRef.current
+      if (!uid) return
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (!key?.startsWith('timer_')) continue
+        const parts = key.split('_')
+        if (parts.length !== 3 || parts[2] !== uid) continue
+        try {
+          const data = JSON.parse(localStorage.getItem(key)!)
+          const taskId = parts[1]
+          const title = await getTaskTitle(taskId)
+          selfRef.current = {
             userId: uid,
-            fullName: p.full_name ?? '',
-            taskId: p.task_id,
-            taskTitle: p.task_title ?? '',
-            startedAt: p.started_at ?? null,
-            accumulated: p.accumulated_seconds ?? 0,
-            isPaused: p.is_paused ?? false,
-          })
-        }
+            fullName: userNameRef.current,
+            taskId,
+            taskTitle: title,
+            startedAt: data.start ?? null,
+            accumulated: data.accumulatedSeconds ?? 0,
+            isPaused: data.isPaused ?? false,
+          }
+          updateDisplay()
+          return
+        } catch {}
       }
-      setTimers(entries)
+      if (selfRef.current) { selfRef.current = null; updateDisplay() }
+    }, 2000)
+
+    sb.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      userIdRef.current = user.id
+
+      const { data: profile } = await sb.from('users').select('full_name').eq('id', user.id).single()
+      userNameRef.current = profile?.full_name ?? user.email ?? ''
+      if (selfRef.current) { selfRef.current = { ...selfRef.current, fullName: userNameRef.current }; updateDisplay() }
+
+      const ch = sb.channel('deployday-timers', { config: { presence: { key: user.id + '-viewer' } } })
+      chRef.current = ch
+
+      ch.on('presence', { event: 'sync' }, () => {
+        const state = ch.presenceState()
+        const others: TimerEntry[] = []
+        for (const [uid, presences] of Object.entries(state)) {
+          const p = (presences as any[])[0]
+          if (p?.task_id) {
+            others.push({
+              userId: uid,
+              fullName: p.full_name ?? '',
+              taskId: p.task_id,
+              taskTitle: p.task_title ?? '',
+              startedAt: p.started_at ?? null,
+              accumulated: p.accumulated_seconds ?? 0,
+              isPaused: p.is_paused ?? false,
+            })
+          }
+        }
+        othersRef.current = others
+        updateDisplay()
+      })
+
+      ch.subscribe()
     })
 
-    ch.subscribe()
     const ticker = setInterval(() => setTick(t => t + 1), 1000)
-    return () => { sb.removeChannel(ch); clearInterval(ticker) }
+
+    return () => {
+      clearInterval(pollSelf)
+      clearInterval(ticker)
+      if (chRef.current) sb.removeChannel(chRef.current)
+    }
   }, [])
 
   if (timers.length === 0) return null
