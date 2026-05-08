@@ -19,31 +19,38 @@ export default function ActiveTimers() {
 
   useEffect(() => {
     const sb = createClient()
-    const ch = sb.channel('deployday-timers')
+    const chRef = { current: null as ReturnType<typeof sb.channel> | null }
+    const ticker = setInterval(() => setTick(t => t + 1), 1000)
 
-    ch.on('presence', { event: 'sync' }, () => {
-      const state = ch.presenceState()
-      const entries: TimerEntry[] = []
-      for (const [uid, presences] of Object.entries(state)) {
-        const p = (presences as any[])[0]
-        if (p?.task_id) {
-          entries.push({
-            userId: uid,
-            fullName: p.full_name ?? '',
-            taskId: p.task_id,
-            taskTitle: p.task_title ?? '',
-            startedAt: p.started_at ?? null,
-            accumulated: p.accumulated_seconds ?? 0,
-            isPaused: p.is_paused ?? false,
-          })
+    sb.auth.getUser().then(({ data: { user } }) => {
+      const presenceKey = (user?.id ?? ('v-' + Date.now())) + '-viewer'
+      const ch = sb.channel('deployday-timers', { config: { presence: { key: presenceKey } } })
+      chRef.current = ch
+
+      ch.on('presence', { event: 'sync' }, () => {
+        const state = ch.presenceState()
+        const entries: TimerEntry[] = []
+        for (const [uid, presences] of Object.entries(state)) {
+          const p = (presences as any[])[0]
+          if (p?.task_id) {
+            entries.push({
+              userId: uid,
+              fullName: p.full_name ?? '',
+              taskId: p.task_id,
+              taskTitle: p.task_title ?? '',
+              startedAt: p.started_at ?? null,
+              accumulated: p.accumulated_seconds ?? 0,
+              isPaused: p.is_paused ?? false,
+            })
+          }
         }
-      }
-      setTimers(entries)
+        setTimers(entries)
+      })
+
+      ch.subscribe()
     })
 
-    ch.subscribe()
-    const ticker = setInterval(() => setTick(t => t + 1), 1000)
-    return () => { sb.removeChannel(ch); clearInterval(ticker) }
+    return () => { if (chRef.current) sb.removeChannel(chRef.current); clearInterval(ticker) }
   }, [])
 
   if (timers.length === 0) return null

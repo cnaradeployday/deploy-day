@@ -34,6 +34,13 @@ function avg(r: Review | null): number | null {
   return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10
 }
 
+function scoreLabel(s: number): { label: string; color: string } {
+  if (s >= 4) return { label: 'Excelente', color: 'text-green-600 bg-green-50' }
+  if (s >= 3) return { label: 'Muy bueno', color: 'text-blue-600 bg-blue-50' }
+  if (s >= 2) return { label: 'Bueno', color: 'text-amber-600 bg-amber-50' }
+  return { label: 'Regular', color: 'text-red-500 bg-red-50' }
+}
+
 function StarPicker({ value, onChange, disabled }: { value: number | null; onChange: (v: number) => void; disabled?: boolean }) {
   return (
     <div className="flex gap-0.5">
@@ -112,6 +119,23 @@ export default function PerformanceClient({
 
   return (
     <div>
+      {/* Score legend */}
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <span className="text-xs text-gray-400 mr-1">Escala:</span>
+        {[
+          { range: '1–2', label: 'Regular',   color: 'bg-red-50 text-red-500 border-red-100' },
+          { range: '2–3', label: 'Bueno',      color: 'bg-amber-50 text-amber-600 border-amber-100' },
+          { range: '3–4', label: 'Muy bueno',  color: 'bg-blue-50 text-blue-600 border-blue-100' },
+          { range: '4–5', label: 'Excelente',  color: 'bg-green-50 text-green-600 border-green-100' },
+        ].map(s => (
+          <span key={s.label} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${s.color}`}>
+            <span className="font-semibold">{s.range}</span>
+            <span className="opacity-70">·</span>
+            {s.label}
+          </span>
+        ))}
+      </div>
+
       {/* Month selector */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
         {mesesDisponibles.map(m => (
@@ -124,7 +148,7 @@ export default function PerformanceClient({
 
       {/* Table header */}
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="grid px-4 py-3 border-b border-gray-50 bg-gray-50 text-xs font-medium text-gray-400" style={{gridTemplateColumns: '200px repeat(6, 1fr) 80px 100px'}}>
+        <div className="grid px-4 py-3 border-b border-gray-50 bg-gray-50 text-xs font-medium text-gray-400" style={{gridTemplateColumns: '200px repeat(6, 1fr) 100px 100px'}}>
           <span>Usuario</span>
           {CATS.map(c => <span key={c.key} className="text-center">{c.label}</span>)}
           <span className="text-center">Global</span>
@@ -140,7 +164,7 @@ export default function PerformanceClient({
 
           return (
             <div key={u.id} className="border-b border-gray-50 last:border-0">
-              <div className="grid items-center px-4 py-3 hover:bg-gray-50 gap-2" style={{gridTemplateColumns: '200px repeat(6, 1fr) 80px 100px'}}>
+              <div className="grid items-center px-4 py-3 hover:bg-gray-50 gap-2" style={{gridTemplateColumns: '200px repeat(6, 1fr) 100px 100px'}}>
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="w-7 h-7 rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0">
                     {u.full_name[0].toUpperCase()}
@@ -158,12 +182,16 @@ export default function PerformanceClient({
                   </div>
                 ))}
 
-                <div className="flex justify-center">
-                  {globalScore !== null ? (
-                    <span className={`text-sm font-bold tabular-nums ${globalScore >= 4 ? 'text-green-600' : globalScore >= 3 ? 'text-amber-600' : 'text-red-500'}`}>
-                      {globalScore}
-                    </span>
-                  ) : <span className="text-xs text-gray-300">—</span>}
+                <div className="flex flex-col items-center gap-0.5">
+                  {globalScore !== null ? (() => {
+                    const { label, color } = scoreLabel(globalScore)
+                    return (
+                      <>
+                        <span className={`text-sm font-bold tabular-nums ${color.split(' ')[0]}`}>{globalScore}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${color}`}>{label}</span>
+                      </>
+                    )
+                  })() : <span className="text-xs text-gray-300">—</span>}
                 </div>
 
                 {isCurrentMonth && (
@@ -187,7 +215,7 @@ export default function PerformanceClient({
               {showHist && history.map(r => {
                 const hAvg = avg(r)
                 return (
-                  <div key={r.month} className="grid items-center px-4 py-2 bg-gray-50/50 border-t border-gray-50 gap-2" style={{gridTemplateColumns: '200px repeat(6, 1fr) 80px 100px'}}>
+                  <div key={r.month} className="grid items-center px-4 py-2 bg-gray-50/50 border-t border-gray-50 gap-2" style={{gridTemplateColumns: '200px repeat(6, 1fr) 100px 100px'}}>
                     <span className="text-xs text-gray-400 pl-9">
                       {new Date(r.month + '-01').toLocaleDateString('es-AR', { month: 'short', year: '2-digit' })}
                     </span>

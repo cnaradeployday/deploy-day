@@ -119,7 +119,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   const bar = timer.isPaused ? 'bg-amber-400' : 'bg-green-500'
 
   return (
-    <div className="fixed top-16 right-4 md:top-4 md:right-6 z-50 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
+    <div className="fixed top-32 right-4 md:top-16 md:right-6 z-50 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <div className={`w-2 h-2 rounded-full shrink-0 ${dot}`}/>
         <div className="min-w-0">

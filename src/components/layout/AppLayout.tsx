@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import OnlineUsers from './OnlineUsers'
+import OnlineUsers, { initOnlineTracking } from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, Award } from 'lucide-react'
@@ -119,6 +119,8 @@ export default function AppLayout({
   const [showProfile, setShowProfile] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const pathnameRef = useRef(pathname)
   const hasNews = !!activeNews
 
   useEffect(() => {
@@ -164,11 +166,35 @@ export default function AppLayout({
   const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)
   const isChat = pathname === '/chat'
+  useEffect(() => { pathnameRef.current = pathname }, [pathname])
   const isCollapsed = mounted && collapsed
   const newsPx = hasNews ? 40 : 0
 
+  function playNotifSound() {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const ctx = audioCtxRef.current
+      const play = () => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain); gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(880, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15)
+        gain.gain.setValueAtTime(0.4, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+        osc.start(); osc.stop(ctx.currentTime + 0.4)
+      }
+      ctx.state === 'suspended' ? ctx.resume().then(play) : play()
+    } catch {}
+  }
+
   useEffect(() => {
     if (!userId) return
+
+    // Ensure current user is tracked in the online presence channel
+    initOnlineTracking()
+
     const sb = createClient()
 
     // Global unread (based on localStorage timestamp)
@@ -195,10 +221,15 @@ export default function AppLayout({
         setUnreadCount(c => c + total)
       })
 
-    // Realtime: all new messages from others (RLS ensures only visible ones)
+    // Realtime: new messages from others — update badge + play sound
     const channel = sb.channel('chat-badge-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
-        (p) => { if (p.new.user_id !== userId) setUnreadCount(c => c + 1) })
+        (p) => {
+          if (p.new.user_id !== userId) {
+            setUnreadCount(c => c + 1)
+            if (pathnameRef.current !== '/chat') playNotifSound()
+          }
+        })
       .subscribe()
     return () => { sb.removeChannel(channel) }
   }, [userId])
