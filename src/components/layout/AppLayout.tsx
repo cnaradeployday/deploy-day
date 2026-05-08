@@ -228,7 +228,14 @@ export default function AppLayout({
           </div>
           <button onClick={() => setShowProfile(!showProfile)}
             className="flex items-center gap-2 mt-3 w-full hover:bg-gray-50 rounded-xl px-1 py-1.5 transition-all">
-            <Avatar url={avatarUrl ?? null} name={userName} size={7}/>
+            <div className="relative shrink-0">
+              <Avatar url={avatarUrl ?? null} name={userName} size={7}/>
+              {unreadCount > 0 && !isChat && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </div>
             {!isCollapsed && (
               <div className="text-left min-w-0">
                 <p className="text-xs font-medium text-gray-700 truncate">{userName}</p>

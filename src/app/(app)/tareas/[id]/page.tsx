@@ -69,7 +69,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   const isDirectResponsible = t.direct_responsible_id === user?.id
   const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user_id === user?.id || c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
-  const canUseTimer = ['estimado','en_proceso'].includes(t.status) && isAssigned
+  const canUseTimer = ['estimado','en_proceso'].includes(t.status) && (isAssigned || isAdmin)
 
   const { data: comments } = await supabase
     .from('task_comments')

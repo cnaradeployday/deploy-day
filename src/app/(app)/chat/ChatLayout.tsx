@@ -25,8 +25,23 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   // partner's last_read_at per conversation_id (for double ticks)
   const [partnerLastReadAt, setPartnerLastReadAt] = useState<Record<string, string | null>>({})
   const supabase = createClient()
-  // Keep activeChat accessible inside subscriptions without recreating them
   const activeChatRef = useRef(activeChat)
+
+  function playNotifSound() {
+    try {
+      const ctx = new AudioContext()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.setValueAtTime(880, ctx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1)
+      gain.gain.setValueAtTime(0.3, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 0.3)
+    } catch {}
+  }
   useEffect(() => { activeChatRef.current = activeChat }, [activeChat])
 
   // Initial: load messages + unread counts + partner last_read_at for each DM
@@ -71,6 +86,8 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
           .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
           .eq('id', msg.id).single()
         if (!data) return
+
+        if (data.user_id !== currentUserId) playNotifSound()
 
         if (data.is_global) {
           setGlobalMsgs(prev => prev.find((m: any) => m.id === data.id) ? prev : [...prev, data])

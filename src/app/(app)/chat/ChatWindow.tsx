@@ -4,12 +4,16 @@ import { createClient } from '@/lib/supabase/client'
 import { Send, Hash, Lock, Check } from 'lucide-react'
 import { renderContent } from './renderContent'
 
-function MessageTicks({ isRead }: { isRead: boolean }) {
-  const cls = isRead ? 'text-[#53bdeb]' : 'text-white/50'
+type TickStatus = 'sent' | 'delivered' | 'read'
+function MessageTicks({ status }: { status: TickStatus }) {
+  if (status === 'sent') {
+    return <Check size={10} className="text-gray-400" strokeWidth={2.5}/>
+  }
+  const cls = status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400'
   return (
-    <span className="inline-flex items-center ml-0.5 shrink-0">
-      <Check size={9} className={cls} strokeWidth={2.5}/>
-      <Check size={9} className={'-ml-[5px] ' + cls} strokeWidth={2.5}/>
+    <span className="inline-flex items-center">
+      <Check size={10} className={cls} strokeWidth={2.5}/>
+      <Check size={10} className={'-ml-[5px] ' + cls} strokeWidth={2.5}/>
     </span>
   )
 }
@@ -153,7 +157,7 @@ export default function ChatWindow({
                 new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() < 300000
               const own = msg.user?.id === currentUserId
               const mentioned = Array.isArray(msg.mentions) && msg.mentions.includes(currentUserId)
-              const isRead = showTicks && own && !!partnerLastReadAt && partnerLastReadAt >= msg.created_at
+              const tickStatus: TickStatus = !partnerLastReadAt ? 'sent' : partnerLastReadAt >= msg.created_at ? 'read' : 'delivered'
               return (
                 <div key={msg.id} className={'flex gap-3 ' + (own ? 'flex-row-reverse ' : '') + (sameUser ? 'mt-0.5' : 'mt-3')}>
                   {!sameUser && !own && (
@@ -177,16 +181,19 @@ export default function ChatWindow({
                       'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
                     )}>
                       {renderContent(msg, users, projects, tasks, currentUserId)}
-                      {/* Time + ticks inside own message bubble */}
                       {own && (
-                        <div className="flex items-center justify-end gap-0.5 mt-1 -mb-0.5">
+                        <div className="flex items-center justify-end mt-1 -mb-0.5">
                           <span className="text-[9px] text-white/50 leading-none">
                             {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
-                          {showTicks && <MessageTicks isRead={isRead}/>}
                         </div>
                       )}
                     </div>
+                    {own && showTicks && (
+                      <div className="flex items-center justify-end gap-0.5 mt-0.5 mr-0.5">
+                        <MessageTicks status={tickStatus}/>
+                      </div>
+                    )}
                     {(msg.task || msg.project) && (
                       <div className="flex gap-2 mt-1">
                         {msg.task && <a href={'/tareas/' + msg.task.id} className="text-xs text-amber-600 hover:underline">→ {msg.task.title}</a>}
