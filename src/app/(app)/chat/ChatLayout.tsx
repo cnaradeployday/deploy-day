@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Hash, Plus, Users, MessageSquare, X, Check, Search, ArrowLeft, Lock } from 'lucide-react'
 import ChatWindow from './ChatWindow'
@@ -13,6 +13,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   conversations: any[]
 }) {
   const [activeChat, setActiveChat] = useState<{ type: 'global' | 'conversation'; id?: string; name: string } | null>(null)
+  const [globalMsgs, setGlobalMsgs] = useState<any[]>(globalMessages)
   const [convMessages, setConvMessages] = useState<Record<string, any[]>>({})
   const [showNewChat, setShowNewChat] = useState(false)
   const [newChatSearch, setNewChatSearch] = useState('')
@@ -21,14 +22,20 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
   const [isGroup, setIsGroup] = useState(false)
   const [creating, setCreating] = useState(false)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+  // partner's last_read_at per conversation_id (for double ticks)
+  const [partnerLastReadAt, setPartnerLastReadAt] = useState<Record<string, string | null>>({})
   const supabase = createClient()
+  // Keep activeChat accessible inside subscriptions without recreating them
+  const activeChatRef = useRef(activeChat)
+  useEffect(() => { activeChatRef.current = activeChat }, [activeChat])
 
+  // Initial: load messages + unread counts + partner last_read_at for each DM
   useEffect(() => {
     conversations.forEach(async (cm: any) => {
       const convId = cm.conversation_id
       const { data } = await supabase
         .from('messages')
-        .select('id, content, created_at, mentions, task_id, project_id, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
+        .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
         .eq('conversation_id', convId)
         .order('created_at', { ascending: true })
         .limit(100)
@@ -43,31 +50,69 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
           .neq('user_id', currentUserId)
         setUnreadCounts(prev => ({ ...prev, [convId]: count ?? 0 }))
       }
+
+      // Extract partner's last_read_at for 1:1 chats
+      if (!cm.conversation?.is_group) {
+        const partner = (cm.members ?? []).find((m: any) => m.user_id !== currentUserId)
+        if (partner) {
+          setPartnerLastReadAt(prev => ({ ...prev, [convId]: partner.last_read_at ?? null }))
+        }
+      }
     })
   }, [])
 
+  // Single subscription for ALL new messages (global + DM)
   useEffect(() => {
-    const channel = supabase.channel('private-msgs-' + currentUserId)
+    const channel = supabase.channel('all-msgs-' + currentUserId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
         const msg = payload.new
-        if (!msg.conversation_id || msg.is_global) return
         const { data } = await supabase
           .from('messages')
-          .select('id, content, created_at, mentions, task_id, project_id, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
+          .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
           .eq('id', msg.id).single()
         if (!data) return
-        setConvMessages(prev => {
-          const existing = prev[msg.conversation_id] ?? []
-          if (existing.find((m: any) => m.id === data.id)) return prev
-          return { ...prev, [msg.conversation_id]: [...existing, data] }
-        })
-        if (activeChat?.id !== msg.conversation_id && msg.user_id !== currentUserId) {
-          setUnreadCounts(prev => ({ ...prev, [msg.conversation_id]: (prev[msg.conversation_id] ?? 0) + 1 }))
+
+        if (data.is_global) {
+          setGlobalMsgs(prev => prev.find((m: any) => m.id === data.id) ? prev : [...prev, data])
+          if (activeChatRef.current?.type === 'global') {
+            localStorage.setItem('chat_last_read', new Date().toISOString())
+          }
+        } else if (data.conversation_id) {
+          setConvMessages(prev => {
+            const existing = prev[data.conversation_id] ?? []
+            if (existing.find((m: any) => m.id === data.id)) return prev
+            return { ...prev, [data.conversation_id]: [...existing, data] }
+          })
+          if (activeChatRef.current?.id !== data.conversation_id && data.user_id !== currentUserId) {
+            setUnreadCounts(prev => ({ ...prev, [data.conversation_id]: (prev[data.conversation_id] ?? 0) + 1 }))
+          }
         }
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [activeChat])
+  }, [currentUserId])
+
+  // Subscribe to conversation_members UPDATEs to track when partner reads the chat (double ticks)
+  useEffect(() => {
+    const convIds = conversations.map((cm: any) => cm.conversation_id)
+    if (!convIds.length) return
+    const readChannel = supabase.channel('partner-reads-' + currentUserId)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members' }, (payload) => {
+        const { conversation_id, user_id, last_read_at } = payload.new as any
+        if (user_id !== currentUserId && convIds.includes(conversation_id)) {
+          setPartnerLastReadAt(prev => ({ ...prev, [conversation_id]: last_read_at ?? null }))
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(readChannel) }
+  }, [currentUserId])
+
+  // Update localStorage when user opens global chat
+  useEffect(() => {
+    if (activeChat?.type === 'global') {
+      localStorage.setItem('chat_last_read', new Date().toISOString())
+    }
+  }, [activeChat?.type])
 
   async function markRead(convId: string) {
     await supabase.from('conversation_members')
@@ -75,6 +120,18 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
       .eq('conversation_id', convId)
       .eq('user_id', currentUserId)
     setUnreadCounts(prev => ({ ...prev, [convId]: 0 }))
+  }
+
+  function handleNewMessage(msg: any) {
+    if (msg.is_global) {
+      setGlobalMsgs(prev => prev.find((m: any) => m.id === msg.id) ? prev : [...prev, msg])
+    } else if (msg.conversation_id) {
+      setConvMessages(prev => {
+        const existing = prev[msg.conversation_id] ?? []
+        if (existing.find((m: any) => m.id === msg.id)) return prev
+        return { ...prev, [msg.conversation_id]: [...existing, msg] }
+      })
+    }
   }
 
   async function createConversation() {
@@ -123,9 +180,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
     u.id !== currentUserId && u.full_name.toLowerCase().includes(newChatSearch.toLowerCase())
   )
 
-  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
-
-  // Mobile: mostrar lista o chat
+  const totalUnread = (Object.values(unreadCounts) as number[]).reduce((a, b) => a + b, 0)
   const showList = !activeChat
 
   return (
@@ -182,24 +237,36 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
       <div className={`${!showList ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-w-0`}>
         {activeChat ? (
           <>
-            {/* Back button mobile */}
             <div className="md:hidden absolute top-0 left-0 z-10">
               <button onClick={() => setActiveChat(null)}
                 className="flex items-center gap-1 px-3 py-2 text-sm text-gray-500">
                 <ArrowLeft size={16}/> Volver
               </button>
             </div>
-            <ChatWindow
-              key={activeChat.id ?? 'global'}
-              conversationId={activeChat.id ?? null}
-              isGlobal={activeChat.type === 'global'}
-              name={activeChat.name}
-              currentUserId={currentUserId}
-              users={users}
-              tasks={tasks}
-              projects={projects}
-              initialMessages={activeChat.type === 'global' ? globalMessages : (convMessages[activeChat.id ?? ''] ?? [])}
-            />
+            {(() => {
+              const cm = conversations.find((c: any) => c.conversation_id === activeChat.id)
+              const isGroupChat = cm?.conversation?.is_group ?? false
+              const pLastRead = activeChat.id ? (partnerLastReadAt[activeChat.id] ?? null) : null
+              const messages: any[] = activeChat.type === 'global'
+                ? globalMsgs
+                : (convMessages[activeChat.id ?? ''] ?? [])
+              return (
+                <ChatWindow
+                  key={activeChat.id ?? 'global'}
+                  conversationId={activeChat.id ?? null}
+                  isGlobal={activeChat.type === 'global'}
+                  name={activeChat.name}
+                  currentUserId={currentUserId}
+                  users={users}
+                  tasks={tasks}
+                  projects={projects}
+                  messages={messages}
+                  onNewMessage={handleNewMessage}
+                  partnerLastReadAt={pLastRead}
+                  isGroup={isGroupChat}
+                />
+              )
+            })()}
           </>
         ) : (
           <div className="hidden md:flex flex-col items-center justify-center h-full text-gray-400">

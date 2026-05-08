@@ -167,11 +167,34 @@ export default function AppLayout({
   useEffect(() => {
     if (!userId) return
     const sb = createClient()
+
+    // Global unread (based on localStorage timestamp)
     const lastRead = localStorage.getItem('chat_last_read') ?? '1970-01-01'
-    sb.from('messages').select('id', { count: 'exact', head: true }).eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
-      .then(({ count }) => setUnreadCount(count ?? 0))
+    sb.from('messages').select('id', { count: 'exact', head: true })
+      .eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
+      .then(({ count }) => setUnreadCount(c => c + (count ?? 0)))
+
+    // DM unread: sum unread per conversation
+    sb.from('conversation_members')
+      .select('conversation_id, last_read_at')
+      .eq('user_id', userId)
+      .then(async ({ data: memberships }) => {
+        if (!memberships?.length) return
+        let total = 0
+        for (const m of memberships) {
+          const { count } = await sb.from('messages')
+            .select('id', { count: 'exact', head: true })
+            .eq('conversation_id', m.conversation_id)
+            .neq('user_id', userId)
+            .gt('created_at', m.last_read_at ?? '1970-01-01')
+          total += count ?? 0
+        }
+        setUnreadCount(c => c + total)
+      })
+
+    // Realtime: all new messages from others (RLS ensures only visible ones)
     const channel = sb.channel('chat-badge-' + userId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'is_global=eq.true' },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
         (p) => { if (p.new.user_id !== userId) setUnreadCount(c => c + 1) })
       .subscribe()
     return () => { sb.removeChannel(channel) }

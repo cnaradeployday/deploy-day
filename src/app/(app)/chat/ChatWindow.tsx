@@ -1,10 +1,24 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Send, Hash, Lock } from 'lucide-react'
+import { Send, Hash, Lock, Check } from 'lucide-react'
 import { renderContent } from './renderContent'
 
-export default function ChatWindow({ conversationId, isGlobal, name, currentUserId, users, tasks, projects, initialMessages }: {
+function MessageTicks({ isRead }: { isRead: boolean }) {
+  const cls = isRead ? 'text-[#53bdeb]' : 'text-white/50'
+  return (
+    <span className="inline-flex items-center ml-0.5 shrink-0">
+      <Check size={9} className={cls} strokeWidth={2.5}/>
+      <Check size={9} className={'-ml-[5px] ' + cls} strokeWidth={2.5}/>
+    </span>
+  )
+}
+
+export default function ChatWindow({
+  conversationId, isGlobal, name, currentUserId,
+  users, tasks, projects, messages, onNewMessage,
+  partnerLastReadAt, isGroup,
+}: {
   conversationId: string | null
   isGlobal: boolean
   name: string
@@ -12,9 +26,11 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
   users: { id: string; full_name: string }[]
   tasks: { id: string; title: string }[]
   projects: { id: string; name: string }[]
-  initialMessages: any[]
+  messages: any[]
+  onNewMessage: (msg: any) => void
+  partnerLastReadAt?: string | null
+  isGroup?: boolean
 }) {
-  const [messages, setMessages] = useState<any[]>(initialMessages)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [suggestions, setSuggestions] = useState<{ type: string; id: string; label: string }[]>([])
@@ -22,37 +38,11 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
   const [triggerPos, setTriggerPos] = useState<{ start: number; type: string } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const supabaseRef = useRef(createClient())
-
-  useEffect(() => {
-    setMessages(initialMessages)
-  }, [conversationId])
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  useEffect(() => {
-    if (isGlobal) localStorage.setItem('chat_last_read', new Date().toISOString())
-    const sb = supabaseRef.current
-    const channel = sb.channel('chat-window-' + (conversationId ?? 'global') + '-' + Math.random())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload) => {
-        const msg = payload.new
-        const matchesGlobal = isGlobal && msg.is_global
-        const matchesConv = !isGlobal && msg.conversation_id === conversationId
-        if (!matchesGlobal && !matchesConv) return
-        const { data } = await sb
-          .from('messages')
-          .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
-          .eq('id', msg.id).single()
-        if (data) setMessages(prev => {
-          if (prev.find((m: any) => m.id === data.id)) return prev
-          return [...prev, data]
-        })
-      })
-      .subscribe()
-    return () => { sb.removeChannel(channel) }
-  }, [conversationId, isGlobal])
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value
@@ -103,11 +93,10 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
   async function sendMessage() {
     if (!input.trim() || sending) return
     setSending(true)
-    const sb = supabaseRef.current
     const mentionedUsers = users.filter(u => input.includes('@' + u.full_name)).map(u => u.id)
     const mentionedTask = tasks.find(t => input.includes('/' + t.title))
     const mentionedProject = projects.find(p => input.includes('#' + p.name))
-    const { data } = await sb.from('messages').insert({
+    const { data } = await supabase.from('messages').insert({
       content: input.trim(),
       user_id: currentUserId,
       is_global: isGlobal,
@@ -116,7 +105,7 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
       task_id: mentionedTask?.id ?? null,
       project_id: mentionedProject?.id ?? null,
     }).select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)').single()
-    if (data) setMessages(prev => prev.find((m: any) => m.id === data.id) ? prev : [...prev, data])
+    if (data) onNewMessage(data)
     setInput('')
     setSending(false)
   }
@@ -131,6 +120,9 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
     })
     return groups
   }
+
+  // Show ticks only in 1:1 DMs (not global, not groups)
+  const showTicks = !isGlobal && !isGroup
 
   return (
     <div className="flex flex-col h-full">
@@ -161,6 +153,7 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
                 new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() < 300000
               const own = msg.user?.id === currentUserId
               const mentioned = Array.isArray(msg.mentions) && msg.mentions.includes(currentUserId)
+              const isRead = showTicks && own && !!partnerLastReadAt && partnerLastReadAt >= msg.created_at
               return (
                 <div key={msg.id} className={'flex gap-3 ' + (own ? 'flex-row-reverse ' : '') + (sameUser ? 'mt-0.5' : 'mt-3')}>
                   {!sameUser && !own && (
@@ -184,6 +177,15 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
                       'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
                     )}>
                       {renderContent(msg, users, projects, tasks, currentUserId)}
+                      {/* Time + ticks inside own message bubble */}
+                      {own && (
+                        <div className="flex items-center justify-end gap-0.5 mt-1 -mb-0.5">
+                          <span className="text-[9px] text-white/50 leading-none">
+                            {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {showTicks && <MessageTicks isRead={isRead}/>}
+                        </div>
+                      )}
                     </div>
                     {(msg.task || msg.project) && (
                       <div className="flex gap-2 mt-1">

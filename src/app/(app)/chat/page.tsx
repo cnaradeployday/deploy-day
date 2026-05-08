@@ -40,7 +40,7 @@ export default async function ChatPage() {
     (myConversations ?? []).map(async (cm) => {
       const { data: members } = await supabase
         .from('conversation_members')
-        .select('user_id, user:users(id, full_name)')
+        .select('user_id, last_read_at, user:users(id, full_name)')
         .eq('conversation_id', cm.conversation_id)
       return { ...cm, members: members ?? [] }
     })
