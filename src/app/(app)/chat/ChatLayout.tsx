@@ -68,7 +68,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
         const msg = payload.new
         const { data } = await supabase
           .from('messages')
-          .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
+          .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
           .eq('id', msg.id).single()
         if (!data) return
 
