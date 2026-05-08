@@ -138,7 +138,7 @@ export default function LogsClient({
                       {log.entity_name && <span className="text-gray-400">· {log.entity_name}</span>}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400 max-w-xs truncate">{log.detail ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400 max-w-xs break-words whitespace-normal">{log.detail ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

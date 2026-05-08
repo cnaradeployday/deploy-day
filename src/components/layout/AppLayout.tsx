@@ -4,11 +4,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
+import FloatingTimer from './FloatingTimer'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
-const APP_VERSION = '1.6.0'
+const APP_VERSION = '1.7.0'
 
 const navItems = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
@@ -283,12 +284,19 @@ export default function AppLayout({
           }
         </nav>
 
-        <div className={`shrink-0 border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
-          {canSeeOnlineUsers && <OnlineUsers collapsed={isCollapsed}/>}
-          {!isCollapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
-          <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${isCollapsed ? 'justify-center' : ''}`}>
-            <LogOut size={13}/> {!isCollapsed && 'Salir'}
-          </button>
+        <div className={`shrink-0 border-t border-gray-50 flex flex-col ${isCollapsed ? 'px-1 py-3 items-center gap-2' : 'px-4 py-3 gap-2'}`}>
+          <div className={`flex items-center ${isCollapsed ? 'flex-col gap-2 justify-center' : 'justify-between'}`}>
+            {canSeeOnlineUsers && <OnlineUsers collapsed={isCollapsed}/>}
+            <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${isCollapsed ? 'justify-center' : ''}`}>
+              <LogOut size={13}/> {!isCollapsed && 'Salir'}
+            </button>
+          </div>
+          {!isCollapsed && (
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-300">Desarrollado por DEPLOYDAY LLC · 2026</span>
+              <span className="text-[10px] text-gray-300">v{APP_VERSION}</span>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -360,6 +368,8 @@ export default function AppLayout({
       >
         {children}
       </main>
+
+      {userId && <FloatingTimer userId={userId} userName={userName}/>}
     </div>
   )
 }

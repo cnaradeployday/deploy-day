@@ -17,6 +17,15 @@ interface UserOption {
   full_name: string
 }
 
+function parseNewsStyle(content: string): { display: string; bg: string; bt: string | null } {
+  const match = content.match(/^__STYLE__({.*?})__END__\s*/)
+  if (!match) return { display: content, bg: '#22c55e', bt: null }
+  try {
+    const c = JSON.parse(match[1])
+    return { display: content.slice(match[0].length), bg: c.bg ?? '#22c55e', bt: c.bt ?? null }
+  } catch { return { display: content, bg: '#22c55e', bt: null } }
+}
+
 export default function NewsClient({
   newsList, allUsers, currentUserId
 }: {
@@ -29,6 +38,8 @@ export default function NewsClient({
   const [showForm, setShowForm] = useState(false)
   const [content, setContent] = useState('')
   const [visibleTo, setVisibleTo] = useState<string[]>(['all'])
+  const [bgColor, setBgColor] = useState('#22c55e')
+  const [borderColor, setBorderColor] = useState('')
   const [saving, setSaving] = useState(false)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -44,12 +55,20 @@ export default function NewsClient({
     })
   }
 
+  function buildContent(text: string): string {
+    const hasCustomStyle = bgColor !== '#22c55e' || borderColor
+    if (!hasCustomStyle) return text
+    const style: Record<string, string> = { bg: bgColor }
+    if (borderColor) { style.bt = borderColor; style.bb = borderColor }
+    return `__STYLE__${JSON.stringify(style)}__END__ ${text}`
+  }
+
   async function handleCreate() {
     if (!content.trim()) return
     setSaving(true)
     const sb = createClient()
     const { data, error } = await sb.from('news').insert({
-      content: content.trim(),
+      content: buildContent(content.trim()),
       visible_to: visibleTo,
       is_active: false,
       created_by: currentUserId,
@@ -58,6 +77,8 @@ export default function NewsClient({
       setItems(prev => [data, ...prev])
       setContent('')
       setVisibleTo(['all'])
+      setBgColor('#22c55e')
+      setBorderColor('')
       setShowForm(false)
     }
     setSaving(false)
@@ -173,6 +194,35 @@ export default function NewsClient({
             </div>
           )}
 
+          <div className="mb-4">
+            <p className="text-xs font-medium text-gray-500 mb-2">Colores de la barra</p>
+            <div className="flex gap-4 flex-wrap">
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)}
+                  className="w-7 h-7 rounded cursor-pointer border border-gray-200"/>
+                Fondo
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <input type="color" value={borderColor || '#000000'} onChange={e => setBorderColor(e.target.value)}
+                  className="w-7 h-7 rounded cursor-pointer border border-gray-200"/>
+                Borde (sup / inf)
+                {borderColor && (
+                  <button onClick={() => setBorderColor('')} className="text-gray-400 hover:text-gray-600 text-[10px]">✕</button>
+                )}
+              </label>
+            </div>
+            <div
+              className="mt-2 h-8 rounded-lg flex items-center justify-center text-xs font-semibold text-white overflow-hidden"
+              style={{
+                backgroundColor: bgColor,
+                borderTop: borderColor ? `2px solid ${borderColor}` : undefined,
+                borderBottom: borderColor ? `2px solid ${borderColor}` : undefined,
+              }}
+            >
+              Vista previa
+            </div>
+          </div>
+
           <button
             onClick={handleCreate}
             disabled={saving || !content.trim() || (!isAll && visibleTo.length === 0)}
@@ -198,8 +248,19 @@ export default function NewsClient({
                   <Megaphone size={14} className={item.is_active ? 'text-[#1B9BF0]' : 'text-gray-400'}/>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800 leading-relaxed">{item.content}</p>
-                  <div className="flex items-center gap-3 mt-2">
+                  {(() => {
+                    const { display, bg, bt } = parseNewsStyle(item.content)
+                    return (
+                      <>
+                        <p className="text-sm text-gray-800 leading-relaxed">{display}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="w-3 h-3 rounded-full border border-gray-200 shrink-0" style={{ backgroundColor: bg }}/>
+                          {bt && <span className="w-3 h-3 rounded-full border border-gray-200 shrink-0" style={{ backgroundColor: bt }}/>}
+                        </div>
+                      </>
+                    )
+                  })()}
+                  <div className="flex items-center gap-3 mt-1.5">
                     {item.is_active && (
                       <span className="text-xs bg-[#E8F4FE] text-[#1B9BF0] px-2 py-0.5 rounded-full font-medium">Activo</span>
                     )}
