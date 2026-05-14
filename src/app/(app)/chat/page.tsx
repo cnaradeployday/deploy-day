@@ -7,7 +7,7 @@ export default async function ChatPage() {
 
   const { data: users } = await supabase
     .from('users')
-    .select('id, full_name')
+    .select('id, full_name, avatar_url')
     .order('full_name')
 
   const { data: tasks } = await supabase
@@ -25,7 +25,7 @@ export default async function ChatPage() {
 
   const { data: globalMessages } = await supabase
     .from('messages')
-    .select('id, content, created_at, mentions, task_id, project_id, is_global, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
+    .select('id, content, created_at, mentions, task_id, project_id, is_global, user:users(id, full_name, avatar_url), task:tasks(id, title), project:projects(id, name)')
     .eq('is_global', true)
     .order('created_at', { ascending: true })
     .limit(100)
@@ -40,7 +40,7 @@ export default async function ChatPage() {
     (myConversations ?? []).map(async (cm) => {
       const { data: members } = await supabase
         .from('conversation_members')
-        .select('user_id, user:users(id, full_name)')
+        .select('user_id, user:users(id, full_name, avatar_url)')
         .eq('conversation_id', cm.conversation_id)
       return { ...cm, members: members ?? [] }
     })

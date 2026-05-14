@@ -9,37 +9,61 @@ export function renderContent(
 ): React.ReactNode[] {
   const content: string = msg.content ?? ''
   const parts: React.ReactNode[] = []
-  let last = 0
-  const regex = /@([\w ]+?)(?=\s|$)|#([\w ]+?)(?=\s|$)|\/(.+?)(?=\s|$)/g
 
-  let m = regex.exec(content)
-  while (m !== null) {
-    if (m.index > last) parts.push(content.slice(last, m.index))
-    const full = m[0]
-    if (full.startsWith('@') && m[1]) {
-      const u = users.find(u => u.full_name === m![1])
-      parts.push(
-        React.createElement('span', {
-          key: m.index,
-          className: 'font-semibold ' + (u?.id === currentUserId ? 'text-[#1B9BF0]' : 'text-purple-600')
-        }, full)
-      )
-    } else if (full.startsWith('#') && m[2]) {
-      const p = projects.find(p => p.name === m![2])
-      parts.push(p
-        ? React.createElement('a', { key: m.index, href: '/proyectos/' + p.id, className: 'font-semibold text-green-600 hover:underline' }, full)
-        : React.createElement('span', { key: m.index, className: 'font-semibold text-green-600' }, full)
-      )
-    } else if (m[3]) {
-      const t = tasks.find(t => t.title === m![3])
-      parts.push(t
-        ? React.createElement('a', { key: m.index, href: '/tareas/' + t.id, className: 'font-semibold text-amber-600 hover:underline' }, full)
-        : React.createElement('span', { key: m.index, className: 'font-semibold text-amber-600' }, full)
-      )
+  // Build all possible mention patterns, longest first to avoid partial matches
+  type MentionEntry = { trigger: string; text: string; type: 'user' | 'project' | 'task'; id: string }
+  const mentions: MentionEntry[] = [
+    ...users.map(u => ({ trigger: '@', text: u.full_name, type: 'user' as const, id: u.id })),
+    ...projects.map(p => ({ trigger: '#', text: p.name, type: 'project' as const, id: p.id })),
+    ...tasks.map(t => ({ trigger: '/', text: t.title, type: 'task' as const, id: t.id })),
+  ].sort((a, b) => (b.trigger + b.text).length - (a.trigger + a.text).length)
+
+  let remaining = content
+  let keyIdx = 0
+
+  while (remaining.length > 0) {
+    let earliest: { idx: number; entry: MentionEntry } | null = null
+
+    for (const entry of mentions) {
+      const pattern = entry.trigger + entry.text
+      const idx = remaining.indexOf(pattern)
+      if (idx !== -1 && (earliest === null || idx < earliest.idx)) {
+        earliest = { idx, entry }
+      }
     }
-    last = m.index + full.length
-    m = regex.exec(content)
+
+    if (!earliest) {
+      parts.push(remaining)
+      break
+    }
+
+    // Text before mention
+    if (earliest.idx > 0) parts.push(remaining.slice(0, earliest.idx))
+
+    const { entry } = earliest
+    const full = entry.trigger + entry.text
+
+    if (entry.type === 'user') {
+      parts.push(React.createElement('span', {
+        key: keyIdx++,
+        className: 'font-semibold ' + (entry.id === currentUserId ? 'text-[#1B9BF0]' : 'text-purple-600')
+      }, full))
+    } else if (entry.type === 'project') {
+      parts.push(React.createElement('a', {
+        key: keyIdx++,
+        href: '/proyectos/' + entry.id,
+        className: 'font-semibold text-blue-600 hover:underline'
+      }, full))
+    } else {
+      parts.push(React.createElement('a', {
+        key: keyIdx++,
+        href: '/tareas/' + entry.id,
+        className: 'font-semibold text-amber-600 hover:underline'
+      }, full))
+    }
+
+    remaining = remaining.slice(earliest.idx + full.length)
   }
-  if (last < content.length) parts.push(content.slice(last))
+
   return parts
 }

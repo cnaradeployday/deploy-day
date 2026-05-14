@@ -192,7 +192,10 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
               return (
                 <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap capitalize">{mes ? new Date(mes + '-15').toLocaleString('es-AR', { month: 'short', year: '2-digit' }) : '—'}</td>
-                  <td className="px-3 py-2.5 text-sm font-medium text-gray-900 max-w-[180px] truncate">{t.title}</td>
+                  <td className="px-3 py-2.5 max-w-[200px]">
+                    <p className="text-sm font-medium text-gray-900 truncate">{t.title}</p>
+                    <span className="text-[10px] font-mono text-gray-300">#{t.id.slice(0,6).toUpperCase()}</span>
+                  </td>
                   {show('client') && <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{t.project?.client?.name ?? '—'}</td>}
                   {show('project') && <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{t.project?.name ?? '—'}</td>}
                   {show('responsible') && <td className="px-3 py-2.5">{t.direct_responsible ? <PersonChip name={t.direct_responsible.full_name} assignedHours={t.estimated_hours} usedHours={t.hours_logged}/> : <span className="text-gray-300 text-xs">—</span>}</td>}
