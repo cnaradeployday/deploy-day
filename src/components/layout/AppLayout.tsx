@@ -180,8 +180,27 @@ export default function AppLayout({
     if (!userId) return
     const sb = createClient()
     const lastRead = localStorage.getItem('chat_last_read') ?? '1970-01-01'
-    sb.from('messages').select('id', { count: 'exact', head: true }).eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
-      .then(({ count }) => setUnreadCount(count ?? 0))
+    const myConvIds = { current: [] as string[] }
+
+    async function loadInitialCount() {
+      // Get conversations the user belongs to
+      const { data: memberships } = await sb.from('conversation_members').select('conversation_id').eq('user_id', userId)
+      myConvIds.current = memberships?.map((m: any) => m.conversation_id) ?? []
+
+      const { count: globalCount } = await sb.from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
+
+      let dmCount = 0
+      if (myConvIds.current.length > 0) {
+        const { count } = await sb.from('messages')
+          .select('id', { count: 'exact', head: true })
+          .in('conversation_id', myConvIds.current).gt('created_at', lastRead).neq('user_id', userId)
+        dmCount = count ?? 0
+      }
+      if (!isChatRef.current) setUnreadCount((globalCount ?? 0) + dmCount)
+    }
+    loadInitialCount()
 
     // Notification sound — AudioContext created lazily after first user gesture
     let audioCtx: AudioContext | null = null
@@ -190,7 +209,6 @@ export default function AppLayout({
       try { audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)() } catch {}
       return audioCtx
     }
-    // Prime the context on first user interaction so autoplay policy is satisfied
     const primeHandler = () => { ensureAudio(); document.removeEventListener('click', primeHandler) }
     document.addEventListener('click', primeHandler)
 
@@ -216,7 +234,10 @@ export default function AppLayout({
     const channel = sb.channel('chat-badge-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
         (p) => {
-          if (p.new.is_global && p.new.user_id !== userId && !isChatRef.current) {
+          if (p.new.user_id === userId || isChatRef.current) return
+          const isGlobal = !!p.new.is_global
+          const isDM = !isGlobal && myConvIds.current.includes(p.new.conversation_id)
+          if (isGlobal || isDM) {
             setUnreadCount(c => c + 1)
             playNotifSound()
           }
