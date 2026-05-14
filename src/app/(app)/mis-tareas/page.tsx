@@ -8,24 +8,49 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const { status, priority, proyecto, cliente } = sp
 
   const mesActual = new Date().toISOString().slice(0, 7)
-  const mes = sp.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+
+  // Support multi-month: ?meses=2025-04,2025-05 or legacy ?mes=2025-05
+  const mesStr = sp.meses ?? sp.mes ?? mesActual
+  const mesArray = [...new Set(mesStr.split(',').filter(Boolean))]
+
+  // Derive date range covering all selected months
+  const allFirstDays = mesArray.map(m => {
+    const [y, mo] = m.split('-').map(Number)
+    return new Date(y, mo - 1, 1).toISOString().split('T')[0]
+  })
+  const allLastDays = mesArray.map(m => {
+    const [y, mo] = m.split('-').map(Number)
+    return new Date(y, mo, 0).toISOString().split('T')[0]
+  })
+  const primerDia = [...allFirstDays].sort()[0]
+  const ultimoDia = [...allLastDays].sort().reverse()[0]
 
   const { data: profile } = await supabase
     .from('users').select('role, custom_role_id').eq('id', user?.id ?? '').single()
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
   let canCreateTask = isAdmin
-  if (!canCreateTask && profile?.custom_role_id) {
-    const { data: perm } = await supabase
-      .from('role_permissions').select('can_read')
-      .eq('role_id', profile.custom_role_id).eq('module', 'crear_tareas').single()
-    canCreateTask = perm?.can_read ?? false
+  let showHorasEstimadas = true
+
+  if (profile?.custom_role_id) {
+    const { data: perms } = await supabase
+      .from('role_permissions').select('module, can_read')
+      .eq('role_id', profile.custom_role_id)
+
+    if (perms) {
+      if (!canCreateTask) canCreateTask = perms.some(p => p.module === 'crear_tareas' && p.can_read)
+      // Hide horas estimadas unless role has explicit permission
+      const showPerm = perms.find(p => p.module === 'ver_horas_estimadas')
+      if (showPerm) showHorasEstimadas = showPerm.can_read
+      else showHorasEstimadas = isAdmin
+    } else {
+      showHorasEstimadas = isAdmin
+    }
+  } else {
+    showHorasEstimadas = isAdmin
   }
 
-  // Tareas donde soy responsable — incluye project_id explícito para segmentos
+  // Tareas donde soy responsable
   const { data: directas } = await supabase
     .from('tasks')
     .select(`
@@ -38,7 +63,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .not('status', 'in', '(presentado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
-  // Tareas donde soy colaborador — incluye project_id explícito
+  // Tareas donde soy colaborador
   const { data: colaboraciones } = await supabase
     .from('task_collaborators')
     .select(`
@@ -67,29 +92,11 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const colabSinDuplicar = colabTasks.filter((t: any) => !directasIds.has(t.id))
   const allTasksRaw = [...directasMapped, ...colabSinDuplicar]
 
-  // Recopilar project_ids — ahora sí disponibles en el resultado
-  const proyectosIds = [...new Set(allTasksRaw.map((t: any) => t.project_id).filter(Boolean))]
+  // Filter by selected months (client-side compatible — pass all tasks)
+  let tareasFiltered = allTasksRaw.filter((t: any) =>
+    t.due_date && mesArray.some(m => t.due_date.startsWith(m))
+  )
 
-  // Segmentos del mes para esos proyectos
-  const { data: segmentosMes } = proyectosIds.length
-    ? await supabase
-        .from('project_hour_segments')
-        .select('project_id, horas')
-        .in('project_id', proyectosIds)
-        .lte('desde', ultimoDia)
-        .gte('hasta', primerDia)
-    : { data: [] }
-
-  const segPorProyecto: Record<string, number> = {}
-  ;(segmentosMes ?? []).forEach((s: any) => {
-    segPorProyecto[s.project_id] = (segPorProyecto[s.project_id] ?? 0) + s.horas
-  })
-
-  const allTasks = allTasksRaw
-    .filter((t: any) => t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia)
-    .map((t: any) => ({ ...t, desde_segmento: false }))
-
-  let tareasFiltered = [...allTasks]
   if (status)   tareasFiltered = tareasFiltered.filter((t: any) => t.status === status)
   if (priority) tareasFiltered = tareasFiltered.filter((t: any) => t.priority === priority)
   if (proyecto) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.id === proyecto)
@@ -116,8 +123,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
   }))
 
-  const horasEstimadasDelMes = tareasFiltered.filter((t: any) => !t.desde_segmento)
-    .reduce((s: number, t: any) => s + (t.my_assigned_hours ?? 0), 0)
+  const horasEstimadasDelMes = tareasFiltered.reduce((s: number, t: any) => s + (t.my_assigned_hours ?? 0), 0)
 
   const proyectosUnicos = [...new Map(tareasFiltered.map((t: any) => [t.project?.id, t.project])).values()]
     .filter(Boolean).map((p: any) => ({ value: p.id, label: p.name }))
@@ -125,15 +131,26 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const clientesUnicos = [...new Map(tareasFiltered.map((t: any) => [t.project?.client?.id, t.project?.client])).values()]
     .filter(Boolean).map((c: any) => ({ value: c.id, label: c.name }))
 
+  // All months available: past 5 + current + next
+  const now = new Date()
+  const availableMeses: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    availableMeses.push(d.toISOString().slice(0, 7))
+  }
+  availableMeses.push(new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().slice(0, 7))
+
   return (
     <MisTareasClient
       tareas={tareasConHoras}
       proyectos={proyectosUnicos}
       clientes={clientesUnicos}
-      filters={{ status, priority, proyecto, cliente, mes }}
+      filters={{ status, priority, proyecto, cliente, meses: mesStr }}
       mesActual={mesActual}
       canCreateTask={canCreateTask}
       horasEstimadasDelMes={Math.round(horasEstimadasDelMes * 10) / 10}
+      showHorasEstimadas={showHorasEstimadas}
+      availableMeses={availableMeses}
     />
   )
 }

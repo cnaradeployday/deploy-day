@@ -9,6 +9,7 @@ interface Entry {
   hours_logged: number
   entry_date: string
   notes: string | null
+  user_id: string
   user: { full_name: string } | null
 }
 
@@ -49,8 +50,9 @@ export default function TimeEntriesList({
   async function deleteEntry(id: string) {
     if (!confirm('¿Eliminar esta entrada de horas?')) return
     setLoading(true)
-    await createClient().from('time_entries').delete().eq('id', id)
+    const { error } = await createClient().from('time_entries').delete().eq('id', id)
     setLoading(false)
+    if (error) { alert('Error al eliminar: ' + error.message); return }
     router.refresh()
   }
 
@@ -103,9 +105,9 @@ export default function TimeEntriesList({
                   <div className="flex items-center gap-1 ml-3 shrink-0">
                     <div className="text-right mr-1">
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
-                      <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
+                      <p className="text-xs text-gray-400">{e.entry_date.split('-').reverse().join('/')}</p>
                     </div>
-                    {canEdit && (
+                    {(canEdit || e.user_id === currentUserId) && (
                       <>
                         <button onClick={() => startEdit(e)} title="Editar"
                           className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">

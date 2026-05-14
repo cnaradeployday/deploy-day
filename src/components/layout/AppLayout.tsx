@@ -7,6 +7,7 @@ import NewsBanner from './NewsBanner'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
+import TimerBubble from './TimerBubble'
 
 const APP_VERSION = '1.6.0'
 
@@ -68,10 +69,10 @@ function NavItem({ href, label, Icon, active, badge, unreadCount, onClick }: {
         : 'flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all'}>
       <div className="relative shrink-0">
         <Icon size={15} strokeWidth={active ? 2 : 1.5} color={active ? '#1B9BF0' : '#6b7280'}/>
-        {showBadge && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{badgeNum}</span>}
+        {showBadge && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-green-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{badgeNum}</span>}
       </div>
       <span className="flex-1">{label}</span>
-      {showBadge && <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{badgeNum}</span>}
+      {showBadge && <span className="bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none">{badgeNum}</span>}
     </Link>
   )
 }
@@ -85,7 +86,7 @@ function BottomNavItem({ href, label, Icon, active, badge, unreadCount }: {
     <Link href={href} className={active ? 'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 text-[#1B9BF0] transition-colors' : 'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 text-gray-400 transition-colors'}>
       <div className="relative">
         <Icon size={19} strokeWidth={active ? 2 : 1.5}/>
-        {showBadge && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{badgeNum}</span>}
+        {showBadge && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-green-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{badgeNum}</span>}
       </div>
       <span className={active ? 'font-medium' : ''}>{label}</span>
     </Link>
@@ -117,6 +118,7 @@ export default function AppLayout({
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
   const hasNews = !!activeNews
+  const isChatRef = useRef(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebar_collapsed')
@@ -164,15 +166,50 @@ export default function AppLayout({
   const isCollapsed = mounted && collapsed
   const newsPx = hasNews ? 40 : 0
 
+  // Keep ref in sync so the real-time callback closure has current value
+  useEffect(() => { isChatRef.current = isChat }, [isChat])
+
+  // Browser tab title with unread count
+  useEffect(() => {
+    if (unreadCount > 0) document.title = `(${unreadCount}) DDS`
+    else document.title = 'DDS'
+  }, [unreadCount])
+
   useEffect(() => {
     if (!userId) return
     const sb = createClient()
     const lastRead = localStorage.getItem('chat_last_read') ?? '1970-01-01'
     sb.from('messages').select('id', { count: 'exact', head: true }).eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
       .then(({ count }) => setUnreadCount(count ?? 0))
+
+    // Notification sound using Web Audio API
+    function playNotifSound() {
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(880, ctx.currentTime)
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15)
+        gain.gain.setValueAtTime(0.15, ctx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + 0.3)
+      } catch {}
+    }
+
     const channel = sb.channel('chat-badge-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'is_global=eq.true' },
-        (p) => { if (p.new.user_id !== userId) setUnreadCount(c => c + 1) })
+        (p) => {
+          if (p.new.user_id !== userId) {
+            if (!isChatRef.current) {
+              setUnreadCount(c => c + 1)
+              playNotifSound()
+            }
+          }
+        })
       .subscribe()
     return () => { sb.removeChannel(channel) }
   }, [userId])
@@ -269,7 +306,7 @@ export default function AppLayout({
           <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
             {unreadCount > 0 && !open && (
-              <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+              <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-green-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -322,6 +359,9 @@ export default function AppLayout({
             badge={item.badge} unreadCount={unreadCount}/>
         ))}
       </nav>
+
+      {/* Floating timer bubble */}
+      {userId && <TimerBubble userId={userId}/>}
 
       <main
         ref={mainRef}

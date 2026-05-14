@@ -1,15 +1,51 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Send, Hash, Lock } from 'lucide-react'
+import { Send, Hash, Lock, Image as ImageIcon, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 import { renderContent } from './renderContent'
+
+function UserAvatar({ url, name, size = 7 }: { url?: string | null; name: string; size?: number }) {
+  if (url) return (
+    <div className={`w-${size} h-${size} rounded-full overflow-hidden shrink-0 border border-gray-100`}>
+      <Image src={url} alt={name} width={size * 4} height={size * 4} className="object-cover w-full h-full" unoptimized/>
+    </div>
+  )
+  return (
+    <div className={`w-${size} h-${size} rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600 shrink-0`}>
+      {(name ?? '?')[0].toUpperCase()}
+    </div>
+  )
+}
+
+function isImageUrl(url: string) {
+  return /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url) || url.includes('/storage/v1/object/public/chat-images/')
+}
+
+function MessageContent({ msg, users, projects, tasks, currentUserId }: any) {
+  const content: string = msg.content ?? ''
+  // If the message is purely an image URL, render it as an image
+  if (isImageUrl(content.trim())) {
+    return (
+      <Image
+        src={content.trim()}
+        alt="imagen"
+        width={280}
+        height={200}
+        className="rounded-xl max-w-[280px] w-full object-contain"
+        unoptimized
+      />
+    )
+  }
+  return <>{renderContent(msg, users, projects, tasks, currentUserId)}</>
+}
 
 export default function ChatWindow({ conversationId, isGlobal, name, currentUserId, users, tasks, projects, initialMessages }: {
   conversationId: string | null
   isGlobal: boolean
   name: string
   currentUserId: string
-  users: { id: string; full_name: string }[]
+  users: { id: string; full_name: string; avatar_url?: string | null }[]
   tasks: { id: string; title: string }[]
   projects: { id: string; name: string }[]
   initialMessages: any[]
@@ -17,6 +53,7 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
   const [messages, setMessages] = useState<any[]>(initialMessages)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [suggestions, setSuggestions] = useState<{ type: string; id: string; label: string }[]>([])
   const [suggestionIdx, setSuggestionIdx] = useState(0)
   const [triggerPos, setTriggerPos] = useState<{ start: number; type: string } | null>(null)
@@ -43,7 +80,7 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
         if (!matchesGlobal && !matchesConv) return
         const { data } = await sb
           .from('messages')
-          .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')
+          .select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name, avatar_url), task:tasks(id, title), project:projects(id, name)')
           .eq('id', msg.id).single()
         if (data) setMessages(prev => {
           if (prev.find((m: any) => m.id === data.id)) return prev
@@ -53,6 +90,25 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
       .subscribe()
     return () => { sb.removeChannel(channel) }
   }, [conversationId, isGlobal])
+
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find(item => item.type.startsWith('image/'))
+    if (!imageItem) return
+    e.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) return
+    setUploadingImage(true)
+    const sb = supabaseRef.current
+    const ext = file.type.split('/')[1] || 'png'
+    const path = `${currentUserId}/${Date.now()}.${ext}`
+    const { error } = await sb.storage.from('chat-images').upload(path, file, { upsert: true })
+    if (error) { setUploadingImage(false); alert('Error subiendo imagen: ' + error.message); return }
+    const { data: { publicUrl } } = sb.storage.from('chat-images').getPublicUrl(path)
+    setUploadingImage(false)
+    // Send image directly as a message
+    await sendMessageContent(publicUrl)
+  }
 
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value
@@ -100,23 +156,27 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
-  async function sendMessage() {
-    if (!input.trim() || sending) return
-    setSending(true)
+  async function sendMessageContent(content: string) {
     const sb = supabaseRef.current
-    const mentionedUsers = users.filter(u => input.includes('@' + u.full_name)).map(u => u.id)
-    const mentionedTask = tasks.find(t => input.includes('/' + t.title))
-    const mentionedProject = projects.find(p => input.includes('#' + p.name))
+    const mentionedUsers = users.filter(u => content.includes('@' + u.full_name)).map(u => u.id)
+    const mentionedTask = tasks.find(t => content.includes('/' + t.title))
+    const mentionedProject = projects.find(p => content.includes('#' + p.name))
     const { data } = await sb.from('messages').insert({
-      content: input.trim(),
+      content,
       user_id: currentUserId,
       is_global: isGlobal,
       conversation_id: conversationId ?? null,
       mentions: mentionedUsers,
       task_id: mentionedTask?.id ?? null,
       project_id: mentionedProject?.id ?? null,
-    }).select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)').single()
+    }).select('id, content, created_at, mentions, task_id, project_id, is_global, conversation_id, user:users(id, full_name, avatar_url), task:tasks(id, title), project:projects(id, name)').single()
     if (data) setMessages(prev => prev.find((m: any) => m.id === data.id) ? prev : [...prev, data])
+  }
+
+  async function sendMessage() {
+    if (!input.trim() || sending) return
+    setSending(true)
+    await sendMessageContent(input.trim())
     setInput('')
     setSending(false)
   }
@@ -161,29 +221,28 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
                 new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() < 300000
               const own = msg.user?.id === currentUserId
               const mentioned = Array.isArray(msg.mentions) && msg.mentions.includes(currentUserId)
+              const senderName = msg.user?.full_name ?? '?'
+              const senderAvatar = msg.user?.avatar_url ?? null
               return (
-                <div key={msg.id} className={'flex gap-3 ' + (own ? 'flex-row-reverse ' : '') + (sameUser ? 'mt-0.5' : 'mt-3')}>
-                  {!sameUser && !own && (
-                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600 shrink-0 mt-0.5">
-                      {(msg.user?.full_name ?? '?')[0].toUpperCase()}
-                    </div>
-                  )}
+                <div key={msg.id} className={'flex gap-2.5 ' + (own ? 'flex-row-reverse ' : '') + (sameUser ? 'mt-0.5' : 'mt-3')}>
+                  {!sameUser && !own && <UserAvatar url={senderAvatar} name={senderName} size={7}/>}
                   {sameUser && !own && <div className="w-7 shrink-0"/>}
                   <div className={'max-w-[75%] flex flex-col ' + (own ? 'items-end' : 'items-start')}>
                     {!sameUser && (
                       <span className={'text-xs text-gray-400 mb-1 ' + (own ? 'text-right' : '')}>
-                        {own ? 'Tú' : (msg.user?.full_name ?? '')}
+                        {own ? 'Tú' : senderName}
                         <span className="ml-2 text-gray-300">
                           {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </span>
                     )}
                     <div className={'px-3.5 py-2 rounded-2xl text-sm leading-relaxed ' + (
+                      isImageUrl((msg.content ?? '').trim()) ? 'p-1 bg-transparent' :
                       own ? 'bg-[#1B9BF0] text-white rounded-tr-sm' :
                       mentioned ? 'bg-amber-50 border border-amber-200 text-gray-800 rounded-tl-sm' :
                       'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
                     )}>
-                      {renderContent(msg, users, projects, tasks, currentUserId)}
+                      <MessageContent msg={msg} users={users} projects={projects} tasks={tasks} currentUserId={currentUserId}/>
                     </div>
                     {(msg.task || msg.project) && (
                       <div className="flex gap-2 mt-1">
@@ -215,8 +274,13 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
       )}
 
       <div className="bg-white border-t border-gray-100 px-4 py-3 shrink-0">
+        {uploadingImage && (
+          <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+            <Loader2 size={12} className="animate-spin"/> Subiendo imagen...
+          </div>
+        )}
         <div className="flex items-end gap-3 bg-gray-50 rounded-2xl px-4 py-2.5 border border-gray-200 focus-within:border-[#1B9BF0] focus-within:bg-white transition-all">
-          <textarea ref={inputRef} value={input} onChange={handleInput} onKeyDown={handleKeyDown}
+          <textarea ref={inputRef} value={input} onChange={handleInput} onKeyDown={handleKeyDown} onPaste={handlePaste}
             placeholder={'Escribí un mensaje en ' + name + '... @ · # · /'}
             rows={1}
             className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none max-h-32"
@@ -226,11 +290,12 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
               t.style.height = t.scrollHeight + 'px'
             }}
           />
-          <button onClick={sendMessage} disabled={!input.trim() || sending}
+          <button onClick={sendMessage} disabled={!input.trim() || sending || uploadingImage}
             className="w-8 h-8 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl flex items-center justify-center disabled:opacity-30 transition-all shrink-0">
             <Send size={14}/>
           </button>
         </div>
+        <p className="text-[10px] text-gray-300 mt-1 ml-1">Pegá una imagen con Ctrl+V</p>
       </div>
     </div>
   )

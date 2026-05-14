@@ -136,6 +136,18 @@ export default function EditarTareaPage() {
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Responsable directo</label>
+          <select value={form.direct_responsible_id} onChange={e => {
+            set('direct_responsible_id', e.target.value)
+            if (e.target.value) setColaboradores(prev => prev.filter(c => c.uid !== e.target.value))
+          }}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            <option value="">Sin asignar</option>
+            {usuarios.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+        </div>
+
         {/* HORAS DESGLOSADAS */}
         <div className="border border-gray-100 rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -149,14 +161,12 @@ export default function EditarTareaPage() {
             <span className="col-span-2 text-xs text-gray-400">Horas</span>
           </div>
 
-          {/* Responsable */}
+          {/* Responsable horas */}
           <div className="grid grid-cols-5 gap-2">
-            <div className="col-span-3">
-              <select value={form.direct_responsible_id} onChange={e => set('direct_responsible_id', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-                <option value="">Responsable — sin asignar</option>
-                {usuarios.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-              </select>
+            <div className="col-span-3 flex items-center bg-gray-50 px-3 py-2 rounded-xl">
+              <span className="text-sm text-gray-600 truncate flex-1">
+                {form.direct_responsible_id ? (usuarios.find(u => u.id === form.direct_responsible_id)?.full_name ?? 'Responsable') : 'Sin responsable asignado'}
+              </span>
             </div>
             <div className="col-span-2">
               <input type="number" min="0" step="0.5" value={form.direct_hours}

@@ -35,7 +35,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       project:projects(id, name, client:clients(name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
       task_collaborators(id, assigned_hours, user:users(id, full_name)),
-      time_entries(id, hours_logged, entry_date, notes, user:users(full_name))`)
+      time_entries(id, hours_logged, entry_date, notes, user_id, user:users(full_name))`)
     .eq('id', id).single()
   if (!t) notFound()
 
@@ -91,6 +91,9 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-gray-400 mb-1">{(t.project as any)?.client?.name} · {(t.project as any)?.name}</p>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-xs font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded-lg">#{t.id.slice(0,6).toUpperCase()}</span>
+          </div>
           <h1 className="text-xl font-semibold text-gray-900">{t.title}</h1>
           {t.description && <p className="text-sm text-gray-500 mt-1">{t.description}</p>}
         </div>
@@ -148,7 +151,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div className="space-y-4">
           {canUseTimer && (
-            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status}/>
+            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status} taskTitle={t.title}/>
           )}
           <TaskActions
             task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
@@ -161,7 +164,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         </div>
         <TimeEntriesList
           entries={(t.time_entries as any[]) ?? []}
-          canEdit={isAdmin}
+          canEdit={isAdmin || isAssigned}
           currentUserId={user?.id ?? ''}
         />
       </div>

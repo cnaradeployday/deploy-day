@@ -2,11 +2,25 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Hash, Plus, Users, MessageSquare, X, Check, Search, ArrowLeft, Lock } from 'lucide-react'
+import Image from 'next/image'
 import ChatWindow from './ChatWindow'
+
+function UserAvatar({ url, name, size = 8 }: { url?: string | null; name: string; size?: number }) {
+  if (url) return (
+    <div className={`w-${size} h-${size} rounded-full overflow-hidden shrink-0 border border-gray-100`}>
+      <Image src={url} alt={name} width={size * 4} height={size * 4} className="object-cover w-full h-full" unoptimized/>
+    </div>
+  )
+  return (
+    <div className={`w-${size} h-${size} rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0`}>
+      {name[0]?.toUpperCase()}
+    </div>
+  )
+}
 
 export default function ChatLayout({ currentUserId, users, tasks, projects, globalMessages, conversations }: {
   currentUserId: string
-  users: { id: string; full_name: string }[]
+  users: { id: string; full_name: string; avatar_url?: string | null }[]
   tasks: { id: string; title: string }[]
   projects: { id: string; name: string }[]
   globalMessages: any[]
@@ -134,7 +148,7 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
       <div className={`${showList ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-64 bg-white border-r border-gray-100 shrink-0`}>
         <div className="px-4 py-4 border-b border-gray-50 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-700">
-            Mensajes {totalUnread > 0 && <span className="ml-1 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{totalUnread}</span>}
+            Mensajes {totalUnread > 0 && <span className="ml-1 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{totalUnread}</span>}
           </p>
           <button onClick={() => setShowNewChat(true)}
             className="w-8 h-8 bg-[#1B9BF0] text-white rounded-xl flex items-center justify-center hover:bg-[#0F7ACC] transition-all">
@@ -163,12 +177,18 @@ export default function ChatLayout({ currentUserId, users, tasks, projects, glob
               <button key={convId}
                 onClick={() => { setActiveChat({ type: 'conversation', id: convId, name }); markRead(convId) }}
                 className={'w-full flex items-center gap-3 px-4 py-3 text-sm transition-all ' + (active ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-600 hover:bg-gray-50')}>
-                <div className={'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ' + (active ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
-                  {cm.conversation?.is_group ? <Users size={14}/> : name[0]?.toUpperCase()}
-                </div>
+                {cm.conversation?.is_group ? (
+                  <div className={'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ' + (active ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-600')}>
+                    <Users size={14}/>
+                  </div>
+                ) : (() => {
+                  const other = (cm.members ?? []).find((m: any) => m.user_id !== currentUserId)
+                  const otherUser = users.find(u => u.id === other?.user_id)
+                  return <UserAvatar url={otherUser?.avatar_url} name={name} size={8}/>
+                })()}
                 <span className="flex-1 text-left truncate font-medium">{name}</span>
                 {unread > 0 && (
-                  <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                  <span className="bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
                     {unread > 9 ? '9+' : unread}
                   </span>
                 )}

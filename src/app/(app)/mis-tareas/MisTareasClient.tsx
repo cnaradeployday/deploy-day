@@ -1,10 +1,10 @@
 'use client'
 import { logActivity } from '@/lib/logActivity'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
+import { Download, Clock, CheckCircle, X, Plus, ChevronUp, ChevronDown, Loader2, ChevronDown as CD } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -27,6 +27,60 @@ const nextLabel: Record<string, string> = {
   creado: 'Iniciar', estimado: 'En proceso', en_proceso: 'Terminar', terminado: 'Presentar'
 }
 
+function nombreMes(m: string) {
+  return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
+}
+
+function MultiSelectMeses({ options, selected, onChange }: {
+  options: string[]
+  selected: string[]
+  onChange: (vals: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const toggle = (val: string) => {
+    if (selected.includes(val)) onChange(selected.filter(v => v !== val))
+    else onChange([...selected, val])
+  }
+
+  const label = selected.length === 0 ? 'Todos los meses'
+    : selected.length === 1 ? nombreMes(selected[0])
+    : selected.length + ' meses'
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-xs text-gray-400 mb-1">Mes</label>
+      <button type="button" onClick={() => setOpen(!open)}
+        className={'w-full px-3 py-2 border rounded-xl text-xs text-left flex items-center justify-between focus:outline-none bg-white ' + (selected.length > 0 ? 'border-[#1B9BF0] text-[#1B9BF0]' : 'border-gray-200 text-gray-500')}>
+        <span className="truncate capitalize">{label}</span>
+        <ChevronDown size={11} className="shrink-0 ml-1"/>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)}/>
+          <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">
+            {options.map(m => (
+              <label key={m} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-xs text-gray-700 capitalize">
+                <input type="checkbox" checked={selected.includes(m)} onChange={() => toggle(m)} className="rounded border-gray-300"/>
+                <span className="truncate">{nombreMes(m)}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   tareas: any[]
   proyectos: { value: string; label: string }[]
@@ -35,11 +89,14 @@ interface Props {
   mesActual: string
   canCreateTask?: boolean
   horasEstimadasDelMes?: number
+  showHorasEstimadas?: boolean
+  availableMeses?: string[]
 }
 
 export default function MisTareasClient({
   tareas, proyectos, clientes, filters, mesActual,
-  canCreateTask = true, horasEstimadasDelMes = 0
+  canCreateTask = true, horasEstimadasDelMes = 0,
+  showHorasEstimadas = true, availableMeses = []
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -51,32 +108,42 @@ export default function MisTareasClient({
 
   useEffect(() => { setTareasLocal(tareas) }, [tareas])
 
+  // Parse selected months from URL
+  const mesesStr = filters.meses ?? mesActual
+  const selectedMeses = mesesStr.split(',').filter(Boolean)
+
   const update = useCallback((key: string, value: string) => {
     const p = new URLSearchParams(params.toString())
     if (value) p.set(key, value); else p.delete(key)
     router.push(pathname + '?' + p.toString())
   }, [params, pathname, router])
 
-  const clear = () => router.push(pathname)
-  const hasFilters = Object.values(filters).some(v => v && v !== filters.mes)
+  function updateMeses(vals: string[]) {
+    const p = new URLSearchParams(params.toString())
+    if (vals.length > 0) p.set('meses', vals.join(','))
+    else { p.delete('meses'); p.delete('mes') }
+    p.delete('mes')
+    router.push(pathname + '?' + p.toString())
+  }
 
-  const meses: string[] = []
+  const clear = () => {
+    const p = new URLSearchParams()
+    p.set('meses', mesActual)
+    router.push(pathname + '?' + p.toString())
+  }
+  const hasFilters = !!(filters.status || filters.priority || filters.cliente || filters.proyecto)
+
+  // Build months list for the selector
   const now = new Date()
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    meses.push(d.toISOString().slice(0, 7))
-  }
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  meses.push(nextMonth.toISOString().slice(0, 7))
-
-  function nombreMes(m: string) {
-    return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
-  }
-
-  const mes = filters.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+  const meses: string[] = availableMeses.length > 0 ? availableMeses : (() => {
+    const arr: string[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      arr.push(d.toISOString().slice(0, 7))
+    }
+    arr.push(new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().slice(0, 7))
+    return arr
+  })()
 
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -101,8 +168,6 @@ export default function MisTareasClient({
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
-  // KPIs: estimadas vienen del server (tareas con due_date en el mes)
-  // Usadas: hours_logged ya filtrado por entry_date del mes desde el server
   const totalUsadas = tareasLocal.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
   const totalRestantes = horasEstimadasDelMes - totalUsadas
 
@@ -129,26 +194,27 @@ export default function MisTareasClient({
       Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—',
       Estado: statusLabels[t.status] ?? t.status, Prioridad: t.priority,
       'Mis horas': t.my_assigned_hours ?? '—', 'Horas usadas': t.hours_logged ?? 0,
-      Vence: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
+      Vence: t.due_date ? new Date(t.due_date + 'T12:00:00').toLocaleDateString('es-AR') : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Mis tareas')
-    XLSX.writeFile(wb, 'mis-tareas-' + mes + '.xlsx')
+    XLSX.writeFile(wb, 'mis-tareas-' + mesesStr + '.xlsx')
   }
+
+  const mesLabel = selectedMeses.length === 1
+    ? nombreMes(selectedMeses[0])
+    : selectedMeses.length > 1 ? selectedMeses.length + ' meses'
+    : 'Todos los meses'
 
   return (
     <div className="p-4 md:p-6 max-w-full">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
-          <p className="text-sm text-gray-400 mt-0.5 capitalize">{nombreMes(mes)} · {tareasLocal.length} tarea{tareasLocal.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-400 mt-0.5 capitalize">{mesLabel} · {tareasLocal.length} tarea{tareasLocal.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-2">
-          <select value={mes} onChange={e => update('mes', e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white capitalize">
-            {meses.map(m => <option key={m} value={m}>{nombreMes(m)}</option>)}
-          </select>
           <button onClick={exportar} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
             <Download size={14}/> Excel
           </button>
@@ -161,21 +227,30 @@ export default function MisTareasClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {[
-          { label: 'Horas estimadas (mes)', value: Math.round(horasEstimadasDelMes * 10) / 10, color: 'text-gray-900' },
-          { label: 'Horas usadas (mes)',    value: Math.round(totalUsadas * 10) / 10,           color: 'text-[#1B9BF0]' },
-          { label: 'Restantes',             value: Math.round(totalRestantes * 10) / 10,         color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-400">{label}</p>
-            <p className={'text-xl font-bold mt-0.5 ' + color}>{value}h</p>
+      {/* KPIs */}
+      <div className={`grid gap-3 mb-4 ${showHorasEstimadas ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        {showHorasEstimadas && (
+          <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+            <p className="text-xs text-gray-400">Horas estimadas</p>
+            <p className="text-xl font-bold mt-0.5 text-gray-900">{Math.round(horasEstimadasDelMes * 10) / 10}h</p>
           </div>
-        ))}
+        )}
+        <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+          <p className="text-xs text-gray-400">Horas usadas</p>
+          <p className="text-xl font-bold mt-0.5 text-[#1B9BF0]">{Math.round(totalUsadas * 10) / 10}h</p>
+        </div>
+        {showHorasEstimadas && (
+          <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+            <p className="text-xs text-gray-400">Restantes</p>
+            <p className={'text-xl font-bold mt-0.5 ' + (totalRestantes < 0 ? 'text-red-500' : 'text-green-600')}>{Math.round(totalRestantes * 10) / 10}h</p>
+          </div>
+        )}
       </div>
 
+      {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <MultiSelectMeses options={meses} selected={selectedMeses} onChange={updateMeses}/>
           <div>
             <label className="block text-xs text-gray-400 mb-1">Estado</label>
             <select value={filters.status ?? ''} onChange={e => update('status', e.target.value)}
@@ -222,10 +297,10 @@ export default function MisTareasClient({
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <table className="w-full table-fixed">
           <colgroup>
-            <col style={{width:'14%'}}/><col style={{width:'8%'}}/><col style={{width:'9%'}}/>
-            <col style={{width:'13%'}}/><col style={{width:'12%'}}/><col style={{width:'5%'}}/>
-            <col style={{width:'8%'}}/><col style={{width:'7%'}}/><col style={{width:'7%'}}/>
-            <col style={{width:'9%'}}/><col style={{width:'8%'}}/>
+            <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
+            <col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'6%'}}/>
+            <col style={{width:'8%'}}/><col style={{width:'8%'}}/><col style={{width:'9%'}}/>
+            <col style={{width:'9%'}}/>
           </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
@@ -248,16 +323,15 @@ export default function MisTareasClient({
             {!sorted.length ? (
               <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
-              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+              const isOverdue = t.due_date && new Date(t.due_date + 'T12:00:00') < new Date() && !['terminado','presentado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               const isLoading = loading === t.id
-              const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
               return (
-                <tr key={t.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors' + (esOtroMes ? ' opacity-60' : '')}>
-                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate" title={t.title}>
-                    {t.title}
-                    {esOtroMes && t.due_date && <span className="ml-1 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">{t.due_date.slice(0,7)}</span>}
+                <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                  <td className="px-3 py-3">
+                    <p className="text-sm font-medium text-gray-900 truncate" title={t.title}>{t.title}</p>
+                    <span className="text-[10px] font-mono text-gray-300">#{t.id.slice(0,6).toUpperCase()}</span>
                   </td>
                   <td className="px-3 py-3">
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
@@ -279,7 +353,7 @@ export default function MisTareasClient({
                     </div>
                   </td>
                   <td className={'px-3 py-3 text-xs ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
-                    {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
+                    {t.due_date ? new Date(t.due_date + 'T12:00:00').toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
                   </td>
                   <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
                   <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
@@ -308,16 +382,14 @@ export default function MisTareasClient({
       {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
-          const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+          const isOverdue = t.due_date && new Date(t.due_date + 'T12:00:00') < new Date() && !['terminado','presentado'].includes(t.status)
           const myHours = t.my_assigned_hours ?? 0
           const isLoading = loading === t.id
-          const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
           return (
-            <div key={t.id} className={'bg-white rounded-2xl border p-4 ' + (esOtroMes ? 'border-gray-50 opacity-70' : 'border-gray-100')}>
+            <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 pr-2">
                   <p className="text-sm font-medium text-gray-900">{t.title}</p>
-                  {esOtroMes && t.due_date && <span className="text-[10px] text-gray-400">{t.due_date.slice(0,7)}</span>}
                 </div>
                 <span className={'text-xs px-2 py-0.5 rounded-full shrink-0 ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
               </div>
@@ -329,7 +401,7 @@ export default function MisTareasClient({
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
-                  {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
+                  {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date + 'T12:00:00').toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">

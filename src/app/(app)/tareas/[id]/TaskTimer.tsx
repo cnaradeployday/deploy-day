@@ -4,32 +4,47 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Play, Square, Pause, Save, Clock } from 'lucide-react'
 
-export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: string; userId: string; taskStatus?: string }) {
+export default function TaskTimer({ taskId, userId, taskStatus, taskTitle = '' }: {
+  taskId: string
+  userId: string
+  taskStatus?: string
+  taskTitle?: string
+}) {
   const [running, setRunning] = useState(false)
   const [paused, setPaused] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [startTime, setStartTime] = useState<Date | null>(null)
-  const [pausedSeconds, setPausedSeconds] = useState(0) // acumula tiempo pausado
+  const [pausedSeconds, setPausedSeconds] = useState(0)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const router = useRouter()
   const storageKey = `timer_${taskId}_${userId}`
+  const activeKey = `active_timer_${userId}`
 
-  // Restaurar timer de localStorage al montar
+  function saveActiveTimer(state: { running: boolean; paused: boolean; seconds: number }) {
+    if (state.running) {
+      localStorage.setItem(activeKey, JSON.stringify({ taskId, taskTitle }))
+    } else {
+      const existing = localStorage.getItem(activeKey)
+      if (existing) {
+        try { if (JSON.parse(existing).taskId === taskId) localStorage.removeItem(activeKey) } catch {}
+      }
+    }
+  }
+
   useEffect(() => {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
       try {
         const { start, accumulatedSeconds, isPaused } = JSON.parse(saved)
         if (isPaused) {
-          // Estaba pausado — restaurar segundos acumulados sin correr
           setSeconds(accumulatedSeconds ?? 0)
           setPausedSeconds(accumulatedSeconds ?? 0)
           setRunning(true)
           setPaused(true)
+          saveActiveTimer({ running: true, paused: true, seconds: accumulatedSeconds ?? 0 })
         } else {
-          // Estaba corriendo — calcular tiempo transcurrido desde start
           const startDate = new Date(start)
           const elapsed = Math.floor((Date.now() - startDate.getTime()) / 1000)
           const total = (accumulatedSeconds ?? 0) + elapsed
@@ -38,14 +53,15 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
           setPausedSeconds(accumulatedSeconds ?? 0)
           setRunning(true)
           setPaused(false)
+          saveActiveTimer({ running: true, paused: false, seconds: total })
         }
       } catch {
         localStorage.removeItem(storageKey)
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey])
 
-  // Tick del intervalo
   useEffect(() => {
     if (running && !paused && startTime) {
       intervalRef.current = setInterval(() => {
@@ -74,16 +90,17 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     localStorage.setItem(storageKey, JSON.stringify({
       start: now.toISOString(), accumulatedSeconds: 0, isPaused: false
     }))
+    localStorage.setItem(activeKey, JSON.stringify({ taskId, taskTitle }))
   }
 
   function pauseTimer() {
-    // Congela los segundos actuales y guarda estado pausado
     setPaused(true)
     setPausedSeconds(seconds)
     setStartTime(null)
     localStorage.setItem(storageKey, JSON.stringify({
       start: null, accumulatedSeconds: seconds, isPaused: true
     }))
+    localStorage.setItem(activeKey, JSON.stringify({ taskId, taskTitle }))
   }
 
   function resumeTimer() {
@@ -93,6 +110,7 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     localStorage.setItem(storageKey, JSON.stringify({
       start: now.toISOString(), accumulatedSeconds: pausedSeconds, isPaused: false
     }))
+    localStorage.setItem(activeKey, JSON.stringify({ taskId, taskTitle }))
   }
 
   async function saveEntry(andStop: boolean) {
@@ -100,11 +118,12 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     if (hoursLogged <= 0) return
     setLoading(true)
 
+    const d = new Date()
     const { error } = await createClient().from('time_entries').insert({
       task_id: taskId,
       user_id: userId,
       hours_logged: hoursLogged,
-      entry_date: new Date().toISOString().split('T')[0],
+      entry_date: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
       notes: 'Registrado con cronómetro'
     })
 
@@ -115,16 +134,16 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     }
 
     if (andStop) {
-      // Detener y limpiar
       setRunning(false)
       setPaused(false)
       setSeconds(0)
       setPausedSeconds(0)
       setStartTime(null)
       localStorage.removeItem(storageKey)
+      const existing = localStorage.getItem(activeKey)
+      if (existing) { try { if (JSON.parse(existing).taskId === taskId) localStorage.removeItem(activeKey) } catch {} }
       router.refresh()
     } else {
-      // Guardar parcial — reiniciar contador sin detener
       const now = new Date()
       setStartTime(now)
       setPausedSeconds(0)
@@ -135,6 +154,7 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
       localStorage.setItem(storageKey, JSON.stringify({
         start: now.toISOString(), accumulatedSeconds: 0, isPaused: false
       }))
+      localStorage.setItem(activeKey, JSON.stringify({ taskId, taskTitle }))
       router.refresh()
     }
 
@@ -158,7 +178,6 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 space-y-3">
-      {/* Tiempo + estado */}
       <div className="flex items-center gap-3">
         <Clock size={14} className={paused ? 'text-amber-400' : 'text-green-500'} />
         <span className="text-lg font-mono font-bold text-gray-900 tabular-nums flex-1">
@@ -170,14 +189,10 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
         }
       </div>
 
-      {/* Horas actuales */}
       {seconds > 0 && (
-        <p className="text-xs text-gray-400">
-          {hoursLogged}h a registrar
-        </p>
+        <p className="text-xs text-gray-400">{hoursLogged}h a registrar</p>
       )}
 
-      {/* Botones */}
       <div className="flex gap-2">
         {paused ? (
           <button onClick={resumeTimer}
