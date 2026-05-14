@@ -297,17 +297,25 @@ export default function MisTareasClient({
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <table className="w-full table-fixed">
           <colgroup>
-            <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
-            <col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'6%'}}/>
-            <col style={{width:'8%'}}/><col style={{width:'8%'}}/><col style={{width:'9%'}}/>
-            <col style={{width:'9%'}}/>
+            {showHorasEstimadas ? <>
+              <col style={{width:'14%'}}/><col style={{width:'7%'}}/><col style={{width:'9%'}}/>
+              <col style={{width:'11%'}}/><col style={{width:'11%'}}/><col style={{width:'6%'}}/>
+              <col style={{width:'8%'}}/><col style={{width:'7%'}}/><col style={{width:'9%'}}/>
+              <col style={{width:'9%'}}/><col style={{width:'9%'}}/>
+            </> : <>
+              <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
+              <col style={{width:'13%'}}/><col style={{width:'13%'}}/><col style={{width:'9%'}}/>
+              <col style={{width:'8%'}}/><col style={{width:'9%'}}/><col style={{width:'9%'}}/>
+              <col style={{width:'5%'}}/>
+            </>}
           </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
               {[
                 { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
                 { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
+                { key: 'responsible', label: 'Responsable' },
+                ...(showHorasEstimadas ? [{ key: 'my_assigned_hours', label: 'Est.' }] : []),
                 { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
                 { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
                 { key: 'actions', label: '' },
@@ -321,7 +329,7 @@ export default function MisTareasClient({
           </thead>
           <tbody>
             {!sorted.length ? (
-              <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
+              <tr><td colSpan={showHorasEstimadas ? 11 : 10} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date + 'T12:00:00') < new Date() && !['terminado','presentado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
@@ -341,11 +349,13 @@ export default function MisTareasClient({
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  {showHorasEstimadas && (
+                    <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  )}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
-                      {pct !== null && (
+                      {pct !== null && showHorasEstimadas && (
                         <div className="w-8 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')} style={{ width: Math.min(100, pct) + '%' }}/>
                         </div>
