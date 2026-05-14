@@ -21,6 +21,10 @@ function broadcast(users: OnlineUser[]) {
   _state.listeners.forEach(fn => fn([...users]))
 }
 
+export async function initPresence() {
+  return init()
+}
+
 async function init() {
   if (_state.initialized) return
   _state.initialized = true

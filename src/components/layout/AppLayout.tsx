@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import OnlineUsers from './OnlineUsers'
+import OnlineUsers, { initPresence } from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
@@ -166,6 +166,9 @@ export default function AppLayout({
   const isChat = pathname === '/chat'
   const isCollapsed = mounted && collapsed
   const newsPx = hasNews ? 40 : 0
+
+  // All users must join the presence channel so they appear in OnlineUsers for others
+  useEffect(() => { if (userId) initPresence() }, [userId])
 
   // Keep ref in sync so the real-time callback closure has current value
   useEffect(() => { isChatRef.current = isChat }, [isChat])
