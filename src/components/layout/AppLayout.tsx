@@ -7,7 +7,7 @@ import NewsBanner from './NewsBanner'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import TimerBubble from './TimerBubble'
+import FloatingTimer from './FloatingTimer'
 
 const APP_VERSION = '1.6.0'
 
@@ -22,6 +22,7 @@ const navItems = [
   { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
   { href: '/ocupacion-equipo',   label: 'Ocupación equipo',   icon: Users,           roles: ['admin','gerente_operaciones'] },
+  { href: '/cronometros',        label: 'Cronómetros',        icon: Timer,           roles: ['admin','gerente_operaciones'] },
   { href: '/reportes',          label: 'Reportes',           icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
   { href: '/solicitudes',       label: 'Solicitudes',        icon: AlertCircle,     roles: ['admin','gerente_operaciones'] },
   { href: '/facturacion',       label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
@@ -361,7 +362,7 @@ export default function AppLayout({
       </nav>
 
       {/* Floating timer bubble */}
-      {userId && <TimerBubble userId={userId}/>}
+      {userId && <FloatingTimer userId={userId} userName={userName}/>}
 
       <main
         ref={mainRef}
