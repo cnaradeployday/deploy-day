@@ -183,10 +183,22 @@ export default function AppLayout({
     sb.from('messages').select('id', { count: 'exact', head: true }).eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
       .then(({ count }) => setUnreadCount(count ?? 0))
 
-    // Notification sound using Web Audio API
+    // Notification sound — AudioContext created lazily after first user gesture
+    let audioCtx: AudioContext | null = null
+    function ensureAudio() {
+      if (audioCtx) return audioCtx
+      try { audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)() } catch {}
+      return audioCtx
+    }
+    // Prime the context on first user interaction so autoplay policy is satisfied
+    const primeHandler = () => { ensureAudio(); document.removeEventListener('click', primeHandler) }
+    document.addEventListener('click', primeHandler)
+
     function playNotifSound() {
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const ctx = ensureAudio()
+        if (!ctx) return
+        if (ctx.state === 'suspended') ctx.resume()
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
         osc.connect(gain)
@@ -268,15 +280,18 @@ export default function AppLayout({
         </div>
 
         <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto min-h-0 ${isCollapsed ? 'px-1' : 'px-3'}`}>
-          {visible.map(item => isCollapsed
-            ? <Link key={item.href} href={item.href} title={item.label}
-                className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === item.href || pathname.startsWith(item.href + '/') ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
-                <item.icon size={18} strokeWidth={pathname === item.href ? 2 : 1.5}/>
-              </Link>
-            : <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
-                active={pathname === item.href || pathname.startsWith(item.href + '/')}
-                badge={item.badge} unreadCount={unreadCount}/>
-          )}
+          {visible.map(item => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            const showDot = item.badge && unreadCount > 0 && !isActive
+            return isCollapsed
+              ? <Link key={item.href} href={item.href} title={item.label}
+                  className={`relative flex items-center justify-center py-2.5 rounded-xl transition-all ${isActive ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
+                  <item.icon size={18} strokeWidth={isActive ? 2 : 1.5}/>
+                  {showDot && <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"/>}
+                </Link>
+              : <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
+                  active={isActive} badge={item.badge} unreadCount={unreadCount}/>
+          })}
           {canManageNews && (isCollapsed
             ? <Link href="/news" title="Anuncios" className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <Megaphone size={18}/>

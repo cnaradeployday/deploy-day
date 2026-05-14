@@ -31,6 +31,7 @@ const MODULES = [
   { key: 'online_users',          label: 'Ver usuarios online' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
   { key: 'ver_horas_estimadas',   label: 'Mis tareas — Ver horas estimadas' },
+  { key: 'cronometros',           label: 'Cronómetros en curso' },
 ]
 
 export default async function RolesPage() {

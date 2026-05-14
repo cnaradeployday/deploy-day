@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { usePathname, useRouter } from 'next/navigation'
-import { Pause, Play, Square, ExternalLink, X } from 'lucide-react'
+import { Pause, Play, Square, ExternalLink, X, GripHorizontal } from 'lucide-react'
 import Link from 'next/link'
 
 interface ActiveTimer {
@@ -13,7 +13,33 @@ interface ActiveTimer {
   isPaused: boolean
 }
 
+function useDraggable(defaultPos: { x: number; y: number }) {
+  const [pos, setPos] = useState(defaultPos)
+  const dragging = useRef(false)
+  const offset = useRef({ x: 0, y: 0 })
+
+  function onMouseDown(e: React.MouseEvent) {
+    dragging.current = true
+    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+    e.preventDefault()
+  }
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      if (!dragging.current) return
+      setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y })
+    }
+    function onUp() { dragging.current = false }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  return { pos, onMouseDown }
+}
+
 export default function FloatingTimer({ userId, userName }: { userId: string; userName: string }) {
+  const { pos, onMouseDown } = useDraggable({ x: -1, y: -1 })
   const [timer, setTimer] = useState<ActiveTimer | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [dismissed, setDismissed] = useState(false)
@@ -165,8 +191,18 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   const s = elapsed % 60
   const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 
+  // Use fixed position if dragged, else default bottom-right
+  const style = pos.x >= 0
+    ? { position: 'fixed' as const, left: pos.x, top: pos.y, bottom: 'auto', right: 'auto' }
+    : {}
+
   return (
-    <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden min-w-[220px] max-w-[280px]">
+    <div style={style} className={`z-50 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden min-w-[220px] max-w-[280px] ${pos.x < 0 ? 'fixed bottom-20 md:bottom-6 right-4 md:right-6' : ''}`}>
+      {/* Drag handle */}
+      <div onMouseDown={onMouseDown}
+        className="flex items-center justify-center py-1 cursor-grab active:cursor-grabbing bg-gray-50 border-b border-gray-100">
+        <GripHorizontal size={14} className="text-gray-300"/>
+      </div>
       <div className="flex items-center gap-3 px-4 py-3">
         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${timer.isPaused ? 'bg-amber-400' : 'bg-green-500 animate-pulse'}`}/>
         <div className="flex-1 min-w-0">

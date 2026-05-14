@@ -19,7 +19,7 @@ function UserAvatar({ url, name, size = 7 }: { url?: string | null; name: string
 }
 
 function isImageUrl(url: string) {
-  return /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url) || url.includes('/storage/v1/object/public/chat-images/')
+  return /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(url) || url.includes('/storage/v1/object/public/avatars/chat/')
 }
 
 function MessageContent({ msg, users, projects, tasks, currentUserId }: any) {
@@ -102,9 +102,9 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
     const sb = supabaseRef.current
     const ext = file.type.split('/')[1] || 'png'
     const path = `${currentUserId}/${Date.now()}.${ext}`
-    const { error } = await sb.storage.from('chat-images').upload(path, file, { upsert: true })
+    const { error } = await sb.storage.from('avatars').upload('chat/' + path, file, { upsert: true })
     if (error) { setUploadingImage(false); alert('Error subiendo imagen: ' + error.message); return }
-    const { data: { publicUrl } } = sb.storage.from('chat-images').getPublicUrl(path)
+    const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl('chat/' + path)
     setUploadingImage(false)
     // Send image directly as a message
     await sendMessageContent(publicUrl)
