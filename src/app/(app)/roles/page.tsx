@@ -30,6 +30,7 @@ const MODULES = [
   { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
   { key: 'online_users',          label: 'Ver usuarios online' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
+  { key: 'ver_horas_estimadas',   label: 'Mis tareas — Ver horas estimadas' },
 ]
 
 export default async function RolesPage() {
