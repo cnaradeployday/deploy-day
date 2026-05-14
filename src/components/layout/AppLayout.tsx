@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import FloatingTimer from './FloatingTimer'
 
-const APP_VERSION = '1.6.0'
+const APP_VERSION = '1.7.0'
 
 const navItems = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
@@ -214,13 +214,11 @@ export default function AppLayout({
     }
 
     const channel = sb.channel('chat-badge-' + userId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'is_global=eq.true' },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' },
         (p) => {
-          if (p.new.user_id !== userId) {
-            if (!isChatRef.current) {
-              setUnreadCount(c => c + 1)
-              playNotifSound()
-            }
+          if (p.new.is_global && p.new.user_id !== userId && !isChatRef.current) {
+            setUnreadCount(c => c + 1)
+            playNotifSound()
           }
         })
       .subscribe()

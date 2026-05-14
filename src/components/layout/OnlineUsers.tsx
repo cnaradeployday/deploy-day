@@ -61,6 +61,15 @@ async function init() {
       await channel.track({ full_name: myName, online_at: new Date().toISOString() })
     }
   })
+
+  // Re-track when tab regains visibility (handles reconnects / tab switching)
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && _state.channel) {
+        _state.channel.track({ full_name: myName, online_at: new Date().toISOString() }).catch(() => {})
+      }
+    })
+  }
 }
 
 export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {

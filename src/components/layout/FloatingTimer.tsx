@@ -13,14 +13,17 @@ interface ActiveTimer {
   isPaused: boolean
 }
 
-function useDraggable(defaultPos: { x: number; y: number }) {
-  const [pos, setPos] = useState(defaultPos)
+function useDraggable() {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
   const dragging = useRef(false)
   const offset = useRef({ x: 0, y: 0 })
+  const elementRef = useRef<HTMLDivElement>(null)
 
   function onMouseDown(e: React.MouseEvent) {
     dragging.current = true
-    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y }
+    const rect = elementRef.current?.getBoundingClientRect()
+    const currentPos = pos ?? (rect ? { x: rect.left, y: rect.top } : { x: e.clientX - 110, y: e.clientY - 30 })
+    offset.current = { x: e.clientX - currentPos.x, y: e.clientY - currentPos.y }
     e.preventDefault()
   }
 
@@ -35,11 +38,11 @@ function useDraggable(defaultPos: { x: number; y: number }) {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
   }, [])
 
-  return { pos, onMouseDown }
+  return { pos, onMouseDown, elementRef }
 }
 
 export default function FloatingTimer({ userId, userName }: { userId: string; userName: string }) {
-  const { pos, onMouseDown } = useDraggable({ x: -1, y: -1 })
+  const { pos, onMouseDown, elementRef } = useDraggable()
   const [timer, setTimer] = useState<ActiveTimer | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [dismissed, setDismissed] = useState(false)
@@ -191,13 +194,12 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   const s = elapsed % 60
   const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 
-  // Use fixed position if dragged, else default bottom-right
-  const style = pos.x >= 0
-    ? { position: 'fixed' as const, left: pos.x, top: pos.y, bottom: 'auto', right: 'auto' }
-    : {}
+  const style: React.CSSProperties = pos
+    ? { position: 'fixed', left: pos.x, top: pos.y }
+    : { position: 'fixed', bottom: '1.5rem', right: '1.5rem' }
 
   return (
-    <div style={style} className={`z-50 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden min-w-[220px] max-w-[280px] ${pos.x < 0 ? 'fixed bottom-20 md:bottom-6 right-4 md:right-6' : ''}`}>
+    <div ref={elementRef} style={style} className="z-50 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden min-w-[220px] max-w-[280px]">
       {/* Drag handle */}
       <div onMouseDown={onMouseDown}
         className="flex items-center justify-center py-1 cursor-grab active:cursor-grabbing bg-gray-50 border-b border-gray-100">

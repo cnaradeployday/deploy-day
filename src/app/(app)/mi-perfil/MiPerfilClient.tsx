@@ -43,11 +43,13 @@ export default function MiPerfilClient({
     const { error: upErr } = await sb.storage.from('avatars').upload(path, file, { upsert: true })
     if (upErr) { setError('Error al subir imagen: ' + upErr.message); setUploading(false); return }
     const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(path)
-    const url = publicUrl + '?t=' + Date.now()
-    setAvatarUrl(url)
+    const displayUrl = publicUrl + '?t=' + Date.now()
+    setAvatarUrl(displayUrl)
     setPreview(null)
-    await createClient().from('users').update({ avatar_url: url }).eq('id', userId)
+    const { error: dbErr } = await createClient().from('users').update({ avatar_url: publicUrl }).eq('id', userId)
+    if (dbErr) { setError('Error al guardar: ' + dbErr.message); setUploading(false); return }
     setUploading(false)
+    router.refresh()
   }
 
   async function handleSave() {
