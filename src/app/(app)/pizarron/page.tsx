@@ -7,7 +7,7 @@ export default async function PizarronPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: posts }, { data: profile }] = await Promise.all([
+  const [{ data: posts }, { data: profile }, { data: teammates }] = await Promise.all([
     supabase
       .from('tablero_posts')
       .select('id, content, image_url, created_at, author_id, author:users!tablero_posts_author_id_fkey(id, full_name, avatar_url)')
@@ -18,6 +18,11 @@ export default async function PizarronPage() {
       .select('full_name, avatar_url, role')
       .eq('id', user.id)
       .single(),
+    supabase
+      .from('users')
+      .select('id, full_name, avatar_url')
+      .neq('id', user.id)
+      .order('full_name'),
   ])
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
@@ -29,6 +34,7 @@ export default async function PizarronPage() {
       userAvatarUrl={profile?.avatar_url ?? null}
       isAdmin={isAdmin}
       initialPosts={(posts ?? []) as any[]}
+      teammates={(teammates ?? []) as any[]}
     />
   )
 }

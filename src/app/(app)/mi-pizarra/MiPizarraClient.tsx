@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search } from 'lucide-react'
+import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon } from 'lucide-react'
 import Image from 'next/image'
 
 const COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -12,6 +12,21 @@ const COLORS: Record<string, { bg: string; border: string; label: string }> = {
   purple: { bg: '#EDE9FE', border: '#DDD6FE', label: 'Violeta' },
 }
 
+function getRotation(id: string): number {
+  const hash = id.split('').reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0)
+  const steps = ['-5', '-3.5', '-2', '-0.8', '0.5', '1.5', '2.8', '4', '5.2', '-4']
+  return parseFloat(steps[Math.abs(hash) % steps.length])
+}
+
+function renderMentions(text: string): React.ReactNode {
+  const parts = text.split(/(@\S+)/g)
+  return parts.map((part, i) =>
+    part.startsWith('@')
+      ? <span key={i} className="text-[#1B9BF0] font-semibold">{part}</span>
+      : part
+  )
+}
+
 interface Postit {
   id: string
   content: string
@@ -20,6 +35,7 @@ interface Postit {
   created_at: string
   board_owner_id: string
   author_id: string
+  image_url: string | null
   author: { id: string; full_name: string; avatar_url: string | null } | null
 }
 
@@ -39,26 +55,102 @@ function UserAvatar({ url, name, size }: { url: string | null; name: string; siz
     )
   }
   return (
-    <div style={{ width: px, height: px }} className="rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0">
+    <div style={{ width: px, height: px }}
+      className="rounded-full bg-[#E8F4FE] flex items-center justify-center text-xs font-semibold text-[#1B9BF0] shrink-0">
       {name?.[0]?.toUpperCase()}
     </div>
   )
 }
 
-function PostitCard({ postit, userId, onDelete, onToggle }: {
+function MentionTextarea({ value, onChange, teammates, placeholder, rows = 4, style, className, autoFocus }: {
+  value: string
+  onChange: (v: string) => void
+  teammates: Teammate[]
+  placeholder?: string
+  rows?: number
+  style?: React.CSSProperties
+  className?: string
+  autoFocus?: boolean
+}) {
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionStart, setMentionStart] = useState(0)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const val = e.target.value
+    const pos = e.target.selectionStart ?? val.length
+    onChange(val)
+    const before = val.slice(0, pos)
+    const m = before.match(/@(\w*)$/)
+    if (m) { setMentionQuery(m[1]); setMentionStart(pos - m[0].length) }
+    else setMentionQuery(null)
+  }
+
+  function selectMention(t: Teammate) {
+    const firstName = t.full_name.split(' ')[0]
+    const curPos = taRef.current?.selectionStart ?? value.length
+    const newVal = value.slice(0, mentionStart) + '@' + firstName + ' ' + value.slice(curPos)
+    onChange(newVal)
+    setMentionQuery(null)
+    setTimeout(() => {
+      if (!taRef.current) return
+      const pos = mentionStart + firstName.length + 2
+      taRef.current.focus()
+      taRef.current.setSelectionRange(pos, pos)
+    }, 0)
+  }
+
+  const filtered = mentionQuery !== null
+    ? teammates.filter(t => t.full_name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
+    : []
+
+  return (
+    <div className="relative">
+      <textarea ref={taRef} value={value} onChange={handleChange}
+        placeholder={placeholder} rows={rows} style={style} className={className} autoFocus={autoFocus} />
+      {filtered.length > 0 && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden">
+          {filtered.map(t => (
+            <button key={t.id} onMouseDown={e => { e.preventDefault(); selectMention(t) }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-[#E8F4FE] text-left transition-colors">
+              <UserAvatar url={t.avatar_url} name={t.full_name} size={6} />
+              <span className="text-sm text-gray-700">{t.full_name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PostitCard({ postit, userId, rotation, isDragging, isDragOver,
+  onDelete, onToggle, onDragStart, onDragOver, onDrop, onDragEnd }: {
   postit: Postit
   userId: string
+  rotation: number
+  isDragging: boolean
+  isDragOver: boolean
   onDelete: (id: string) => void
   onToggle: (id: string, done: boolean) => void
+  onDragStart: () => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: () => void
+  onDragEnd: () => void
 }) {
   const [deleting, setDeleting] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const isOwn = postit.author_id === userId
   const color = COLORS[postit.color] ?? COLORS.yellow
 
   async function handleDelete() {
     setDeleting(true)
-    await createClient().from('postits').delete().eq('id', postit.id)
+    const sb = createClient()
+    if (postit.image_url) {
+      const path = postit.image_url.split('/tablero-general/').pop()
+      if (path) await sb.storage.from('tablero-general').remove([path])
+    }
+    await sb.from('postits').delete().eq('id', postit.id)
     onDelete(postit.id)
   }
 
@@ -71,69 +163,121 @@ function PostitCard({ postit, userId, onDelete, onToggle }: {
 
   return (
     <div
-      className="relative p-4 rounded-lg shadow-md group transition-all hover:shadow-lg hover:-translate-y-0.5"
-      style={{ backgroundColor: color.bg, borderTop: `4px solid ${color.border}` }}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className="relative group cursor-grab active:cursor-grabbing transition-all duration-200"
+      style={{
+        transform: `rotate(${rotation}deg) scale(${isDragOver ? 1.04 : 1})`,
+        opacity: isDragging ? 0.35 : 1,
+        outline: isDragOver ? `3px solid #1B9BF0` : 'none',
+        outlineOffset: 3,
+        borderRadius: 8,
+      }}
     >
-      <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full shadow-sm"
-        style={{ background: 'radial-gradient(circle at 40% 40%, #f87171, #dc2626)' }} />
-
-      {!isOwn && postit.author && (
-        <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-black/10">
-          <UserAvatar url={postit.author.avatar_url} name={postit.author.full_name} size={4} />
-          <span className="text-[10px] text-gray-600 font-semibold">{postit.author.full_name}</span>
+      <div className="rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+        style={{ backgroundColor: color.bg, borderTop: `4px solid ${color.border}` }}>
+        {/* Pin */}
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full shadow-md z-10 flex items-center justify-center"
+          style={{ background: 'radial-gradient(circle at 35% 35%, #f87171, #b91c1c)' }}>
+          <div className="w-1.5 h-1.5 rounded-full bg-red-900/30" />
         </div>
-      )}
 
-      <p className={`text-sm leading-relaxed text-gray-800 min-h-[3rem] ${postit.done ? 'line-through text-gray-400' : ''}`}>
-        {postit.content}
-      </p>
-
-      <div className="flex items-center justify-between mt-3 pt-2 border-t border-black/5">
-        <span className="text-[10px] text-gray-500">
-          {new Date(postit.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
-        </span>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {isOwn && (
-            <button onClick={handleToggle} disabled={toggling}
-              className="p-1.5 rounded-lg hover:bg-black/10 transition-all"
-              title={postit.done ? 'Marcar pendiente' : 'Marcar hecho'}>
-              {toggling
-                ? <Loader2 size={12} className="animate-spin" />
-                : <Check size={12} className={postit.done ? 'text-green-600' : 'text-gray-500'} />}
-            </button>
+        <div className="p-4 pt-5">
+          {/* Author (messages from others) */}
+          {!isOwn && postit.author && (
+            <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b border-black/10">
+              <UserAvatar url={postit.author.avatar_url} name={postit.author.full_name} size={4} />
+              <span className="text-[10px] text-gray-600 font-semibold">{postit.author.full_name}</span>
+            </div>
           )}
-          <button onClick={handleDelete} disabled={deleting}
-            className="p-1.5 rounded-lg hover:bg-red-100 transition-all" title="Eliminar">
-            {deleting ? <Loader2 size={12} className="animate-spin text-red-400" /> : <Trash2 size={12} className="text-red-400" />}
-          </button>
+
+          {/* Image */}
+          {postit.image_url && !imgError && (
+            <div className="relative w-full rounded-md overflow-hidden mb-2.5" style={{ aspectRatio: '4/3' }}>
+              <Image src={postit.image_url} alt="adjunto" fill className="object-cover"
+                unoptimized onError={() => setImgError(true)} />
+            </div>
+          )}
+
+          {/* Content */}
+          {postit.content && (
+            <p className={`text-sm leading-relaxed text-gray-800 min-h-[2.5rem] whitespace-pre-wrap
+              ${postit.done ? 'line-through text-gray-400' : ''}`}>
+              {renderMentions(postit.content)}
+            </p>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-black/5">
+            <span className="text-[10px] text-gray-500">
+              {new Date(postit.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+            </span>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isOwn && (
+                <button onClick={handleToggle} disabled={toggling}
+                  className="p-1.5 rounded-lg hover:bg-black/10 transition-all"
+                  title={postit.done ? 'Marcar pendiente' : 'Marcar hecho'}>
+                  {toggling
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <Check size={11} className={postit.done ? 'text-green-600' : 'text-gray-500'} />}
+                </button>
+              )}
+              <button onClick={handleDelete} disabled={deleting}
+                className="p-1.5 rounded-lg hover:bg-red-100 transition-all" title="Eliminar">
+                {deleting ? <Loader2 size={11} className="animate-spin text-red-400" /> : <Trash2 size={11} className="text-red-400" />}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function AddPostitModal({ userId, onAdd, onClose }: {
+function AddPostitModal({ userId, teammates, onAdd, onClose }: {
   userId: string
-  onAdd: (postit: Postit) => void
+  teammates: Teammate[]
+  onAdd: (p: Postit) => void
   onClose: () => void
 }) {
   const [content, setContent] = useState('')
   const [color, setColor] = useState('yellow')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 10 * 1024 * 1024) { setError('La imagen no puede superar 10 MB'); return }
+    setImageFile(f); setImagePreview(URL.createObjectURL(f)); setError(null)
+  }
 
   async function handleSubmit() {
-    if (!content.trim()) return
-    setSaving(true)
-    setError(null)
-    const { data, error: err } = await createClient().from('postits').insert({
-      board_owner_id: userId,
-      author_id: userId,
-      content: content.trim(),
-      color,
-      done: false,
-    }).select('id, content, color, done, created_at, board_owner_id, author_id, author:users!postits_author_id_fkey(id, full_name, avatar_url)').single()
-    if (err) { setError(err.message); setSaving(false); return }
+    if (!content.trim() && !imageFile) return
+    setSaving(true); setError(null)
+    const sb = createClient()
+
+    let imageUrl: string | null = null
+    if (imageFile) {
+      const ext = imageFile.name.split('.').pop()
+      const path = `postits/${userId}/${Date.now()}.${ext}`
+      const { error: upErr } = await sb.storage.from('tablero-general').upload(path, imageFile)
+      if (upErr) { setError('Error subiendo imagen: ' + upErr.message); setSaving(false); return }
+      imageUrl = sb.storage.from('tablero-general').getPublicUrl(path).data.publicUrl
+    }
+
+    const { data, error: dbErr } = await sb.from('postits').insert({
+      board_owner_id: userId, author_id: userId,
+      content: content.trim() || null, color, done: false, image_url: imageUrl,
+    }).select('id, content, color, done, created_at, board_owner_id, author_id, image_url, author:users!postits_author_id_fkey(id, full_name, avatar_url)').single()
+
+    if (dbErr) { setError(dbErr.message); setSaving(false); return }
     if (data) { onAdd(data as any); onClose() }
     setSaving(false)
   }
@@ -154,28 +298,41 @@ function AddPostitModal({ userId, onAdd, onClose }: {
                 backgroundColor: val.bg,
                 border: `3px solid ${color === key ? '#374151' : val.border}`,
                 transform: color === key ? 'scale(1.2)' : 'scale(1)',
-              }}
-              title={val.label} />
+              }} title={val.label} />
           ))}
         </div>
 
-        <textarea
-          autoFocus
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) handleSubmit() }}
-          placeholder="Escribí tu nota..."
-          rows={4}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-4 transition-colors"
+        {imagePreview && (
+          <div className="relative w-full rounded-xl overflow-hidden border border-gray-100 mb-3" style={{ aspectRatio: '4/3' }}>
+            <Image src={imagePreview} alt="preview" fill className="object-cover" unoptimized />
+            <button onClick={() => { setImageFile(null); setImagePreview(null); if (fileRef.current) fileRef.current.value = '' }}
+              className="absolute top-2 right-2 p-1 bg-black/50 rounded-lg">
+              <X size={12} className="text-white" />
+            </button>
+          </div>
+        )}
+
+        <MentionTextarea
+          value={content} onChange={setContent} teammates={teammates}
+          placeholder="Escribí tu nota... (@nombre para mencionar)"
+          rows={4} autoFocus
           style={{ backgroundColor: COLORS[color]?.bg ?? '#FEF9C3' }}
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 w-full transition-colors"
         />
 
         {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
 
-        <button onClick={handleSubmit} disabled={saving || !content.trim()}
-          className="w-full py-2.5 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
-          {saving ? <><Loader2 size={14} className="animate-spin" /> Guardando...</> : '+ Agregar post-it'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-all">
+            <ImageIcon size={14} /> Imagen
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <button onClick={handleSubmit} disabled={saving || (!content.trim() && !imageFile)}
+            className="flex-1 py-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Guardando...</> : '+ Agregar'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -194,20 +351,14 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const filtered = teammates.filter(t =>
-    t.full_name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = teammates.filter(t => t.full_name.toLowerCase().includes(search.toLowerCase()))
 
   async function handleSend() {
     if (!selected || !content.trim()) return
-    setSaving(true)
-    setError(null)
+    setSaving(true); setError(null)
     const { error: err } = await createClient().from('postits').insert({
-      board_owner_id: selected.id,
-      author_id: userId,
-      content: content.trim(),
-      color,
-      done: false,
+      board_owner_id: selected.id, author_id: userId,
+      content: content.trim(), color, done: false,
     })
     if (err) { setError(err.message); setSaving(false); return }
     setSent(true)
@@ -246,9 +397,7 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
                   <span className="text-sm text-gray-700">{t.full_name}</span>
                 </button>
               ))}
-              {filtered.length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-4">Sin resultados</p>
-              )}
+              {filtered.length === 0 && <p className="text-sm text-gray-400 text-center py-4">Sin resultados</p>}
             </div>
           </>
         ) : (
@@ -260,7 +409,6 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
                 <X size={12} className="text-gray-500" />
               </button>
             </div>
-
             <div className="flex items-center gap-2 mb-3">
               {Object.entries(COLORS).map(([key, val]) => (
                 <button key={key} onClick={() => setColor(key)}
@@ -269,23 +417,17 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
                     backgroundColor: val.bg,
                     border: `3px solid ${color === key ? '#374151' : val.border}`,
                     transform: color === key ? 'scale(1.2)' : 'scale(1)',
-                  }}
-                  title={val.label} />
+                  }} title={val.label} />
               ))}
             </div>
-
-            <textarea
-              autoFocus
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder={`Escribí un mensaje para ${selected.full_name}...`}
-              rows={4}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-4 transition-colors"
+            <MentionTextarea
+              value={content} onChange={setContent} teammates={teammates}
+              placeholder={`Escribí un mensaje... (@nombre para mencionar)`}
+              rows={4} autoFocus
               style={{ backgroundColor: COLORS[color]?.bg ?? '#DBEAFE' }}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-4 transition-colors"
             />
-
             {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
-
             <button onClick={handleSend} disabled={saving || !content.trim()}
               className="w-full py-2.5 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
               {saving ? <><Loader2 size={14} className="animate-spin" /> Enviando...</> : <><Send size={14} /> Enviar nota</>}
@@ -304,15 +446,75 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
   teammates: Teammate[]
 }) {
   const [postits, setPostits] = useState<Postit[]>(initialPostits)
+  const [orderedIds, setOrderedIds] = useState<string[]>(() => initialPostits.map(p => p.id))
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showLeaveNote, setShowLeaveNote] = useState(false)
 
-  const myPostits = postits.filter(p => p.author_id === userId)
-  const received = postits.filter(p => p.author_id !== userId)
+  const postitsById = Object.fromEntries(postits.map(p => [p.id, p]))
+  const sorted = orderedIds.map(id => postitsById[id]).filter(Boolean)
+  const myPostits = sorted.filter(p => p.author_id === userId)
+  const received = sorted.filter(p => p.author_id !== userId)
 
-  function handleAdd(p: Postit) { setPostits(prev => [p, ...prev]) }
-  function handleDelete(id: string) { setPostits(prev => prev.filter(p => p.id !== id)) }
-  function handleToggle(id: string, done: boolean) { setPostits(prev => prev.map(p => p.id === id ? { ...p, done } : p)) }
+  function handleAdd(p: Postit) {
+    setPostits(prev => [p, ...prev])
+    setOrderedIds(prev => [p.id, ...prev])
+  }
+  function handleDelete(id: string) {
+    setPostits(prev => prev.filter(p => p.id !== id))
+    setOrderedIds(prev => prev.filter(i => i !== id))
+  }
+  function handleToggle(id: string, done: boolean) {
+    setPostits(prev => prev.map(p => p.id === id ? { ...p, done } : p))
+  }
+
+  function handleDragStart(id: string) { setDraggingId(id) }
+  function handleDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault()
+    if (id !== draggingId) setDragOverId(id)
+  }
+  function handleDrop(targetId: string) {
+    if (!draggingId || draggingId === targetId) { setDraggingId(null); setDragOverId(null); return }
+    setOrderedIds(prev => {
+      const arr = [...prev]
+      const fromIdx = arr.indexOf(draggingId)
+      const toIdx = arr.indexOf(targetId)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, draggingId)
+      return arr
+    })
+    setDraggingId(null); setDragOverId(null)
+  }
+  function handleDragEnd() { setDraggingId(null); setDragOverId(null) }
+
+  function renderSection(items: Postit[], label: string) {
+    if (items.length === 0) return null
+    return (
+      <div className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-widest mb-5 px-1"
+          style={{ color: 'rgba(254,243,199,0.75)' }}>
+          {label}
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          {items.map(p => (
+            <PostitCard
+              key={p.id} postit={p} userId={userId}
+              rotation={getRotation(p.id)}
+              isDragging={draggingId === p.id}
+              isDragOver={dragOverId === p.id}
+              onDelete={handleDelete} onToggle={handleToggle}
+              onDragStart={() => handleDragStart(p.id)}
+              onDragOver={e => handleDragOver(e, p.id)}
+              onDrop={() => handleDrop(p.id)}
+              onDragEnd={handleDragEnd}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -335,51 +537,28 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         </div>
       </div>
 
-      <div className="rounded-2xl p-6 min-h-72"
+      <div className="rounded-2xl p-8 min-h-80"
         style={{
-          background: 'linear-gradient(135deg, #c8935a 0%, #bf8a52 50%, #b07d47 100%)',
-          boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.2), inset 0 0 40px rgba(0,0,0,0.05)',
+          background: 'linear-gradient(145deg, #c8935a 0%, #b5803f 40%, #a06e30 100%)',
+          boxShadow: 'inset 0 2px 16px rgba(0,0,0,0.25), inset 0 0 60px rgba(0,0,0,0.08)',
         }}>
 
-        {myPostits.length > 0 && (
-          <div className="mb-8">
-            <p className="text-xs font-semibold text-amber-100/80 uppercase tracking-widest mb-4 px-1">
-              Mis pendientes ({myPostits.filter(p => !p.done).length} activos)
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-              {myPostits.map(p => (
-                <PostitCard key={p.id} postit={p} userId={userId} onDelete={handleDelete} onToggle={handleToggle} />
-              ))}
-            </div>
-          </div>
+        {renderSection(myPostits, `Mis pendientes (${myPostits.filter(p => !p.done).length} activos)`)}
+        {received.length > 0 && myPostits.length > 0 && (
+          <div className="border-t border-amber-800/30 mb-8" />
         )}
-
-        {received.length > 0 && (
-          <div>
-            {myPostits.length > 0 && (
-              <div className="border-t border-amber-700/30 mb-6" />
-            )}
-            <p className="text-xs font-semibold text-amber-100/80 uppercase tracking-widest mb-4 px-1">
-              Mensajes recibidos ({received.length})
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-              {received.map(p => (
-                <PostitCard key={p.id} postit={p} userId={userId} onDelete={handleDelete} onToggle={handleToggle} />
-              ))}
-            </div>
-          </div>
-        )}
+        {renderSection(received, `Mensajes recibidos (${received.length})`)}
 
         {postits.length === 0 && (
-          <div className="text-center py-20">
-            <StickyNote size={44} className="mx-auto mb-3" style={{ color: 'rgba(254,243,199,0.5)' }} />
-            <p className="text-sm font-medium" style={{ color: 'rgba(254,243,199,0.9)' }}>Tu pizarra está vacía</p>
-            <p className="text-xs mt-1" style={{ color: 'rgba(254,243,199,0.5)' }}>Agregá tu primer post-it con el botón de arriba</p>
+          <div className="text-center py-24">
+            <StickyNote size={48} className="mx-auto mb-4" style={{ color: 'rgba(254,243,199,0.4)' }} />
+            <p className="text-sm font-medium" style={{ color: 'rgba(254,243,199,0.85)' }}>Tu pizarra está vacía</p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(254,243,199,0.45)' }}>Agregá tu primer post-it arriba</p>
           </div>
         )}
       </div>
 
-      {showAdd && <AddPostitModal userId={userId} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddPostitModal userId={userId} teammates={teammates} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
       {showLeaveNote && <LeaveNoteModal userId={userId} teammates={teammates} onClose={() => setShowLeaveNote(false)} />}
     </div>
   )
