@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -19,6 +19,8 @@ const navItems = [
   { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/mi-pizarra',       label: 'Mi pizarra',         icon: StickyNote,      roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/pizarron',         label: 'Pizarrón',           icon: LayoutGrid,      roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
   { href: '/ocupacion-equipo',   label: 'Ocupación equipo',   icon: Users,           roles: ['admin','gerente_operaciones'] },
   { href: '/reportes',          label: 'Reportes',           icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
