@@ -168,7 +168,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     localStorage.removeItem(`timer_${taskId}_${userId}`)
     const updated = timers.filter(t => t.taskId !== taskId)
     setTimers(updated)
-    broadcastPresence(updated)
+    sendBroadcast(presenceChannelRef.current, updated)
     router.refresh()
   }
 
