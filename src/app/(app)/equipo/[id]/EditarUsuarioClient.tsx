@@ -43,9 +43,8 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
       is_active: form.is_active, banco: form.banco,
       cbu: form.cbu, cuenta_nombre: form.cuenta_nombre,
     }).eq('id', miembro.id)
-    if (error) alert('Error: ' + error.message)
-    else router.refresh()
-    setLoading(false)
+    if (error) { alert('Error: ' + error.message); setLoading(false); return }
+    router.push('/equipo')
   }
 
   async function actualizarTarifa(e: React.FormEvent) {

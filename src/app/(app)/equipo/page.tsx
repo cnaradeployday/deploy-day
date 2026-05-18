@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Pencil } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 const roleColors: Record<string, string> = {
   admin: 'bg-purple-50 text-purple-600',
   gerente_operaciones: 'bg-blue-50 text-blue-600',
