@@ -33,11 +33,13 @@ interface Props {
   canCreateTask?: boolean
   horasEstimadasDelMes?: number
   userId?: string
+  canVerHorasEstimadas?: boolean
 }
 
 export default function MisTareasClient({
   tareas, proyectos, clientes, filters, mesActual,
-  canCreateTask = true, horasEstimadasDelMes = 0, userId = ''
+  canCreateTask = true, horasEstimadasDelMes = 0, userId = '',
+  canVerHorasEstimadas = true
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -155,12 +157,12 @@ export default function MisTareasClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className={`grid gap-3 mb-4 ${canVerHorasEstimadas ? 'grid-cols-3' : 'grid-cols-1'}`}>
         {[
-          { label: 'Horas estimadas (mes)', value: Math.round(horasEstimadasDelMes * 10) / 10, color: 'text-gray-900' },
+          canVerHorasEstimadas ? { label: 'Horas estimadas (mes)', value: Math.round(horasEstimadasDelMes * 10) / 10, color: 'text-gray-900' } : null,
           { label: 'Horas usadas (mes)',    value: Math.round(totalUsadas * 10) / 10,           color: 'text-[#1B9BF0]' },
-          { label: 'Restantes',             value: Math.round(totalRestantes * 10) / 10,         color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
-        ].map(({ label, value, color }) => (
+          canVerHorasEstimadas ? { label: 'Restantes',             value: Math.round(totalRestantes * 10) / 10,         color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' } : null,
+        ].filter(Boolean).map(({ label, value, color }: any) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
             <p className="text-xs text-gray-400">{label}</p>
             <p className={'text-xl font-bold mt-0.5 ' + color}>{value}h</p>
@@ -217,7 +219,8 @@ export default function MisTareasClient({
         <table className="w-full table-fixed">
           <colgroup>
             <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
-            <col style={{width:'14%'}}/><col style={{width:'13%'}}/><col style={{width:'5%'}}/>
+            <col style={{width:'14%'}}/><col style={{width:'13%'}}/>
+            {canVerHorasEstimadas && <col style={{width:'5%'}}/>}
             <col style={{width:'9%'}}/><col style={{width:'7%'}}/><col style={{width:'8%'}}/>
             <col style={{width:'9%'}}/><col style={{width:'6%'}}/>
           </colgroup>
@@ -226,7 +229,8 @@ export default function MisTareasClient({
               {[
                 { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
                 { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
+                { key: 'responsible', label: 'Responsable' },
+                ...(canVerHorasEstimadas ? [{ key: 'my_assigned_hours', label: 'Est.' }] : []),
                 { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
                 { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
                 { key: 'actions', label: '' },
@@ -262,7 +266,7 @@ export default function MisTareasClient({
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  {canVerHorasEstimadas && <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
@@ -325,7 +329,7 @@ export default function MisTareasClient({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
-                  <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
+                  <span>{t.hours_logged ?? 0}h{canVerHorasEstimadas && myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Link href={`/tareas/${t.id}`} prefetch={false}

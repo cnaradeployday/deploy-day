@@ -123,6 +123,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     try {
       await deleteTaskAction(taskId)
       setDeletedIds(prev => [...prev, taskId])
+      router.refresh()
     } catch (e: any) {
       alert('Error al eliminar: ' + e.message)
     }

@@ -72,6 +72,7 @@ export default function EditarTareaPage() {
         colaboradores.map(c => ({ task_id: id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
       )
     }
+    router.refresh()
     router.push('/tareas/' + id)
   }
 

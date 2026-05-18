@@ -30,6 +30,7 @@ const MODULES = [
   { key: 'logs',                  label: 'Logs de actividad' },
   { key: 'ocupacion_equipo',      label: 'Ocupación del equipo' },
   { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
+  { key: 'ver_horas_estimadas',   label: 'Ver horas estimadas en tareas' },
   { key: 'online_users',          label: 'Ver usuarios online' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
 ]
