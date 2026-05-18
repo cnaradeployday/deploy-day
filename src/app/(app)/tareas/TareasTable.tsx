@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { X, ChevronUp, ChevronDown, RefreshCw, CheckCircle, Trash2, Pencil, Search, Download } from 'lucide-react'
@@ -76,7 +76,6 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const [sortKey, setSortKey] = useState('due_date'); const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null); const [search, setSearch] = useState('')
   const [deletedIds, setDeletedIds] = useState<string[]>([])
-  const [isPending, startTransition] = useTransition()
   const [selStatus, setSelStatus] = useState<string[]>([]); const [selPriority, setSelPriority] = useState<string[]>([])
   const [selCliente, setSelCliente] = useState<string[]>([]); const [selProyecto, setSelProyecto] = useState<string[]>([])
   const [selResponsable, setSelResponsable] = useState<string[]>([]); const [selMes, setSelMes] = useState<string[]>([])
@@ -124,13 +123,13 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     await sb.from('time_entries').delete().eq('task_id', taskId)
     await sb.from('task_collaborators').delete().eq('task_id', taskId)
     await sb.from('task_comments').delete().eq('task_id', taskId)
+    await sb.from('task_attachments').delete().eq('task_id', taskId)
     await sb.from('hour_requests').delete().eq('task_id', taskId)
     const { error } = await sb.from('tasks').delete().eq('id', taskId)
-    // debug removed
     if (error) { alert('Error al eliminar: ' + error.message); setLoading(null); return }
     setDeletedIds(prev => [...prev, taskId])
     setLoading(null)
-    startTransition(() => router.refresh())
+    router.refresh()
   }
 
   function exportToExcel() {
