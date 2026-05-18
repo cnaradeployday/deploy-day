@@ -2,12 +2,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Play, Pause, Square, GripHorizontal, ChevronUp, X, Clock } from 'lucide-react'
+import { Square, GripHorizontal, ChevronUp, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 interface TimerEntry {
   taskId: string
   taskTitle: string
+  userId: string
   start: string | null
   accumulatedSeconds: number
   isPaused: boolean
@@ -25,14 +26,15 @@ function calcSeconds(entry: TimerEntry): number {
   return entry.accumulatedSeconds + Math.floor((Date.now() - new Date(entry.start).getTime()) / 1000)
 }
 
-export default function FloatingTimer({ userId }: { userId: string }) {
+export default function FloatingTimer({ userId, userName }: { userId: string; userName?: string }) {
   const [timers, setTimers] = useState<TimerEntry[]>([])
-  const [tick, setTick] = useState(0)
-  const [expanded, setExpanded] = useState(false)
-  const [pos, setPos] = useState({ right: 24, bottom: 80 })
-  const [dragging, setDragging] = useState(false)
-  const dragRef = useRef<{ mx: number; my: number; right: number; bottom: number } | null>(null)
+  const [expanded, setExpanded] = useState(true)
+  const [pos, setPos] = useState({ x: -1, y: -1 })
+  const dragging = useRef(false)
+  const dragStart = useRef({ mx: 0, my: 0, x: 0, y: 0 })
   const hasDragged = useRef(false)
+  const posRef = useRef({ x: 0, y: 0 })
+  const presenceChannelRef = useRef<any>(null)
   const router = useRouter()
 
   function readTimers(): TimerEntry[] {
@@ -40,85 +42,114 @@ export default function FloatingTimer({ userId }: { userId: string }) {
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
-        if (!key?.startsWith('timer_')) continue
+        if (!key?.startsWith('timer_') || key === 'timer_bubble_pos') continue
         const raw = localStorage.getItem(key)
         if (!raw) continue
         const data = JSON.parse(raw)
-        if (data.userId !== userId) continue
+        if (data.userId !== userId || !data.taskId) continue
         results.push(data as TimerEntry)
       }
     } catch {}
     return results
   }
 
+  function broadcastPresence(currentTimers: TimerEntry[]) {
+    if (!presenceChannelRef.current) return
+    presenceChannelRef.current.track({
+      userId,
+      userName: userName ?? userId,
+      timers: currentTimers.map(t => ({
+        taskId: t.taskId,
+        taskTitle: t.taskTitle,
+        start: t.start,
+        accumulatedSeconds: t.accumulatedSeconds,
+        isPaused: t.isPaused,
+      })),
+      updatedAt: Date.now(),
+    })
+  }
+
   useEffect(() => {
-    setTimers(readTimers())
+    const initial = readTimers()
+    setTimers(initial)
+
+    const sb = createClient()
+    const ch = sb.channel('active-timers', {
+      config: { presence: { key: userId } },
+    })
+    presenceChannelRef.current = ch
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        broadcastPresence(initial)
+      }
+    })
+
     const iv = setInterval(() => {
-      setTimers(readTimers())
-      setTick(t => t + 1)
+      const current = readTimers()
+      setTimers(current)
+      broadcastPresence(current)
     }, 1000)
-    return () => clearInterval(iv)
+
+    return () => {
+      clearInterval(iv)
+      sb.removeChannel(ch)
+      presenceChannelRef.current = null
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
-  // Restore saved position
   useEffect(() => {
     try {
       const saved = localStorage.getItem('timer_bubble_pos')
-      if (saved) setPos(JSON.parse(saved))
-    } catch {}
+      if (saved) {
+        const p = JSON.parse(saved)
+        const x = Math.max(8, Math.min(window.innerWidth - 280, p.x ?? window.innerWidth - 300))
+        const y = Math.max(8, Math.min(window.innerHeight - 100, p.y ?? window.innerHeight - 100))
+        setPos({ x, y })
+        posRef.current = { x, y }
+      } else {
+        const x = window.innerWidth - 300
+        const y = window.innerHeight - 90
+        setPos({ x, y })
+        posRef.current = { x, y }
+      }
+    } catch {
+      const x = window.innerWidth - 300
+      const y = window.innerHeight - 90
+      setPos({ x, y })
+      posRef.current = { x, y }
+    }
   }, [])
 
-  // Drag logic
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     hasDragged.current = false
-    dragRef.current = { mx: e.clientX, my: e.clientY, right: pos.right, bottom: pos.bottom }
-    setDragging(true)
-  }, [pos])
+    dragging.current = true
+    dragStart.current = { mx: e.clientX, my: e.clientY, x: posRef.current.x, y: posRef.current.y }
 
-  useEffect(() => {
-    if (!dragging) return
-    function onMove(e: MouseEvent) {
-      if (!dragRef.current) return
-      const dx = e.clientX - dragRef.current.mx
-      const dy = e.clientY - dragRef.current.my
+    function onMove(ev: MouseEvent) {
+      if (!dragging.current) return
+      const dx = ev.clientX - dragStart.current.mx
+      const dy = ev.clientY - dragStart.current.my
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged.current = true
       const newPos = {
-        right: Math.max(8, Math.min(window.innerWidth - 200, dragRef.current.right - dx)),
-        bottom: Math.max(8, Math.min(window.innerHeight - 100, dragRef.current.bottom + dy)),
+        x: Math.max(8, Math.min(window.innerWidth - 280, dragStart.current.x + dx)),
+        y: Math.max(8, Math.min(window.innerHeight - 60, dragStart.current.y + dy)),
       }
+      posRef.current = newPos
       setPos(newPos)
     }
+
     function onUp() {
-      setDragging(false)
-      try { localStorage.setItem('timer_bubble_pos', JSON.stringify(pos)) } catch {}
+      dragging.current = false
+      try { localStorage.setItem('timer_bubble_pos', JSON.stringify(posRef.current)) } catch {}
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
     }
+
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
-    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
-  }, [dragging, pos])
-
-  function updateEntry(taskId: string, updates: Partial<TimerEntry>) {
-    const key = `timer_${taskId}_${userId}`
-    const current = timers.find(t => t.taskId === taskId)
-    if (!current) return
-    const updated = { ...current, ...updates }
-    localStorage.setItem(key, JSON.stringify(updated))
-    setTimers(prev => prev.map(t => t.taskId === taskId ? updated : t))
-  }
-
-  function pauseTimer(taskId: string) {
-    const entry = timers.find(t => t.taskId === taskId)
-    if (!entry || entry.isPaused) return
-    updateEntry(taskId, { start: null, accumulatedSeconds: calcSeconds(entry), isPaused: true })
-  }
-
-  function resumeTimer(taskId: string) {
-    const entry = timers.find(t => t.taskId === taskId)
-    if (!entry || !entry.isPaused) return
-    updateEntry(taskId, { start: new Date().toISOString(), isPaused: false })
-  }
+  }, [])
 
   async function stopTimer(taskId: string) {
     const entry = timers.find(t => t.taskId === taskId)
@@ -134,117 +165,66 @@ export default function FloatingTimer({ userId }: { userId: string }) {
       })
     }
     localStorage.removeItem(`timer_${taskId}_${userId}`)
-    setTimers(prev => prev.filter(t => t.taskId !== taskId))
-    if (timers.length <= 1) setExpanded(false)
+    const updated = timers.filter(t => t.taskId !== taskId)
+    setTimers(updated)
+    broadcastPresence(updated)
     router.refresh()
   }
 
-  if (timers.length === 0) return null
-
-  const primary = timers[0]
-  const primarySecs = calcSeconds(primary)
+  if (timers.length === 0 || pos.x === -1) return null
 
   return (
-    <div
-      className="fixed z-50 select-none"
-      style={{ right: pos.right, bottom: pos.bottom }}
-    >
-      {/* Panel expandido */}
-      {expanded && (
-        <div className="mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 w-72 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <Clock size={13} className="text-gray-400" />
-              <p className="text-xs font-semibold text-gray-700">Cronómetros activos</p>
-            </div>
-            <button onClick={() => setExpanded(false)} className="p-0.5 rounded-lg hover:bg-gray-200 transition-all">
-              <X size={13} className="text-gray-400" />
-            </button>
-          </div>
-          <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+    <div className="fixed z-50 select-none" style={{ left: pos.x, top: pos.y }}>
+      <div className="bg-gray-900 rounded-2xl shadow-2xl overflow-hidden w-72"
+        style={{ cursor: dragging.current ? 'grabbing' : 'default' }}>
+
+        <div onMouseDown={onMouseDown}
+          className="flex items-center gap-2 px-3 py-2 bg-gray-800 cursor-grab active:cursor-grabbing">
+          <GripHorizontal size={13} className="text-gray-500"/>
+          <Clock size={12} className="text-gray-400"/>
+          <p className="text-xs font-semibold text-gray-300 flex-1">Cronómetros activos</p>
+          <button onClick={() => !hasDragged.current && setExpanded(e => !e)}
+            onMouseDown={e => e.stopPropagation()}
+            className="p-0.5 rounded hover:bg-gray-700 transition-all">
+            <ChevronUp size={13} className={`text-gray-400 transition-transform ${expanded ? '' : 'rotate-180'}`}/>
+          </button>
+        </div>
+
+        {expanded && (
+          <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
             {timers.map(entry => {
               const secs = calcSeconds(entry)
               return (
-                <div key={entry.taskId} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                <div key={entry.taskId} className="px-3 py-2.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-green-400 animate-pulse"/>
                     <Link href={`/tareas/${entry.taskId}`}
-                      className="text-xs font-medium text-gray-800 hover:text-[#1B9BF0] transition-colors leading-snug line-clamp-2 flex-1">
+                      className="text-xs text-gray-300 hover:text-white transition-colors flex-1 line-clamp-1">
                       {entry.taskTitle}
                     </Link>
-                    <span className="text-sm font-mono font-bold text-gray-900 tabular-nums shrink-0">{formatTime(secs)}</span>
+                    <span className="text-sm font-mono font-bold text-white tabular-nums shrink-0">{formatTime(secs)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {entry.isPaused ? (
-                      <button onClick={() => resumeTimer(entry.taskId)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold transition-all">
-                        <Play size={10} /> Reanudar
-                      </button>
-                    ) : (
-                      <button onClick={() => pauseTimer(entry.taskId)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold transition-all">
-                        <Pause size={10} /> Pausar
-                      </button>
-                    )}
                     <button onClick={() => stopTimer(entry.taskId)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-semibold transition-all">
-                      <Square size={10} /> Detener
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all">
+                      <Square size={10}/> Detener y guardar
                     </button>
-                    <span className="ml-auto text-[10px] text-gray-400">
-                      {(Math.round((secs / 3600) * 100) / 100)}h
-                    </span>
+                    <span className="text-[10px] text-gray-500 shrink-0">{(Math.round((secs / 3600) * 100) / 100)}h</span>
                   </div>
                 </div>
               )
             })}
           </div>
-        </div>
-      )}
-
-      {/* Burbuja principal */}
-      <div className={`flex items-center gap-2 rounded-full px-3.5 py-2 shadow-2xl transition-colors
-        ${primary.isPaused ? 'bg-gray-800' : 'bg-gray-900'}`}
-        style={{ cursor: dragging ? 'grabbing' : 'default' }}>
-
-        {/* Grip (drag handle) */}
-        <div onMouseDown={onMouseDown} className="cursor-grab active:cursor-grabbing p-0.5 -ml-0.5">
-          <GripHorizontal size={13} className="text-gray-500" />
-        </div>
-
-        {/* Indicador estado */}
-        <div className={`w-2 h-2 rounded-full shrink-0 ${primary.isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`} />
-
-        {/* Tiempo */}
-        <span className="text-sm font-mono font-bold text-white tabular-nums">{formatTime(primarySecs)}</span>
-
-        {/* Control principal */}
-        {primary.isPaused ? (
-          <button onClick={() => !hasDragged.current && resumeTimer(primary.taskId)}
-            className="p-1.5 rounded-full hover:bg-white/20 text-white transition-all" title="Reanudar">
-            <Play size={12} />
-          </button>
-        ) : (
-          <button onClick={() => !hasDragged.current && pauseTimer(primary.taskId)}
-            className="p-1.5 rounded-full hover:bg-white/20 text-white transition-all" title="Pausar">
-            <Pause size={12} />
-          </button>
         )}
 
-        <button onClick={() => !hasDragged.current && stopTimer(primary.taskId)}
-          className="p-1.5 rounded-full hover:bg-red-500/80 text-white transition-all" title="Detener y guardar">
-          <Square size={12} />
-        </button>
-
-        {/* Expandir panel */}
-        <button onClick={() => !hasDragged.current && setExpanded(e => !e)}
-          className="p-1.5 rounded-full hover:bg-white/20 text-white transition-all" title="Ver todos los cronómetros">
-          <ChevronUp size={12} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-        </button>
-
-        {/* Badge si hay más de uno */}
-        {timers.length > 1 && (
-          <span className="w-4 h-4 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center leading-none -ml-1">
-            {timers.length}
-          </span>
+        {!expanded && (
+          <div className="px-3 py-2 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full shrink-0 bg-green-400 animate-pulse"/>
+            <span className="text-sm font-mono font-bold text-white tabular-nums flex-1">{formatTime(calcSeconds(timers[0]))}</span>
+            {timers.length > 1 && (
+              <span className="text-[10px] text-gray-400">+{timers.length - 1} más</span>
+            )}
+          </div>
         )}
       </div>
     </div>

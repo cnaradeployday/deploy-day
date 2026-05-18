@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -19,6 +19,7 @@ const navItems = [
   { href: '/tareas',            label: 'Tareas',             icon: CheckSquare,     roles: ['admin','gerente_operaciones'] },
   { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/cronometros',       label: 'Cronómetros',        icon: AlarmClock,      roles: ['admin','gerente_operaciones'] },
   { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/mi-pizarra',       label: 'Mi pizarra',         icon: StickyNote,      roles: ['admin','gerente_operaciones'] },
   { href: '/pizarron',         label: 'Pizarrón',           icon: LayoutGrid,      roles: ['admin','gerente_operaciones'] },
@@ -65,7 +66,7 @@ function NavItem({ href, label, Icon, active, badge, unreadCount, onClick }: {
   const showBadge = badge && unreadCount > 0 && !active
   const badgeNum = unreadCount > 9 ? '9+' : String(unreadCount)
   return (
-    <Link href={href} onClick={onClick}
+    <Link href={href} prefetch={false} onClick={onClick}
       className={active
         ? 'flex items-center gap-3 px-3 py-2 rounded-xl text-sm bg-[#E8F4FE] text-[#1B9BF0] font-medium transition-all'
         : 'flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all'}>
@@ -85,7 +86,7 @@ function BottomNavItem({ href, label, Icon, active, badge, unreadCount }: {
   const showBadge = badge && unreadCount > 0 && !active
   const badgeNum = unreadCount > 9 ? '9+' : String(unreadCount)
   return (
-    <Link href={href} className={active ? 'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 text-[#1B9BF0] transition-colors' : 'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 text-gray-400 transition-colors'}>
+    <Link href={href} prefetch={false} className={active ? 'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 text-[#1B9BF0] transition-colors' : 'flex-1 flex flex-col items-center py-2.5 text-xs gap-1 text-gray-400 transition-colors'}>
       <div className="relative">
         <Icon size={19} strokeWidth={active ? 2 : 1.5}/>
         {showBadge && <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">{badgeNum}</span>}
@@ -234,7 +235,7 @@ export default function AppLayout({
 
         <nav className={`flex-1 py-3 space-y-0.5 overflow-y-auto min-h-0 ${isCollapsed ? 'px-1' : 'px-3'}`}>
           {visible.map(item => isCollapsed
-            ? <Link key={item.href} href={item.href} title={item.label}
+            ? <Link key={item.href} href={item.href} prefetch={false} title={item.label}
                 className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === item.href || pathname.startsWith(item.href + '/') ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
                 <item.icon size={18} strokeWidth={pathname === item.href ? 2 : 1.5}/>
               </Link>
@@ -334,7 +335,7 @@ export default function AppLayout({
         {children}
       </main>
 
-      {userId && <FloatingTimer userId={userId} />}
+      {userId && <FloatingTimer userId={userId} userName={userName} />}
     </div>
   )
 }
