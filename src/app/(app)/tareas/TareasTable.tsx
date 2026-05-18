@@ -120,18 +120,13 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     if (!confirm('Eliminar esta tarea?')) return
     setLoading(taskId)
     try {
-      const sb = createClient()
-      await sb.from('time_entries').delete().eq('task_id', taskId)
-      await sb.from('task_collaborators').delete().eq('task_id', taskId)
-      await sb.from('task_comments').delete().eq('task_id', taskId)
-      await sb.from('task_attachments').delete().eq('task_id', taskId)
-      await sb.from('hour_requests').delete().eq('task_id', taskId)
-      await sb.from('messages').update({ task_id: null }).eq('task_id', taskId)
-      const { error } = await sb.from('tasks').delete().eq('id', taskId)
-      if (error) throw new Error(error.message)
-      // Verify deletion actually happened (catches silent RLS failures)
-      const { data: stillExists } = await sb.from('tasks').select('id').eq('id', taskId).maybeSingle()
-      if (stillExists) throw new Error('No se pudo eliminar la tarea. Verificá los permisos en la base de datos (política RLS de DELETE en la tabla tasks).')
+      const res = await fetch('/api/tasks/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al eliminar')
       setDeletedIds(prev => [...prev, taskId])
       router.refresh()
     } catch (e: any) {
