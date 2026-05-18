@@ -11,6 +11,7 @@ export async function deleteTaskAction(taskId: string) {
   await supabase.from('hour_requests').delete().eq('task_id', taskId)
   const { error } = await supabase.from('tasks').delete().eq('id', taskId)
   if (error) throw new Error(error.message)
-  revalidatePath('/tareas')
-  revalidatePath('/mis-tareas')
+  revalidatePath('/tareas', 'page')
+  revalidatePath('/mis-tareas', 'page')
+  revalidatePath('/', 'layout')
 }

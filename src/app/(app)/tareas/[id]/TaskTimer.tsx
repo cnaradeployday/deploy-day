@@ -65,6 +65,16 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
   }
 
   function startTimer() {
+    // Enforce single timer: remove any other active timers first
+    const toRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('timer_') && key !== 'timer_bubble_pos' && key !== storageKey) {
+        toRemove.push(key)
+      }
+    }
+    toRemove.forEach(k => localStorage.removeItem(k))
+
     const now = new Date()
     setStartTime(now)
     setRunning(true)

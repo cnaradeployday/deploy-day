@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil } from 'lucide-react'
+import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -160,8 +160,40 @@ export default function MisTareasClient({
     XLSX.writeFile(wb, 'mis-tareas-' + mes + '.xlsx')
   }
 
+  const activeTimerList = Object.entries(activeTimers)
+  const activeTaskNames = activeTimerList.map(([taskId]) => tareasLocal.find(t => t.id === taskId)?.title ?? 'Tarea').slice(0, 3)
+
   return (
     <div className="p-4 md:p-6 max-w-full">
+
+      {/* Cronómetros activos */}
+      {activeTimerList.length > 0 && (
+        <div className="mb-4 bg-gray-900 rounded-2xl px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock size={13} className="text-gray-400"/>
+            <p className="text-xs font-semibold text-gray-300">Cronómetros activos</p>
+          </div>
+          <div className="space-y-1.5">
+            {activeTimerList.map(([taskId, timer]) => {
+              const tarea = tareasLocal.find(t => t.id === taskId)
+              return (
+                <div key={taskId} className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${timer.isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`}/>
+                  <span className="text-xs text-gray-300 flex-1 truncate">{tarea?.title ?? taskId}</span>
+                  <span className={`text-sm font-mono font-bold tabular-nums ${timer.isPaused ? 'text-amber-400' : 'text-green-400'}`}>
+                    {formatTimerSecs(timer.secs)}
+                  </span>
+                  <Link href={`/tareas/${taskId}?from=mis-tareas`}
+                    className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
+                    Ver →
+                  </Link>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
