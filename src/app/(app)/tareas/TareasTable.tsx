@@ -129,6 +129,9 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
       await sb.from('messages').update({ task_id: null }).eq('task_id', taskId)
       const { error } = await sb.from('tasks').delete().eq('id', taskId)
       if (error) throw new Error(error.message)
+      // Verify deletion actually happened (catches silent RLS failures)
+      const { data: stillExists } = await sb.from('tasks').select('id').eq('id', taskId).maybeSingle()
+      if (stillExists) throw new Error('No se pudo eliminar la tarea. Verificá los permisos en la base de datos (política RLS de DELETE en la tabla tasks).')
       setDeletedIds(prev => [...prev, taskId])
       router.refresh()
     } catch (e: any) {

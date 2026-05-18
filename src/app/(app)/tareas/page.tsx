@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
 
+export const dynamic = 'force-dynamic'
+
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const sp = await searchParams
