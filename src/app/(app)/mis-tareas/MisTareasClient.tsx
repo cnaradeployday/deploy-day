@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState, useEffect } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil, Clock } from 'lucide-react'
+import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -35,11 +35,6 @@ interface Props {
   userId?: string
 }
 
-function formatTimerSecs(s: number) {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
-  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`
-}
-
 export default function MisTareasClient({
   tareas, proyectos, clientes, filters, mesActual,
   canCreateTask = true, horasEstimadasDelMes = 0, userId = ''
@@ -51,32 +46,6 @@ export default function MisTareasClient({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null)
   const [tareasLocal, setTareasLocal] = useState<any[]>(tareas)
-  const [activeTimers, setActiveTimers] = useState<Record<string, { secs: number; isPaused: boolean }>>({})
-
-  // Poll localStorage every second — muestra qué tarea tiene cronómetro activo
-  useEffect(() => {
-    function readActiveTimers() {
-      const result: Record<string, { secs: number; isPaused: boolean }> = {}
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i)
-          if (!key?.startsWith('timer_') || key === 'timer_bubble_pos') continue
-          const raw = localStorage.getItem(key)
-          if (!raw) continue
-          const data = JSON.parse(raw)
-          if (!data.taskId) continue
-          const secs = data.isPaused || !data.start
-            ? (data.accumulatedSeconds ?? 0)
-            : (data.accumulatedSeconds ?? 0) + Math.floor((Date.now() - new Date(data.start).getTime()) / 1000)
-          result[data.taskId] = { secs, isPaused: !!data.isPaused }
-        }
-      } catch {}
-      setActiveTimers(result)
-    }
-    readActiveTimers()
-    const iv = setInterval(readActiveTimers, 1000)
-    return () => clearInterval(iv)
-  }, [])
 
   useEffect(() => { setTareasLocal(tareas) }, [tareas])
 
@@ -95,7 +64,8 @@ export default function MisTareasClient({
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     meses.push(d.toISOString().slice(0, 7))
   }
-  meses.push(new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().slice(0, 7))
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  meses.push(nextMonth.toISOString().slice(0, 7))
 
   function nombreMes(m: string) {
     return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
@@ -118,7 +88,8 @@ export default function MisTareasClient({
 
   const sorted = [...tareasLocal].sort((a, b) => {
     if (sortKey === 'my_assigned_hours' || sortKey === 'hours_logged') {
-      return sortDir === 'asc' ? (a[sortKey] ?? 0) - (b[sortKey] ?? 0) : (b[sortKey] ?? 0) - (a[sortKey] ?? 0)
+      const na = Number(a[sortKey] ?? 0); const nb = Number(b[sortKey] ?? 0)
+      return sortDir === 'asc' ? na - nb : nb - na
     }
     let va = '', vb = ''
     if (sortKey === 'client') { va = a.project?.client?.name ?? ''; vb = b.project?.client?.name ?? '' }
@@ -160,40 +131,8 @@ export default function MisTareasClient({
     XLSX.writeFile(wb, 'mis-tareas-' + mes + '.xlsx')
   }
 
-  const activeTimerList = Object.entries(activeTimers)
-  const activeTaskNames = activeTimerList.map(([taskId]) => tareasLocal.find(t => t.id === taskId)?.title ?? 'Tarea').slice(0, 3)
-
   return (
     <div className="p-4 md:p-6 max-w-full">
-
-      {/* Cronómetros activos */}
-      {activeTimerList.length > 0 && (
-        <div className="mb-4 bg-gray-900 rounded-2xl px-4 py-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock size={13} className="text-gray-400"/>
-            <p className="text-xs font-semibold text-gray-300">Cronómetros activos</p>
-          </div>
-          <div className="space-y-1.5">
-            {activeTimerList.map(([taskId, timer]) => {
-              const tarea = tareasLocal.find(t => t.id === taskId)
-              return (
-                <div key={taskId} className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${timer.isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`}/>
-                  <span className="text-xs text-gray-300 flex-1 truncate">{tarea?.title ?? taskId}</span>
-                  <span className={`text-sm font-mono font-bold tabular-nums ${timer.isPaused ? 'text-amber-400' : 'text-green-400'}`}>
-                    {formatTimerSecs(timer.secs)}
-                  </span>
-                  <Link href={`/tareas/${taskId}?from=mis-tareas`}
-                    className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
-                    Ver →
-                  </Link>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mis tareas</h1>
@@ -277,10 +216,10 @@ export default function MisTareasClient({
       <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <table className="w-full table-fixed">
           <colgroup>
-            <col style={{width:'16%'}}/><col style={{width:'7%'}}/><col style={{width:'9%'}}/>
-            <col style={{width:'12%'}}/><col style={{width:'11%'}}/><col style={{width:'5%'}}/>
-            <col style={{width:'9%'}}/><col style={{width:'7%'}}/><col style={{width:'7%'}}/>
-            <col style={{width:'9%'}}/><col style={{width:'8%'}}/>
+            <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
+            <col style={{width:'14%'}}/><col style={{width:'13%'}}/><col style={{width:'5%'}}/>
+            <col style={{width:'9%'}}/><col style={{width:'7%'}}/><col style={{width:'8%'}}/>
+            <col style={{width:'9%'}}/><col style={{width:'6%'}}/>
           </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
@@ -306,35 +245,25 @@ export default function MisTareasClient({
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
+              const isLoading = loading === t.id
               const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
-              const timer = activeTimers[t.id]
+              const canAdvance = !!nextStatus[t.status]
               return (
                 <tr key={t.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors' + (esOtroMes ? ' opacity-60' : '')}>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1.5">
-                      {timer ? (
-                        <span title={formatTimerSecs(timer.secs)}
-                          className={`w-2 h-2 rounded-full shrink-0 ${timer.isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`}/>
-                      ) : null}
-                      <span className="text-sm font-medium text-gray-900 truncate" title={t.title}>{t.title}</span>
-                      {esOtroMes && t.due_date && <span className="text-[10px] text-gray-400 bg-gray-100 px-1 rounded shrink-0">{t.due_date.slice(0,7)}</span>}
-                    </div>
-                    {timer && (
-                      <p className={`text-[10px] font-mono mt-0.5 ml-3.5 ${timer.isPaused ? 'text-amber-500' : 'text-green-600'}`}>
-                        {timer.isPaused ? '⏸ ' : '▶ '}{formatTimerSecs(timer.secs)}
-                      </p>
-                    )}
+                  <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate" title={t.title}>
+                    {t.title}
+                    {esOtroMes && t.due_date && <span className="ml-1 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">{t.due_date.slice(0,7)}</span>}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3">
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                       {t.es_colaborador ? 'Colab.' : 'Resp.'}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-3 py-2.5 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
+                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
                       {pct !== null && (
@@ -344,21 +273,20 @@ export default function MisTareasClient({
                       )}
                     </div>
                   </td>
-                  <td className={'px-3 py-2.5 text-xs ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
+                  <td className={'px-3 py-3 text-xs ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
                     {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
                   </td>
-                  <td className="px-3 py-2.5"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
-                  <td className="px-3 py-2.5"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-0.5">
-                      <Link href={`/tareas/${t.id}?from=mis-tareas`} title="Ver tarea"
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                  <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
+                  <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center justify-center gap-1">
+                      <Link href={`/tareas/${t.id}`} prefetch={false}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all" title="Ver tarea">
                         <Pencil size={12}/>
                       </Link>
-                      {nextStatus[t.status] && (
-                        <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id}
-                          title="Avanzar estado"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all">
+                      {canAdvance && (
+                        <button onClick={() => advanceStatus(t.id, t.status)} disabled={isLoading}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40" title="Avanzar estado">
                           <CheckCircle size={12}/>
                         </button>
                       )}
@@ -376,26 +304,19 @@ export default function MisTareasClient({
         {sorted.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
           const myHours = t.my_assigned_hours ?? 0
+          const isLoading = loading === t.id
           const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
-          const timer = activeTimers[t.id]
+          const canAdvance = !!nextStatus[t.status]
           return (
             <div key={t.id} className={'bg-white rounded-2xl border p-4 ' + (esOtroMes ? 'border-gray-50 opacity-70' : 'border-gray-100')}>
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 pr-2">
-                  <div className="flex items-center gap-1.5">
-                    {timer && <span className={`w-2 h-2 rounded-full shrink-0 ${timer.isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`}/>}
-                    <p className="text-sm font-medium text-gray-900">{t.title}</p>
-                  </div>
-                  {timer && (
-                    <p className={`text-[10px] font-mono mt-0.5 ${timer.isPaused ? 'text-amber-500' : 'text-green-600'}`}>
-                      {timer.isPaused ? '⏸ ' : '▶ '}{formatTimerSecs(timer.secs)}
-                    </p>
-                  )}
+                  <p className="text-sm font-medium text-gray-900">{t.title}</p>
                   {esOtroMes && t.due_date && <span className="text-[10px] text-gray-400">{t.due_date.slice(0,7)}</span>}
                 </div>
                 <span className={'text-xs px-2 py-0.5 rounded-full shrink-0 ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
               </div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${t.es_colaborador ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                   {t.es_colaborador ? 'Colaborador' : 'Responsable'}
                 </span>
@@ -407,13 +328,13 @@ export default function MisTareasClient({
                   <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Link href={`/tareas/${t.id}?from=mis-tareas`}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                  <Link href={`/tareas/${t.id}`} prefetch={false}
+                    className="p-2 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                     <Pencil size={14}/>
                   </Link>
-                  {nextStatus[t.status] && (
-                    <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all">
+                  {canAdvance && (
+                    <button onClick={() => advanceStatus(t.id, t.status)} disabled={isLoading}
+                      className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all disabled:opacity-40">
                       <CheckCircle size={14}/>
                     </button>
                   )}

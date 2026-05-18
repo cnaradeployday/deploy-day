@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { Clock, User } from 'lucide-react'
@@ -13,10 +13,11 @@ interface TimerState {
   isPaused: boolean
 }
 
-interface UserPresence {
+interface UserState {
   userId: string
   userName: string
   timers: TimerState[]
+  lastSeen: number
 }
 
 interface TaskInfo {
@@ -37,51 +38,69 @@ function formatTime(s: number) {
 }
 
 export default function CronometrosClient() {
-  const [users, setUsers] = useState<UserPresence[]>([])
+  const [userMap, setUserMap] = useState<Record<string, UserState>>({})
   const [taskInfo, setTaskInfo] = useState<Record<string, TaskInfo>>({})
   const [, setTick] = useState(0)
+  const userMapRef = useRef<Record<string, UserState>>({})
 
   useEffect(() => {
-    // Use a fresh Supabase client (separate WebSocket) so presence events
-    // from FloatingTimer (which uses the singleton) are delivered here.
+    // Fresh Supabase client (separate WebSocket from the FloatingTimer singleton)
+    // so broadcast messages from FloatingTimer are delivered here by the server.
     const sb = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-    const ch = sb.channel('active-timers', {
-      config: { presence: { key: 'cronometros-viewer' } },
-    })
 
-    function syncState() {
-      const state = ch.presenceState() as Record<string, any[]>
-      const parsed: UserPresence[] = Object.entries(state)
-        .filter(([key]) => key !== 'cronometros-viewer')
-        .map(([, presences]) => {
-          const latest = presences[presences.length - 1]
-          return {
-            userId: latest.userId ?? '',
-            userName: latest.userName ?? 'Usuario',
-            timers: (latest.timers ?? []) as TimerState[],
-          }
-        })
-        .filter(u => u.timers.length > 0)
-      setUsers(parsed)
-    }
-
-    ch.on('presence', { event: 'sync' }, syncState)
-    ch.on('presence', { event: 'join' }, syncState)
-    ch.on('presence', { event: 'leave' }, syncState)
-    ch.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        // Track as viewer so the channel knows we're subscribed
-        await ch.track({ isViewer: true, userId: 'cronometros-viewer', timers: [] })
+    const ch = sb.channel('timers-live')
+    ch.on('broadcast', { event: 'timer-state' }, ({ payload }: any) => {
+      if (!payload?.userId) return
+      const updated = {
+        ...userMapRef.current,
+        [payload.userId]: {
+          userId: payload.userId,
+          userName: payload.userName ?? payload.userId,
+          timers: payload.timers ?? [],
+          lastSeen: Date.now(),
+        },
       }
+      userMapRef.current = updated
+      setUserMap({ ...updated })
     })
+    ch.subscribe()
 
-    return () => { sb.removeChannel(ch) }
+    // Expire stale entries (no broadcast in 8s = timer stopped or user left)
+    const expiry = setInterval(() => {
+      const now = Date.now()
+      const current = userMapRef.current
+      const cleaned: Record<string, UserState> = {}
+      let changed = false
+      for (const [uid, state] of Object.entries(current)) {
+        if (now - state.lastSeen < 8000) {
+          cleaned[uid] = state
+        } else {
+          changed = true
+        }
+      }
+      if (changed) {
+        userMapRef.current = cleaned
+        setUserMap({ ...cleaned })
+      }
+    }, 3000)
+
+    return () => {
+      clearInterval(expiry)
+      sb.removeChannel(ch)
+    }
+  }, [])
+
+  // Live clock tick
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(iv)
   }, [])
 
   // Fetch task+client info for any new taskIds
+  const users = Object.values(userMap).filter(u => u.timers.length > 0)
   useEffect(() => {
     const allTaskIds = [...new Set(users.flatMap(u => u.timers.map(t => t.taskId)))]
     const missing = allTaskIds.filter(id => !taskInfo[id])
@@ -105,13 +124,7 @@ export default function CronometrosClient() {
         })
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [users])
-
-  // Live clock tick
-  useEffect(() => {
-    const iv = setInterval(() => setTick(t => t + 1), 1000)
-    return () => clearInterval(iv)
-  }, [])
+  }, [userMap])
 
   const totalActive = users.reduce((sum, u) => sum + u.timers.length, 0)
 
