@@ -409,8 +409,8 @@ export default function MisTareasClient({
         )}
       </div>
 
-      {/* Tabla desktop */}
-      <div className="hidden md:block bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      {/* Tabla desktop — sin overflow-hidden para que el popover no quede clippeado */}
+      <div className="hidden md:block bg-white rounded-2xl border border-gray-100">
         <table className="w-full table-fixed">
           <colgroup>
             <col style={{width:'14%'}}/><col style={{width:'8%'}}/><col style={{width:'9%'}}/>

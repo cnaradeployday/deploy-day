@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Send, Hash, Lock } from 'lucide-react'
+import { Send, Hash, Lock, ImageIcon, Loader2 } from 'lucide-react'
 import { renderContent } from './renderContent'
 
 export default function ChatWindow({ conversationId, isGlobal, name, currentUserId, users, tasks, projects, initialMessages }: {
@@ -17,6 +17,7 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
   const [messages, setMessages] = useState<any[]>(initialMessages)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [suggestions, setSuggestions] = useState<{ type: string; id: string; label: string }[]>([])
   const [suggestionIdx, setSuggestionIdx] = useState(0)
   const [triggerPos, setTriggerPos] = useState<{ start: number; type: string } | null>(null)
@@ -88,6 +89,25 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
     setInput(input.slice(0, triggerPos.start) + triggerPos.type + s.label + ' ' + input.slice(cursor))
     setSuggestions([]); setTriggerPos(null)
     setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find(item => item.type.startsWith('image/'))
+    if (!imageItem) return
+    e.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) return
+    setUploading(true)
+    const ext = file.type.split('/')[1] ?? 'png'
+    const path = `chat/${currentUserId}/${Date.now()}.${ext}`
+    const sb = supabaseRef.current
+    const { error } = await sb.storage.from('tablero-general').upload(path, file, { contentType: file.type })
+    if (error) { setUploading(false); alert('Error al subir imagen: ' + error.message); return }
+    const { data: urlData } = sb.storage.from('tablero-general').getPublicUrl(path)
+    const url = urlData.publicUrl
+    setInput(prev => prev + (prev ? '\n' : '') + `![](${url})`)
+    setUploading(false)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -216,7 +236,7 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
 
       <div className="bg-white border-t border-gray-100 px-4 py-3 shrink-0">
         <div className="flex items-end gap-3 bg-gray-50 rounded-2xl px-4 py-2.5 border border-gray-200 focus-within:border-[#1B9BF0] focus-within:bg-white transition-all">
-          <textarea ref={inputRef} value={input} onChange={handleInput} onKeyDown={handleKeyDown}
+          <textarea ref={inputRef} value={input} onChange={handleInput} onKeyDown={handleKeyDown} onPaste={handlePaste}
             placeholder={'Escribí un mensaje en ' + name + '... @ · # · /'}
             rows={1}
             className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none max-h-32"
@@ -226,7 +246,25 @@ export default function ChatWindow({ conversationId, isGlobal, name, currentUser
               t.style.height = t.scrollHeight + 'px'
             }}
           />
-          <button onClick={sendMessage} disabled={!input.trim() || sending}
+          {uploading && <Loader2 size={16} className="text-gray-400 animate-spin shrink-0"/>}
+          {!uploading && (
+            <label className="cursor-pointer p-1 text-gray-400 hover:text-[#1B9BF0] transition-colors shrink-0" title="Subir imagen">
+              <ImageIcon size={16}/>
+              <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return
+                setUploading(true)
+                const ext = file.name.split('.').pop() ?? 'png'
+                const path = `chat/${currentUserId}/${Date.now()}.${ext}`
+                const sb = supabaseRef.current
+                const { error } = await sb.storage.from('tablero-general').upload(path, file, { contentType: file.type })
+                if (error) { setUploading(false); alert('Error al subir imagen: ' + error.message); return }
+                const { data: urlData } = sb.storage.from('tablero-general').getPublicUrl(path)
+                setInput(prev => prev + (prev ? '\n' : '') + `![](${urlData.publicUrl})`)
+                setUploading(false); e.target.value = ''
+              }}/>
+            </label>
+          )}
+          <button onClick={sendMessage} disabled={!input.trim() || sending || uploading}
             className="w-8 h-8 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl flex items-center justify-center disabled:opacity-30 transition-all shrink-0">
             <Send size={14}/>
           </button>

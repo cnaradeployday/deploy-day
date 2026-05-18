@@ -61,11 +61,17 @@ export default function FloatingTimer({ userId }: { userId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
-  // Restore saved position
+  // Restore saved position, clamped to viewport
   useEffect(() => {
     try {
       const saved = localStorage.getItem('timer_bubble_pos')
-      if (saved) setPos(JSON.parse(saved))
+      if (saved) {
+        const p = JSON.parse(saved)
+        setPos({
+          right: Math.max(8, Math.min(window.innerWidth - 220, p.right ?? 24)),
+          bottom: Math.max(8, Math.min(window.innerHeight - 80, p.bottom ?? 80)),
+        })
+      }
     } catch {}
   }, [])
 
