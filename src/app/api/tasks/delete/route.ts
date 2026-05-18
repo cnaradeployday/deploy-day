@@ -7,9 +7,18 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single()
-  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
-  if (!isAdmin) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  const { data: profile } = await supabase.from('users').select('role, custom_role_id').eq('id', user.id).single()
+  const isSystemAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+
+  let canDelete = isSystemAdmin
+  if (!canDelete && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_write')
+      .eq('role_id', profile.custom_role_id).eq('module', 'tareas').single()
+    canDelete = perm?.can_write ?? false
+  }
+
+  if (!canDelete) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
   const { taskId } = await req.json()
   if (!taskId) return NextResponse.json({ error: 'taskId requerido' }, { status: 400 })
