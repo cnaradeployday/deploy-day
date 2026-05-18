@@ -2,12 +2,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Play, Pause, Square, GripHorizontal, ChevronUp, X, Clock } from 'lucide-react'
+import { Square, GripHorizontal, ChevronUp, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 interface TimerEntry {
   taskId: string
   taskTitle: string
+  userId: string
   start: string | null
   accumulatedSeconds: number
   isPaused: boolean
@@ -25,14 +26,15 @@ function calcSeconds(entry: TimerEntry): number {
   return entry.accumulatedSeconds + Math.floor((Date.now() - new Date(entry.start).getTime()) / 1000)
 }
 
-export default function FloatingTimer({ userId }: { userId: string }) {
+export default function FloatingTimer({ userId, userName }: { userId: string; userName?: string }) {
   const [timers, setTimers] = useState<TimerEntry[]>([])
   const [expanded, setExpanded] = useState(true)
-  const [pos, setPos] = useState({ x: -1, y: -1 }) // -1 = not yet initialized
+  const [pos, setPos] = useState({ x: -1, y: -1 })
   const dragging = useRef(false)
   const dragStart = useRef({ mx: 0, my: 0, x: 0, y: 0 })
   const hasDragged = useRef(false)
   const posRef = useRef({ x: 0, y: 0 })
+  const presenceChannelRef = useRef<any>(null)
   const router = useRouter()
 
   function readTimers(): TimerEntry[] {
@@ -51,14 +53,51 @@ export default function FloatingTimer({ userId }: { userId: string }) {
     return results
   }
 
+  function broadcastPresence(currentTimers: TimerEntry[]) {
+    if (!presenceChannelRef.current) return
+    presenceChannelRef.current.track({
+      userId,
+      userName: userName ?? userId,
+      timers: currentTimers.map(t => ({
+        taskId: t.taskId,
+        taskTitle: t.taskTitle,
+        start: t.start,
+        accumulatedSeconds: t.accumulatedSeconds,
+        isPaused: t.isPaused,
+      })),
+      updatedAt: Date.now(),
+    })
+  }
+
   useEffect(() => {
-    setTimers(readTimers())
-    const iv = setInterval(() => setTimers(readTimers()), 1000)
-    return () => clearInterval(iv)
+    const initial = readTimers()
+    setTimers(initial)
+
+    const sb = createClient()
+    const ch = sb.channel('active-timers', {
+      config: { presence: { key: userId } },
+    })
+    presenceChannelRef.current = ch
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        broadcastPresence(initial)
+      }
+    })
+
+    const iv = setInterval(() => {
+      const current = readTimers()
+      setTimers(current)
+      broadcastPresence(current)
+    }, 1000)
+
+    return () => {
+      clearInterval(iv)
+      sb.removeChannel(ch)
+      presenceChannelRef.current = null
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
-  // Restore saved position (bottom-right default)
   useEffect(() => {
     try {
       const saved = localStorage.getItem('timer_bubble_pos')
@@ -112,27 +151,6 @@ export default function FloatingTimer({ userId }: { userId: string }) {
     document.addEventListener('mouseup', onUp)
   }, [])
 
-  function updateEntry(taskId: string, updates: Partial<TimerEntry>) {
-    const key = `timer_${taskId}_${userId}`
-    const current = timers.find(t => t.taskId === taskId)
-    if (!current) return
-    const updated = { ...current, ...updates }
-    localStorage.setItem(key, JSON.stringify(updated))
-    setTimers(prev => prev.map(t => t.taskId === taskId ? updated : t))
-  }
-
-  function pauseTimer(taskId: string) {
-    const entry = timers.find(t => t.taskId === taskId)
-    if (!entry || entry.isPaused) return
-    updateEntry(taskId, { start: null, accumulatedSeconds: calcSeconds(entry), isPaused: true })
-  }
-
-  function resumeTimer(taskId: string) {
-    const entry = timers.find(t => t.taskId === taskId)
-    if (!entry || !entry.isPaused) return
-    updateEntry(taskId, { start: new Date().toISOString(), isPaused: false })
-  }
-
   async function stopTimer(taskId: string) {
     const entry = timers.find(t => t.taskId === taskId)
     if (!entry) return
@@ -147,7 +165,9 @@ export default function FloatingTimer({ userId }: { userId: string }) {
       })
     }
     localStorage.removeItem(`timer_${taskId}_${userId}`)
-    setTimers(prev => prev.filter(t => t.taskId !== taskId))
+    const updated = timers.filter(t => t.taskId !== taskId)
+    setTimers(updated)
+    broadcastPresence(updated)
     router.refresh()
   }
 
@@ -158,7 +178,6 @@ export default function FloatingTimer({ userId }: { userId: string }) {
       <div className="bg-gray-900 rounded-2xl shadow-2xl overflow-hidden w-72"
         style={{ cursor: dragging.current ? 'grabbing' : 'default' }}>
 
-        {/* Header — drag handle */}
         <div onMouseDown={onMouseDown}
           className="flex items-center gap-2 px-3 py-2 bg-gray-800 cursor-grab active:cursor-grabbing">
           <GripHorizontal size={13} className="text-gray-500"/>
@@ -171,7 +190,6 @@ export default function FloatingTimer({ userId }: { userId: string }) {
           </button>
         </div>
 
-        {/* Timer list */}
         {expanded && (
           <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
             {timers.map(entry => {
@@ -179,7 +197,7 @@ export default function FloatingTimer({ userId }: { userId: string }) {
               return (
                 <div key={entry.taskId} className="px-3 py-2.5">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${entry.isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`}/>
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-green-400 animate-pulse"/>
                     <Link href={`/tareas/${entry.taskId}`}
                       className="text-xs text-gray-300 hover:text-white transition-colors flex-1 line-clamp-1">
                       {entry.taskTitle}
@@ -187,20 +205,9 @@ export default function FloatingTimer({ userId }: { userId: string }) {
                     <span className="text-sm font-mono font-bold text-white tabular-nums shrink-0">{formatTime(secs)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {entry.isPaused ? (
-                      <button onClick={() => resumeTimer(entry.taskId)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-semibold transition-all">
-                        <Play size={10}/> Reanudar
-                      </button>
-                    ) : (
-                      <button onClick={() => pauseTimer(entry.taskId)}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-semibold transition-all">
-                        <Pause size={10}/> Pausar
-                      </button>
-                    )}
                     <button onClick={() => stopTimer(entry.taskId)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all">
-                      <Square size={10}/> Detener
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all">
+                      <Square size={10}/> Detener y guardar
                     </button>
                     <span className="text-[10px] text-gray-500 shrink-0">{(Math.round((secs / 3600) * 100) / 100)}h</span>
                   </div>
@@ -210,10 +217,9 @@ export default function FloatingTimer({ userId }: { userId: string }) {
           </div>
         )}
 
-        {/* Collapsed summary */}
         {!expanded && (
           <div className="px-3 py-2 flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full shrink-0 ${timers[0].isPaused ? 'bg-amber-400' : 'bg-green-400 animate-pulse'}`}/>
+            <div className="w-2 h-2 rounded-full shrink-0 bg-green-400 animate-pulse"/>
             <span className="text-sm font-mono font-bold text-white tabular-nums flex-1">{formatTime(calcSeconds(timers[0]))}</span>
             {timers.length > 1 && (
               <span className="text-[10px] text-gray-400">+{timers.length - 1} más</span>
