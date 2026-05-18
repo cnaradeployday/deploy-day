@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
+import FloatingTimer from './FloatingTimer'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
@@ -332,6 +333,8 @@ export default function AppLayout({
       >
         {children}
       </main>
+
+      {userId && <FloatingTimer userId={userId} />}
     </div>
   )
 }

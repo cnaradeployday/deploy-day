@@ -134,6 +134,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       mesActual={mesActual}
       canCreateTask={canCreateTask}
       horasEstimadasDelMes={Math.round(horasEstimadasDelMes * 10) / 10}
+      userId={user?.id ?? ''}
     />
   )
 }

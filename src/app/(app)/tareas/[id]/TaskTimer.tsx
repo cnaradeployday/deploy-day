@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Play, Square, Pause, Save, Clock } from 'lucide-react'
 
-export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: string; userId: string; taskStatus?: string }) {
+export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { taskId: string; userId: string; taskTitle?: string; taskStatus?: string }) {
   const [running, setRunning] = useState(false)
   const [paused, setPaused] = useState(false)
   const [seconds, setSeconds] = useState(0)
@@ -72,6 +72,7 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     setSeconds(0)
     setPausedSeconds(0)
     localStorage.setItem(storageKey, JSON.stringify({
+      taskId, taskTitle: taskTitle ?? 'Tarea', userId,
       start: now.toISOString(), accumulatedSeconds: 0, isPaused: false
     }))
   }
@@ -82,6 +83,7 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     setPausedSeconds(seconds)
     setStartTime(null)
     localStorage.setItem(storageKey, JSON.stringify({
+      taskId, taskTitle: taskTitle ?? 'Tarea', userId,
       start: null, accumulatedSeconds: seconds, isPaused: true
     }))
   }
@@ -91,6 +93,7 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
     setStartTime(now)
     setPaused(false)
     localStorage.setItem(storageKey, JSON.stringify({
+      taskId, taskTitle: taskTitle ?? 'Tarea', userId,
       start: now.toISOString(), accumulatedSeconds: pausedSeconds, isPaused: false
     }))
   }
@@ -133,6 +136,7 @@ export default function TaskTimer({ taskId, userId, taskStatus }: { taskId: stri
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
       localStorage.setItem(storageKey, JSON.stringify({
+        taskId, taskTitle: taskTitle ?? 'Tarea', userId,
         start: now.toISOString(), accumulatedSeconds: 0, isPaused: false
       }))
       router.refresh()

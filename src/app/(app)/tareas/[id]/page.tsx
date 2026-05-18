@@ -148,7 +148,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div className="space-y-4">
           {canUseTimer && (
-            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskStatus={t.status}/>
+            <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskTitle={t.title} taskStatus={t.status}/>
           )}
           <TaskActions
             task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
