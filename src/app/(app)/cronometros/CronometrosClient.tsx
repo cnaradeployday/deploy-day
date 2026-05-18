@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { Clock, User } from 'lucide-react'
 import Link from 'next/link'
@@ -38,29 +39,44 @@ function formatTime(s: number) {
 export default function CronometrosClient() {
   const [users, setUsers] = useState<UserPresence[]>([])
   const [taskInfo, setTaskInfo] = useState<Record<string, TaskInfo>>({})
-  const [tick, setTick] = useState(0)
+  const [, setTick] = useState(0)
 
   useEffect(() => {
-    const sb = createClient()
-    const ch = sb.channel('active-timers', { config: { presence: {} } })
+    // Use a fresh Supabase client (separate WebSocket) so presence events
+    // from FloatingTimer (which uses the singleton) are delivered here.
+    const sb = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const ch = sb.channel('active-timers', {
+      config: { presence: { key: 'cronometros-viewer' } },
+    })
 
     function syncState() {
       const state = ch.presenceState() as Record<string, any[]>
-      const parsed: UserPresence[] = Object.entries(state).map(([, presences]) => {
-        const latest = presences[presences.length - 1]
-        return {
-          userId: latest.userId ?? '',
-          userName: latest.userName ?? 'Usuario',
-          timers: (latest.timers ?? []) as TimerState[],
-        }
-      }).filter(u => u.timers.length > 0)
+      const parsed: UserPresence[] = Object.entries(state)
+        .filter(([key]) => key !== 'cronometros-viewer')
+        .map(([, presences]) => {
+          const latest = presences[presences.length - 1]
+          return {
+            userId: latest.userId ?? '',
+            userName: latest.userName ?? 'Usuario',
+            timers: (latest.timers ?? []) as TimerState[],
+          }
+        })
+        .filter(u => u.timers.length > 0)
       setUsers(parsed)
     }
 
     ch.on('presence', { event: 'sync' }, syncState)
     ch.on('presence', { event: 'join' }, syncState)
     ch.on('presence', { event: 'leave' }, syncState)
-    ch.subscribe()
+    ch.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Track as viewer so the channel knows we're subscribed
+        await ch.track({ isViewer: true, userId: 'cronometros-viewer', timers: [] })
+      }
+    })
 
     return () => { sb.removeChannel(ch) }
   }, [])
@@ -106,7 +122,9 @@ export default function CronometrosClient() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Cronómetros activos</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {totalActive === 0 ? 'Ningún cronómetro activo en este momento' : `${totalActive} cronómetro${totalActive !== 1 ? 's' : ''} corriendo`}
+            {totalActive === 0
+              ? 'Ningún cronómetro activo en este momento'
+              : `${totalActive} cronómetro${totalActive !== 1 ? 's' : ''} corriendo`}
           </p>
         </div>
       </div>

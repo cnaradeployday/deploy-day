@@ -3,6 +3,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { deleteTaskAction } from './actions'
 import { X, ChevronUp, ChevronDown, RefreshCw, CheckCircle, Trash2, Pencil, Search, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -119,17 +120,13 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   async function deleteTask(taskId: string) {
     if (!confirm('Eliminar esta tarea?')) return
     setLoading(taskId)
-    const sb = createClient()
-    await sb.from('time_entries').delete().eq('task_id', taskId)
-    await sb.from('task_collaborators').delete().eq('task_id', taskId)
-    await sb.from('task_comments').delete().eq('task_id', taskId)
-    await sb.from('task_attachments').delete().eq('task_id', taskId)
-    await sb.from('hour_requests').delete().eq('task_id', taskId)
-    const { error } = await sb.from('tasks').delete().eq('id', taskId)
-    if (error) { alert('Error al eliminar: ' + error.message); setLoading(null); return }
-    setDeletedIds(prev => [...prev, taskId])
+    try {
+      await deleteTaskAction(taskId)
+      setDeletedIds(prev => [...prev, taskId])
+    } catch (e: any) {
+      alert('Error al eliminar: ' + e.message)
+    }
     setLoading(null)
-    router.refresh()
   }
 
   function exportToExcel() {
