@@ -53,19 +53,22 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     return results
   }
 
-  function broadcastPresence(currentTimers: TimerEntry[]) {
-    if (!presenceChannelRef.current) return
-    presenceChannelRef.current.track({
-      userId,
-      userName: userName ?? userId,
-      timers: currentTimers.map(t => ({
-        taskId: t.taskId,
-        taskTitle: t.taskTitle,
-        start: t.start,
-        accumulatedSeconds: t.accumulatedSeconds,
-        isPaused: t.isPaused,
-      })),
-      updatedAt: Date.now(),
+  function sendBroadcast(ch: any, currentTimers: TimerEntry[]) {
+    if (!ch) return
+    ch.send({
+      type: 'broadcast',
+      event: 'timer-state',
+      payload: {
+        userId,
+        userName: userName ?? userId,
+        timers: currentTimers.map(t => ({
+          taskId: t.taskId,
+          taskTitle: t.taskTitle,
+          start: t.start,
+          accumulatedSeconds: t.accumulatedSeconds,
+          isPaused: t.isPaused,
+        })),
+      },
     })
   }
 
@@ -74,21 +77,19 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     setTimers(initial)
 
     const sb = createClient()
-    const ch = sb.channel('active-timers', {
-      config: { presence: { key: userId } },
+    const ch = sb.channel('timers-live', {
+      config: { broadcast: { self: false } },
     })
     presenceChannelRef.current = ch
-    ch.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        broadcastPresence(initial)
-      }
+    ch.subscribe((status: string) => {
+      if (status === 'SUBSCRIBED') sendBroadcast(ch, initial)
     })
 
     const iv = setInterval(() => {
       const current = readTimers()
       setTimers(current)
-      broadcastPresence(current)
-    }, 1000)
+      sendBroadcast(presenceChannelRef.current, current)
+    }, 2000)
 
     return () => {
       clearInterval(iv)
