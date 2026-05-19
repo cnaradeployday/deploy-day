@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { redirect } from 'next/navigation'
 import ResumenMesClient from './ResumenMesClient'
 
@@ -20,6 +21,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   }
   if (!canAccess) redirect('/dashboard')
 
+  const db = createServiceClient()
   const sp = await searchParams
   const mesActual = new Date().toISOString().slice(0, 7)
   const mes = sp.mes ?? mesActual
@@ -29,7 +31,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  const { data: proyectos } = await supabase
+  const { data: proyectos } = await db
     .from('projects')
     .select('id, name, sold_hours, start_date, end_date, client:clients(id, name)')
     .eq('is_active', true)
@@ -45,7 +47,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const proyectoIds = proyectosDelMes.map(p => p.id)
 
   const { data: segmentos } = proyectoIds.length
-    ? await supabase
+    ? await db
         .from('project_hour_segments')
         .select('project_id, horas')
         .in('project_id', proyectoIds)
@@ -54,7 +56,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     : { data: [] }
 
   const { data: todasTareas } = proyectoIds.length
-    ? await supabase
+    ? await db
         .from('tasks')
         .select('id, estimated_hours, project_id, due_date')
         .in('project_id', proyectoIds)
@@ -64,7 +66,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
   const { data: entries } = taskIds.length
-    ? await supabase
+    ? await db
         .from('time_entries')
         .select('task_id, hours_logged')
         .in('task_id', taskIds)
@@ -119,7 +121,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   }))
 
   // Meses disponibles desde segmentos reales
-  const { data: todosSegmentos } = await supabase
+  const { data: todosSegmentos } = await db
     .from('project_hour_segments')
     .select('desde')
     .order('desde', { ascending: false })
