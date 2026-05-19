@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { redirect } from 'next/navigation'
 import OcupacionEquipoClient from './OcupacionEquipoClient'
 
@@ -20,6 +21,7 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   }
   if (!canAccess) redirect('/dashboard')
 
+  const db = createServiceClient()
   const sp = await searchParams
   const mesActual = new Date().toISOString().slice(0, 7)
   const mes = sp.mes ?? mesActual
@@ -27,29 +29,29 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  const { data: usuarios } = await supabase
+  const { data: usuarios } = await db
     .from('users').select('id, full_name').eq('is_active', true).order('full_name')
 
   const userIds = (usuarios ?? []).map((u: any) => u.id)
 
-  const { data: disponibilidades } = userIds.length ? await supabase
+  const { data: disponibilidades } = userIds.length ? await db
     .from('user_availability').select('user_id, horas')
     .in('user_id', userIds).lte('desde', ultimoDia).gte('hasta', primerDia)
     : { data: [] }
 
-  const { data: tareasDirectas } = await supabase
+  const { data: tareasDirectas } = await db
     .from('tasks').select('direct_responsible_id, direct_hours')
     .not('status', 'in', '(presentado)')
     .gte('due_date', primerDia).lte('due_date', ultimoDia)
     .not('direct_responsible_id', 'is', null)
 
-  const { data: tareasColab } = await supabase
+  const { data: tareasColab } = await db
     .from('task_collaborators')
     .select('user_id, assigned_hours, task:tasks(due_date, status)')
     .gte('task.due_date', primerDia)
     .lte('task.due_date', ultimoDia)
 
-  const { data: timeEntries } = userIds.length ? await supabase
+  const { data: timeEntries } = userIds.length ? await db
     .from('time_entries').select('user_id, hours_logged')
     .in('user_id', userIds).gte('entry_date', primerDia).lte('entry_date', ultimoDia)
     : { data: [] }
@@ -85,7 +87,7 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
       disponibles: Math.round((disponibilidad - programadas) * 10) / 10 }
   })
 
-  const { data: segmentos } = await supabase
+  const { data: segmentos } = await db
     .from('project_hour_segments').select('desde').order('desde', { ascending: false })
   const mesesDisponibles = [...new Set(
     (segmentos ?? []).map((s: any) => s.desde?.slice(0, 7)).filter(Boolean)

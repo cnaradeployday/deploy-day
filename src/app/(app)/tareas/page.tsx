@@ -1,18 +1,37 @@
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
 
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role, custom_role_id').eq('id', user.id).single()
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'tareas').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
+
+  const db = createServiceClient()
   const sp = await searchParams
   const { status, priority, cliente, proyecto, responsable, mes } = sp
 
-  const { data: clientes } = await supabase.from('clients').select('id, name').order('name')
-  const { data: proyectosAll } = await supabase.from('projects').select('id, name, client_id').order('name')
-  const { data: usuarios } = await supabase.from('users').select('id, full_name').eq('is_active', true).order('full_name')
+  const { data: clientes } = await db.from('clients').select('id, name').order('name')
+  const { data: proyectosAll } = await db.from('projects').select('id, name, client_id').order('name')
+  const { data: usuarios } = await db.from('users').select('id, full_name').eq('is_active', true).order('full_name')
 
-  let query = supabase
+  let query = db
     .from('tasks')
     .select(`id, title, status, priority, due_date, estimated_hours,
       project:projects(id, name, client:clients(id, name)),
@@ -42,7 +61,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
   const [hy, hm] = (mesParaHoras ?? new Date().toISOString().slice(0,7)).split('-').map(Number)
   const hDesde = new Date(hy, hm - 1, 1).toISOString().split('T')[0]
   const hHasta = new Date(hy, hm, 0).toISOString().split('T')[0]
-  const { data: segmentosMes } = await supabase
+  const { data: segmentosMes } = await db
     .from('project_hour_segments')
     .select('horas')
     .lte('desde', hHasta)
@@ -51,7 +70,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
 
   const taskIds = tareas?.map(t => t.id) ?? []
   const { data: timeEntries } = taskIds.length
-    ? await supabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
+    ? await db.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
     : { data: [] }
 
   const horasPorTarea: Record<string, number> = {}
