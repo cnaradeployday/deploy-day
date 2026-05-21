@@ -161,7 +161,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         </div>
         <TimeEntriesList
           entries={(t.time_entries as any[]) ?? []}
-          canEdit={isAdmin}
+          canEdit={canEditTask}
           currentUserId={user?.id ?? ''}
         />
       </div>
