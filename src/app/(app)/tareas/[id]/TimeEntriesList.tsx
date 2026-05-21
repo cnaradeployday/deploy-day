@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
+import { updateTimeEntryAction, deleteTimeEntryAction } from './timeEntryActions'
 
 interface Entry {
   id: string
@@ -36,22 +36,26 @@ export default function TimeEntriesList({
     const h = parseFloat(editHours)
     if (!h || h <= 0) return
     setLoading(true)
-    const { error } = await createClient()
-      .from('time_entries')
-      .update({ hours_logged: h, notes: editNotes || null, entry_date: editDate })
-      .eq('id', id)
+    try {
+      await updateTimeEntryAction(id, h, editNotes || null, editDate)
+      setEditId(null)
+      router.refresh()
+    } catch (err: any) {
+      alert('Error: ' + err.message)
+    }
     setLoading(false)
-    if (error) { alert('Error: ' + error.message); return }
-    setEditId(null)
-    router.refresh()
   }
 
   async function deleteEntry(id: string) {
     if (!confirm('¿Eliminar esta entrada de horas?')) return
     setLoading(true)
-    await createClient().from('time_entries').delete().eq('id', id)
+    try {
+      await deleteTimeEntryAction(id)
+      router.refresh()
+    } catch (err: any) {
+      alert('Error al eliminar: ' + err.message)
+    }
     setLoading(false)
-    router.refresh()
   }
 
   if (!entries.length) return null
