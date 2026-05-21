@@ -107,7 +107,7 @@ export default function TimeEntriesList({
                   <div className="flex items-center gap-1 ml-3 shrink-0">
                     <div className="text-right mr-1">
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
-                      <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
+                      <p className="text-xs text-gray-400">{new Date(e.entry_date + 'T12:00:00').toLocaleDateString('es-AR')}</p>
                     </div>
                     {canEdit && (
                       <>
