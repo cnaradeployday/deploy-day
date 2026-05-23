@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import ResumenMesClient from './ResumenMesClient'
 
@@ -63,8 +64,12 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
+  // Use admin client to bypass RLS — this page is only reachable with explicit permission
+  // and needs to aggregate hours from all users, not just the current one.
+  // Requires SUPABASE_SERVICE_ROLE_KEY in Vercel environment variables.
+  const adminSb = createAdminClient()
   const { data: entries } = taskIds.length
-    ? await supabase
+    ? await adminSb
         .from('time_entries')
         .select('task_id, hours_logged')
         .in('task_id', taskIds)

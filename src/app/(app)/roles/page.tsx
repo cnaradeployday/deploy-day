@@ -11,6 +11,8 @@ const MODULES = [
   { key: 'crear_tareas',          label: 'Crear tareas' },
   { key: 'mis_tareas',            label: 'Mis tareas' },
   { key: 'mis_horas',             label: 'Mis horas' },
+  { key: 'ver_horas_estimadas',   label: 'Ver horas estimadas' },
+  { key: 'editar_historial_horas', label: 'Editar historial de horas' },
   { key: 'cronometros',           label: 'Cronómetros activos' },
   { key: 'chat',                  label: 'Chat' },
   { key: 'mi_pizarra',            label: 'Mi pizarra' },

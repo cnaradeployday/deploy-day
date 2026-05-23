@@ -153,6 +153,15 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   }, [])
 
   async function stopTimer(taskId: string) {
+    const storageKey = `timer_${taskId}_${userId}`
+    // Guard against double-save: if TaskTimer already stopped this timer,
+    // localStorage is already gone — update state without inserting a duplicate entry.
+    if (!localStorage.getItem(storageKey)) {
+      const updated = timers.filter(t => t.taskId !== taskId)
+      setTimers(updated)
+      sendBroadcast(presenceChannelRef.current, updated)
+      return
+    }
     const entry = timers.find(t => t.taskId === taskId)
     if (!entry) return
     const secs = calcSeconds(entry)
@@ -165,7 +174,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
         notes: 'Registrado con cronómetro',
       })
     }
-    localStorage.removeItem(`timer_${taskId}_${userId}`)
+    localStorage.removeItem(storageKey)
     const updated = timers.filter(t => t.taskId !== taskId)
     setTimers(updated)
     sendBroadcast(presenceChannelRef.current, updated)

@@ -31,13 +31,14 @@ interface Props {
   filters: Record<string, string | undefined>
   mesActual: string
   canCreateTask?: boolean
+  canVerHorasEstimadas?: boolean
   horasEstimadasDelMes?: number
   userId?: string
 }
 
 export default function MisTareasClient({
   tareas, proyectos, clientes, filters, mesActual,
-  canCreateTask = true, horasEstimadasDelMes = 0, userId = ''
+  canCreateTask = true, canVerHorasEstimadas = false, horasEstimadasDelMes = 0, userId = ''
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -155,17 +156,23 @@ export default function MisTareasClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        {[
-          { label: 'Horas estimadas (mes)', value: Math.round(horasEstimadasDelMes * 10) / 10, color: 'text-gray-900' },
-          { label: 'Horas usadas (mes)',    value: Math.round(totalUsadas * 10) / 10,           color: 'text-[#1B9BF0]' },
-          { label: 'Restantes',             value: Math.round(totalRestantes * 10) / 10,         color: totalRestantes < 0 ? 'text-red-500' : 'text-green-600' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-400">{label}</p>
-            <p className={'text-xl font-bold mt-0.5 ' + color}>{value}h</p>
+      <div className={`grid gap-3 mb-4 ${canVerHorasEstimadas ? 'grid-cols-3' : 'grid-cols-1 max-w-xs'}`}>
+        {canVerHorasEstimadas && (
+          <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+            <p className="text-xs text-gray-400">Horas estimadas (mes)</p>
+            <p className="text-xl font-bold mt-0.5 text-gray-900">{Math.round(horasEstimadasDelMes * 10) / 10}h</p>
           </div>
-        ))}
+        )}
+        <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+          <p className="text-xs text-gray-400">Horas usadas (mes)</p>
+          <p className="text-xl font-bold mt-0.5 text-[#1B9BF0]">{Math.round(totalUsadas * 10) / 10}h</p>
+        </div>
+        {canVerHorasEstimadas && (
+          <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+            <p className="text-xs text-gray-400">Restantes</p>
+            <p className={'text-xl font-bold mt-0.5 ' + (totalRestantes < 0 ? 'text-red-500' : 'text-green-600')}>{Math.round(totalRestantes * 10) / 10}h</p>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
@@ -217,7 +224,8 @@ export default function MisTareasClient({
         <table className="w-full table-fixed">
           <colgroup>
             <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
-            <col style={{width:'14%'}}/><col style={{width:'13%'}}/><col style={{width:'5%'}}/>
+            <col style={{width:'14%'}}/><col style={{width:'13%'}}/>
+            {canVerHorasEstimadas && <col style={{width:'5%'}}/>}
             <col style={{width:'9%'}}/><col style={{width:'7%'}}/><col style={{width:'8%'}}/>
             <col style={{width:'9%'}}/><col style={{width:'6%'}}/>
           </colgroup>
@@ -226,7 +234,8 @@ export default function MisTareasClient({
               {[
                 { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
                 { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
+                { key: 'responsible', label: 'Responsable' },
+                ...(canVerHorasEstimadas ? [{ key: 'my_assigned_hours', label: 'Est.' }] : []),
                 { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
                 { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
                 { key: 'actions', label: '' },
@@ -262,11 +271,11 @@ export default function MisTareasClient({
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  {canVerHorasEstimadas && <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
-                      <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
-                      {pct !== null && (
+                      <span className={'text-xs font-medium ' + (canVerHorasEstimadas && pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
+                      {canVerHorasEstimadas && pct !== null && (
                         <div className="w-8 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')} style={{ width: Math.min(100, pct) + '%' }}/>
                         </div>
@@ -325,7 +334,7 @@ export default function MisTareasClient({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
-                  <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
+                  <span>{t.hours_logged ?? 0}h{canVerHorasEstimadas && myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Link href={`/tareas/${t.id}`} prefetch={false}

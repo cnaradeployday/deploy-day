@@ -65,6 +65,24 @@ export default async function TareaDetailPage({ params, searchParams }: { params
     canCargarHorasOtros = permHoras?.can_read ?? false
   }
 
+  // Permiso ver horas estimadas
+  let canVerHorasEstimadas = isAdmin
+  if (!canVerHorasEstimadas && profile?.custom_role_id) {
+    const { data: permEst } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'ver_horas_estimadas').single()
+    canVerHorasEstimadas = permEst?.can_read ?? false
+  }
+
+  // Permiso editar historial de horas
+  let canEditTimeEntries = isAdmin
+  if (!canEditTimeEntries && profile?.custom_role_id) {
+    const { data: permEditHoras } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'editar_historial_horas').single()
+    canEditTimeEntries = permEditHoras?.can_read ?? false
+  }
+
   const isDirectResponsible = t.direct_responsible_id === user?.id
   const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
@@ -117,13 +135,13 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <div className={`grid grid-cols-2 gap-3 mb-4 ${canVerHorasEstimadas ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {[
-          { label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' },
+          ...(canVerHorasEstimadas ? [{ label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' }] : []),
           { label: 'Horas cargadas', value: Math.round(totalLogged * 100) / 100 + 'h' },
           { label: 'Responsable', value: (t.direct_responsible as any)?.full_name ?? '—' },
           { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', alert: isOverdue },
-        ].map(({ label, value, alert }) => (
+        ].map(({ label, value, alert }: any) => (
           <div key={label} className={'bg-white rounded-2xl border px-4 py-3 ' + (alert ? 'border-red-200' : 'border-gray-100')}>
             <p className="text-xs text-gray-400">{label}</p>
             <p className={'text-sm font-semibold mt-0.5 ' + (alert ? 'text-red-500' : 'text-gray-900')}>{value}</p>
@@ -132,7 +150,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         ))}
       </div>
 
-      {t.estimated_hours && (
+      {canVerHorasEstimadas && t.estimated_hours && (
         <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 mb-4">
           <div className="flex justify-between text-xs text-gray-400 mb-1.5">
             <span>Progreso</span>
@@ -161,7 +179,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         </div>
         <TimeEntriesList
           entries={(t.time_entries as any[]) ?? []}
-          canEdit={isAdmin}
+          canEdit={canEditTimeEntries}
           currentUserId={user?.id ?? ''}
         />
       </div>
