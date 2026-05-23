@@ -39,15 +39,15 @@ function formatMonto(importe: number, currency: string): string {
 }
 
 const cellBg: Record<EstadoEfectivo, string> = {
-  cobrada:  'bg-green-50 border-green-200',
-  pendiente: 'bg-amber-50 border-amber-200',
-  vencida:   'bg-red-50 border-red-200',
+  cobrada:   'bg-green-300 border-green-400',
+  pendiente: 'bg-orange-400 border-orange-500',
+  vencida:   'bg-red-500 border-red-600',
 }
 
 const cellText: Record<EstadoEfectivo, string> = {
-  cobrada:  'text-green-700',
-  pendiente: 'text-amber-700',
-  vencida:   'text-red-700',
+  cobrada:   'text-green-900',
+  pendiente: 'text-orange-950',
+  vencida:   'text-white',
 }
 
 export default function ResumenFacturasClient({
@@ -133,11 +133,11 @@ export default function ResumenFacturasClient({
       {/* Leyenda */}
       <div className="flex items-center gap-5 mb-4 flex-wrap">
         {([
-          ['cobrada',    'bg-green-50 border-green-200', 'text-green-700', 'Pagada'],
-          ['pendiente',  'bg-amber-50 border-amber-200', 'text-amber-700', 'Pendiente de cobro'],
-          ['vencida',    'bg-red-50 border-red-200',     'text-red-700',   'Vencida'],
-          ['sin_factura','bg-white border-gray-200',     'text-gray-300',  'Sin factura'],
-        ] as const).map(([, bg, , label]) => (
+          ['cobrada',    'bg-green-300 border-green-400',  'Pagada'],
+          ['pendiente',  'bg-orange-400 border-orange-500','Pendiente de cobro'],
+          ['vencida',    'bg-red-500 border-red-600',      'Vencida'],
+          ['sin_factura','bg-white border-gray-200',       'Sin factura'],
+        ] as const).map(([, bg, label]) => (
           <div key={label} className="flex items-center gap-1.5">
             <div className={`w-3.5 h-3.5 rounded border ${bg}`} />
             <span className="text-xs text-gray-500">{label}</span>
