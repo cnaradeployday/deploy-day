@@ -100,6 +100,16 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   }, [userId])
 
   useEffect(() => {
+    function handleTimerChanged() {
+      const current = readTimers()
+      setTimers(current)
+    }
+    window.addEventListener('timer-changed', handleTimerChanged)
+    return () => window.removeEventListener('timer-changed', handleTimerChanged)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem('timer_bubble_pos')
       if (saved) {
@@ -153,6 +163,13 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   }, [])
 
   async function stopTimer(taskId: string) {
+    const storageEntry = localStorage.getItem(`timer_${taskId}_${userId}`)
+    if (!storageEntry) {
+      const updated = timers.filter(t => t.taskId !== taskId)
+      setTimers(updated)
+      sendBroadcast(presenceChannelRef.current, updated)
+      return
+    }
     const entry = timers.find(t => t.taskId === taskId)
     if (!entry) return
     const secs = calcSeconds(entry)

@@ -85,6 +85,7 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
       setAccumulatedSeconds(0)
       setStartTime(null)
       localStorage.removeItem(storageKey)
+      window.dispatchEvent(new CustomEvent('timer-changed'))
       return
     }
     setLoading(true)
@@ -108,6 +109,7 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
     setAccumulatedSeconds(0)
     setStartTime(null)
     localStorage.removeItem(storageKey)
+    window.dispatchEvent(new CustomEvent('timer-changed'))
     router.refresh()
     setLoading(false)
   }

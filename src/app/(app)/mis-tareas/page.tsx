@@ -105,7 +105,9 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     : { data: [] }
 
   const misHorasPorTarea: Record<string, number> = {}
+  const totalHorasPorTarea: Record<string, number> = {}
   timeEntries?.forEach((e: any) => {
+    totalHorasPorTarea[e.task_id] = (totalHorasPorTarea[e.task_id] ?? 0) + e.hours_logged
     if (e.user_id === user?.id) {
       misHorasPorTarea[e.task_id] = (misHorasPorTarea[e.task_id] ?? 0) + e.hours_logged
     }
@@ -113,7 +115,8 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
 
   const tareasConHoras = tareasFiltered.map((t: any) => ({
     ...t,
-    hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
+    hours_logged: Math.round((totalHorasPorTarea[t.id] ?? 0) * 10) / 10,
+    my_hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
   }))
 
   const horasEstimadasDelMes = tareasFiltered.filter((t: any) => !t.desde_segmento)

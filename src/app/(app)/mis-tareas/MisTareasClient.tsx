@@ -99,7 +99,7 @@ export default function MisTareasClient({
     return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
-  const totalUsadas = tareasLocal.reduce((s, t) => s + (t.hours_logged ?? 0), 0)
+  const totalUsadas = tareasLocal.reduce((s, t) => s + (t.my_hours_logged ?? t.hours_logged ?? 0), 0)
   const totalRestantes = horasEstimadasDelMes - totalUsadas
 
   async function advanceStatus(taskId: string, status: string) {
