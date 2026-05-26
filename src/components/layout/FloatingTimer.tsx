@@ -166,6 +166,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
       })
     }
     localStorage.removeItem(`timer_${taskId}_${userId}`)
+    window.dispatchEvent(new CustomEvent('timer-stopped', { detail: { taskId } }))
     const updated = timers.filter(t => t.taskId !== taskId)
     setTimers(updated)
     sendBroadcast(presenceChannelRef.current, updated)
