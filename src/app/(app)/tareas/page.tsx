@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
@@ -50,8 +51,13 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
   const totalVendidas = (segmentosMes ?? []).reduce((s, seg) => s + seg.horas, 0)
 
   const taskIds = tareas?.map(t => t.id) ?? []
+  // Use admin client to bypass RLS so all users see total hours, not just their own
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const { data: timeEntries } = taskIds.length
-    ? await supabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
+    ? await admin.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
     : { data: [] }
 
   const horasPorTarea: Record<string, number> = {}
