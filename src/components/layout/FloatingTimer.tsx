@@ -28,6 +28,7 @@ function calcSeconds(entry: TimerEntry): number {
 
 export default function FloatingTimer({ userId, userName }: { userId: string; userName?: string }) {
   const [timers, setTimers] = useState<TimerEntry[]>([])
+  const [stoppingIds, setStoppingIds] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState(true)
   const [pos, setPos] = useState({ x: -1, y: -1 })
   const dragging = useRef(false)
@@ -153,8 +154,10 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   }, [])
 
   async function stopTimer(taskId: string) {
+    if (stoppingIds.has(taskId)) return
     const entry = timers.find(t => t.taskId === taskId)
     if (!entry) return
+    setStoppingIds(prev => new Set(prev).add(taskId))
     const secs = calcSeconds(entry)
     const hours = Math.round((secs / 3600) * 100) / 100
     if (hours > 0) {
@@ -169,6 +172,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     window.dispatchEvent(new CustomEvent('timer-stopped', { detail: { taskId } }))
     const updated = timers.filter(t => t.taskId !== taskId)
     setTimers(updated)
+    setStoppingIds(prev => { const s = new Set(prev); s.delete(taskId); return s })
     sendBroadcast(presenceChannelRef.current, updated)
     router.refresh()
   }
@@ -208,8 +212,9 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button onClick={() => stopTimer(entry.taskId)}
-                      className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all">
-                      <Square size={10}/> Detener y guardar
+                      disabled={stoppingIds.has(entry.taskId)}
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all disabled:opacity-50">
+                      <Square size={10}/> {stoppingIds.has(entry.taskId) ? 'Guardando...' : 'Detener y guardar'}
                     </button>
                     <span className="text-[10px] text-gray-500 shrink-0">{(Math.round((secs / 3600) * 100) / 100)}h</span>
                   </div>

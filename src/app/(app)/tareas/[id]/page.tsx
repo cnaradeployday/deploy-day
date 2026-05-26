@@ -163,6 +163,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
           entries={(t.time_entries as any[]) ?? []}
           canEdit={isAdmin}
           currentUserId={user?.id ?? ''}
+          taskId={t.id}
         />
       </div>
 

@@ -2,6 +2,13 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
+export async function deleteTimeEntryAction(entryId: string, taskId: string) {
+  const supabase = await createClient()
+  const { error } = await supabase.from('time_entries').delete().eq('id', entryId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/tareas/${taskId}`)
+}
+
 export async function deleteTaskAction(taskId: string) {
   const supabase = await createClient()
   // Clean up all FK references before deleting the task
