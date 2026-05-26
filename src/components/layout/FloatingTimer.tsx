@@ -79,7 +79,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
 
     const sb = createClient()
     const ch = sb.channel('timers-live', {
-      config: { broadcast: { self: false } },
+      config: { broadcast: { self: true } },
     })
     presenceChannelRef.current = ch
     ch.subscribe((status: string) => {

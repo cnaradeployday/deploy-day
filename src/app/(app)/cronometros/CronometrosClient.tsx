@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { Clock, User } from 'lucide-react'
 import Link from 'next/link'
@@ -44,18 +43,7 @@ export default function CronometrosClient() {
   const userMapRef = useRef<Record<string, UserState>>({})
 
   useEffect(() => {
-    // Fresh Supabase client (separate WebSocket from the FloatingTimer singleton)
-    // so broadcast messages from FloatingTimer are delivered here by the server.
-    const sb = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
-    // Pass the current session so the Realtime connection stays authenticated
-    createClient().auth.getSession().then(({ data: { session } }) => {
-      if (session) sb.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token ?? '' })
-    })
-
+    const sb = createClient()
     const ch = sb.channel('timers-live')
     ch.on('broadcast', { event: 'timer-state' }, ({ payload }: any) => {
       if (!payload?.userId) return
