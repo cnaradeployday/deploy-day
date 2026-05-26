@@ -51,6 +51,11 @@ export default function CronometrosClient() {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
+    // Pass the current session so the Realtime connection stays authenticated
+    createClient().auth.getSession().then(({ data: { session } }) => {
+      if (session) sb.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token ?? '' })
+    })
+
     const ch = sb.channel('timers-live')
     ch.on('broadcast', { event: 'timer-state' }, ({ payload }: any) => {
       if (!payload?.userId) return
@@ -75,7 +80,7 @@ export default function CronometrosClient() {
       const cleaned: Record<string, UserState> = {}
       let changed = false
       for (const [uid, state] of Object.entries(current)) {
-        if (now - state.lastSeen < 8000) {
+        if (now - state.lastSeen < 15000) {
           cleaned[uid] = state
         } else {
           changed = true

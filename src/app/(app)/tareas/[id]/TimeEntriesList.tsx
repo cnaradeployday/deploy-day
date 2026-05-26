@@ -10,6 +10,7 @@ interface Entry {
   hours_logged: number
   entry_date: string
   notes: string | null
+  user_id?: string
   user: { full_name: string } | null
 }
 
@@ -113,7 +114,7 @@ export default function TimeEntriesList({
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
                       <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
                     </div>
-                    {canEdit && (
+                    {(canEdit || e.user_id === currentUserId) && (
                       <>
                         <button onClick={() => startEdit(e)} title="Editar"
                           className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">

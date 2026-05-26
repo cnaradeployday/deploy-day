@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
@@ -34,15 +35,25 @@ export default async function TareaDetailPage({ params, searchParams }: { params
     .select(`*,
       project:projects(id, name, client:clients(name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
-      task_collaborators(id, assigned_hours, user:users(id, full_name)),
-      time_entries(id, hours_logged, entry_date, notes, user:users(full_name))`)
+      task_collaborators(id, assigned_hours, user:users(id, full_name))`)
     .eq('id', id).single()
   if (!t) notFound()
+
+  // Fetch all time entries bypassing RLS so all users see the full total
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { data: timeEntries } = await admin
+    .from('time_entries')
+    .select('id, hours_logged, entry_date, notes, user_id, user:users(full_name)')
+    .eq('task_id', id)
+    .order('entry_date', { ascending: false })
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('users').select('role, full_name, custom_role_id').eq('id', user?.id ?? '').single()
 
-  const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
+  const totalLogged = (timeEntries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
@@ -155,12 +166,12 @@ export default async function TareaDetailPage({ params, searchParams }: { params
             userId={user?.id ?? ''}
             userRole={profile?.role ?? 'colaborador'}
             canCargarHorasOtros={canCargarHorasOtros}
-            timeEntries={(t.time_entries as any[]) ?? []}
+            timeEntries={(timeEntries as any[]) ?? []}
             isDirectResponsible={isDirectResponsible}
           />
         </div>
         <TimeEntriesList
-          entries={(t.time_entries as any[]) ?? []}
+          entries={(timeEntries as any[]) ?? []}
           canEdit={isAdmin}
           currentUserId={user?.id ?? ''}
           taskId={t.id}

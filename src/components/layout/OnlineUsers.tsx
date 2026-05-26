@@ -63,7 +63,7 @@ async function init() {
   })
 }
 
-export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean }) {
+export default function OnlineUsers({ collapsed = false, canSee = true }: { collapsed?: boolean; canSee?: boolean }) {
   const [users, setUsers] = useState<OnlineUser[]>(_state.users)
   const [myId, setMyId] = useState<string | null>(_state.myId)
   const [showTooltip, setShowTooltip] = useState(false)
@@ -89,6 +89,8 @@ export default function OnlineUsers({ collapsed = false }: { collapsed?: boolean
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  if (!canSee) return null
 
   const count = users.length
 

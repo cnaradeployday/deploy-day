@@ -259,7 +259,7 @@ export default function AppLayout({
         </nav>
 
         <div className={`shrink-0 border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
-          {canSeeOnlineUsers && <OnlineUsers collapsed={isCollapsed}/>}
+          <OnlineUsers collapsed={isCollapsed} canSee={canSeeOnlineUsers}/>
           {!isCollapsed && <span className="text-xs text-gray-300">v{APP_VERSION}</span>}
           <button onClick={logout} title="Cerrar sesión" className={`flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 ${isCollapsed ? 'justify-center' : ''}`}>
             <LogOut size={13}/> {!isCollapsed && 'Salir'}
@@ -308,7 +308,7 @@ export default function AppLayout({
             </nav>
             <div className="px-4 py-4 border-t border-gray-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {canSeeOnlineUsers && <OnlineUsers/>}
+                <OnlineUsers canSee={canSeeOnlineUsers}/>
                 <span className="text-xs text-gray-300">v{APP_VERSION}</span>
               </div>
               <button onClick={logout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-all">
