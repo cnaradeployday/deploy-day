@@ -153,6 +153,16 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   }, [])
 
   async function stopTimer(taskId: string) {
+    const storageKey = `timer_${taskId}_${userId}`
+    const currentData = localStorage.getItem(storageKey)
+    if (!currentData) {
+      // Already stopped elsewhere (e.g. TaskTimer), just clean up state
+      const updated = timers.filter(t => t.taskId !== taskId)
+      setTimers(updated)
+      sendBroadcast(presenceChannelRef.current, updated)
+      router.refresh()
+      return
+    }
     const entry = timers.find(t => t.taskId === taskId)
     if (!entry) return
     const secs = calcSeconds(entry)
@@ -165,7 +175,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
         notes: 'Registrado con cronómetro',
       })
     }
-    localStorage.removeItem(`timer_${taskId}_${userId}`)
+    localStorage.removeItem(storageKey)
     const updated = timers.filter(t => t.taskId !== taskId)
     setTimers(updated)
     sendBroadcast(presenceChannelRef.current, updated)
