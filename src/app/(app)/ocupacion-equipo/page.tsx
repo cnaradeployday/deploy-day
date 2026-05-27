@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import OcupacionEquipoClient from './OcupacionEquipoClient'
 
@@ -50,7 +51,12 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
     .gte('task.due_date', primerDia)
     .lte('task.due_date', ultimoDia)
 
-  const { data: timeEntries } = userIds.length ? await supabase
+  // Use admin client to bypass RLS so all users see totals for all team members
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  const { data: timeEntries } = userIds.length ? await admin
     .from('time_entries')
     .select('user_id, hours_logged, task:tasks(project:projects(id, client:clients(id, name)))')
     .in('user_id', userIds).gte('entry_date', primerDia).lte('entry_date', ultimoDia)
