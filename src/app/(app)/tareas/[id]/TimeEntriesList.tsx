@@ -3,21 +3,24 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
+import { deleteTimeEntryAction } from '../actions'
 
 interface Entry {
   id: string
   hours_logged: number
   entry_date: string
   notes: string | null
+  user_id?: string
   user: { full_name: string } | null
 }
 
 export default function TimeEntriesList({
-  entries, canEdit, currentUserId,
+  entries, canEdit, currentUserId, taskId,
 }: {
   entries: Entry[]
   canEdit: boolean
   currentUserId: string
+  taskId: string
 }) {
   const router = useRouter()
   const [editId, setEditId] = useState<string | null>(null)
@@ -25,6 +28,7 @@ export default function TimeEntriesList({
   const [editNotes, setEditNotes] = useState('')
   const [editDate, setEditDate] = useState('')
   const [loading, setLoading] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   function startEdit(e: Entry) {
     setEditId(e.id); setEditHours(String(e.hours_logged))
@@ -48,10 +52,15 @@ export default function TimeEntriesList({
 
   async function deleteEntry(id: string) {
     if (!confirm('¿Eliminar esta entrada de horas?')) return
-    setLoading(true)
-    await createClient().from('time_entries').delete().eq('id', id)
-    setLoading(false)
-    router.refresh()
+    setDeletingId(id)
+    try {
+      await deleteTimeEntryAction(id, taskId)
+      router.refresh()
+    } catch (err: any) {
+      alert('Error al eliminar: ' + err.message)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   if (!entries.length) return null
@@ -105,14 +114,14 @@ export default function TimeEntriesList({
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
                       <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
                     </div>
-                    {canEdit && (
+                    {(canEdit || e.user_id === currentUserId) && (
                       <>
                         <button onClick={() => startEdit(e)} title="Editar"
                           className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                           <Pencil size={11}/>
                         </button>
-                        <button onClick={() => deleteEntry(e.id)} title="Eliminar" disabled={loading}
-                          className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                        <button onClick={() => deleteEntry(e.id)} title="Eliminar" disabled={deletingId === e.id}
+                          className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50">
                           <Trash2 size={11}/>
                         </button>
                       </>
