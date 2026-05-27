@@ -8,6 +8,10 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams
   const { status, priority, cliente, proyecto, responsable, mes } = sp
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = await supabase.from('users').select('role').eq('id', user?.id ?? '').single()
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+
   const { data: clientes } = await supabase.from('clients').select('id, name').order('name')
   const { data: proyectosAll } = await supabase.from('projects').select('id, name, client_id').order('name')
   const { data: usuarios } = await supabase.from('users').select('id, full_name').eq('is_active', true).order('full_name')
@@ -90,6 +94,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
         proyectos={proyectosFiltrados?.map(p => ({ value: p.id, label: p.name })) ?? []}
         usuarios={usuarios?.map(u => ({ value: u.id, label: u.full_name })) ?? []}
         filters={{ status, priority, cliente, proyecto, responsable, mes }}
+        isAdmin={isAdmin}
       />
     </div>
   )

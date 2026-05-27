@@ -72,7 +72,7 @@ function MultiSelect({ label, options, selected, onChange }: { label: string; op
   )
 }
 
-export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number }) {
+export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0, isAdmin = false }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number; isAdmin?: boolean }) {
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams()
   const [sortKey, setSortKey] = useState('due_date'); const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null); const [search, setSearch] = useState('')
@@ -120,11 +120,11 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   async function deleteTask(taskId: string) {
     if (!confirm('Eliminar esta tarea?')) return
     setLoading(taskId)
-    try {
-      await deleteTaskAction(taskId)
+    const { error } = await deleteTaskAction(taskId)
+    if (error) {
+      alert('Error al eliminar: ' + error)
+    } else {
       setDeletedIds(prev => [...prev, taskId])
-    } catch (e: any) {
-      alert('Error al eliminar: ' + e.message)
     }
     setLoading(null)
   }
@@ -201,7 +201,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                   <td className="px-3 py-2.5"><div className="flex items-center gap-0.5">
                     <Link href={'/tareas/' + t.id} title="Ver" className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all"><Pencil size={12}/></Link>
                     {nextStatus[t.status] && <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id} title={nextStatusLabel[t.status]} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all"><CheckCircle size={12}/></button>}
-                    <button onClick={() => deleteTask(t.id)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
+                    {isAdmin && <button onClick={() => deleteTask(t.id)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>}
                   </div></td>
                 </tr>
               )
@@ -226,7 +226,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                 <div className="flex items-center gap-1">
                   <Link href={'/tareas/' + t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50"><Pencil size={14}/></Link>
                   {nextStatus[t.status] && <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50"><CheckCircle size={14}/></button>}
-                  <button onClick={() => deleteTask(t.id)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"><Trash2 size={14}/></button>
+                  {isAdmin && <button onClick={() => deleteTask(t.id)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"><Trash2 size={14}/></button>}
                 </div>
               </div>
             </div>
