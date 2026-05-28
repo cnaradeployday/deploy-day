@@ -39,6 +39,19 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
   }, [storageKey])
 
   useEffect(() => {
+    function handleTimerStopped(e: Event) {
+      const { taskId: stoppedId } = (e as CustomEvent).detail
+      if (stoppedId !== taskId) return
+      setRunning(false)
+      setSeconds(0)
+      setAccumulatedSeconds(0)
+      setStartTime(null)
+    }
+    window.addEventListener('timer-stopped', handleTimerStopped)
+    return () => window.removeEventListener('timer-stopped', handleTimerStopped)
+  }, [taskId])
+
+  useEffect(() => {
     if (running && startTime) {
       intervalRef.current = setInterval(() => {
         setSeconds(accumulatedSeconds + Math.floor((Date.now() - startTime.getTime()) / 1000))
