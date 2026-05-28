@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { updateTaskAction } from '../../actions'
 import Link from 'next/link'
 import { ArrowLeft, X } from 'lucide-react'
 
@@ -55,23 +56,19 @@ export default function EditarTareaPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true); setError('')
-    const supabase = createClient()
-    const { error: err } = await supabase.from('tasks').update({
-      project_id: form.project_id, title: form.title,
-      description: form.description || null, priority: form.priority,
+    const result = await updateTaskAction(id as string, {
+      project_id: form.project_id,
+      title: form.title,
+      description: form.description || null,
+      priority: form.priority,
       due_date: form.due_date || null,
       direct_responsible_id: form.direct_responsible_id || null,
       estimated_hours: totalHoras || null,
       direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
       status: form.status,
-    }).eq('id', id)
-    if (err) { setError('Error: ' + err.message); setLoading(false); return }
-    await supabase.from('task_collaborators').delete().eq('task_id', id)
-    if (colaboradores.length > 0) {
-      await supabase.from('task_collaborators').insert(
-        colaboradores.map(c => ({ task_id: id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
-      )
-    }
+      collaborators: colaboradores,
+    })
+    if (result.error) { setError('Error: ' + result.error); setLoading(false); return }
     router.push('/tareas/' + id)
   }
 
