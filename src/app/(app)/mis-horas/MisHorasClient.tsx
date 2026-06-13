@@ -144,7 +144,7 @@ export default function MisHorasClient({ entries, mes, mesActual, estadoLiquidac
             <span>Mes</span>
             <span className="col-span-2">Tarea</span>
             <span>Cliente</span>
-            <span className="text-right">Horas</span>
+            <span className="text-right">Horas usadas</span>
             <span className="text-right">Estado</span>
           </div>
           {filtered.map(e => (

@@ -13,7 +13,7 @@ const estadoColors: Record<string, string> = {
   pagado: 'bg-green-50 text-green-600',
 }
 const estadoLabels: Record<string, string> = {
-  borrador: 'Realizadas',
+  borrador: 'Horas usadas',
   confirmado_colaborador: 'Confirmadas',
   aprobado_gerente: 'Aprobado — subí tu factura',
   factura_subida: 'Factura enviada',

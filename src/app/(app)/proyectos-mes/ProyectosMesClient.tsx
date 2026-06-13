@@ -179,7 +179,7 @@ export default function ProyectosMesClient({ filas, clientes, mes, mesActual, me
               { key: 'nombre',    label: 'Proyecto',          span: 'col-span-3' },
               { key: 'cliente',   label: 'Cliente',           span: 'col-span-2' },
               { key: 'servicio',  label: 'Tipo de servicio',  span: 'col-span-2' },
-              { key: 'horasMes',  label: 'Horas del mes',     span: 'col-span-2 text-right' },
+              { key: 'horasMes',  label: 'Horas del mes vendidas', span: 'col-span-2 text-right' },
               { key: 'soldHours', label: 'Horas vendidas',    span: 'col-span-1 text-right' },
               { key: 'startDate', label: 'Inicio',            span: 'col-span-1 text-center' },
               { key: 'endDate',   label: 'Fin',               span: 'col-span-1 text-center' },

@@ -226,8 +226,8 @@ export default function MisTareasClient({
               {[
                 { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
                 { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
-                { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
+                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Horas estimadas' },
+                { key: 'hours_logged', label: 'Horas usadas' }, { key: 'due_date', label: 'Vence' },
                 { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
                 { key: 'actions', label: '' },
               ].map(({ key, label }) => (

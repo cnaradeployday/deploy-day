@@ -71,7 +71,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
     { key: 'disponibilidad', label: 'Disponibilidad', title: 'Horas cargadas en el perfil del usuario' },
     { key: 'programadas',    label: 'Estimadas',      title: 'Horas estimadas en tareas del mes' },
     { key: 'disponibles',    label: 'Disponibles',    title: 'Disponibilidad − Programadas' },
-    { key: 'realizadas',     label: 'Realizadas',     title: 'Horas cargadas en time entries del mes' },
+    { key: 'realizadas',     label: 'Horas usadas',   title: 'Horas cargadas en time entries del mes' },
   ]
 
   return (
@@ -104,7 +104,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
           { label: 'Disponibilidad total', value: totales.disponibilidad, color: 'text-gray-900' },
           { label: 'Horas estimadas',      value: totales.programadas,    color: 'text-amber-600' },
           { label: 'Horas disponibles',    value: totales.disponibles,    color: totales.disponibles < 0 ? 'text-red-500' : 'text-green-600' },
-          { label: 'Horas realizadas',     value: totales.realizadas,     color: 'text-[#1B9BF0]' },
+          { label: 'Horas usadas',          value: totales.realizadas,     color: 'text-[#1B9BF0]' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
             <p className="text-xs text-gray-400">{label}</p>

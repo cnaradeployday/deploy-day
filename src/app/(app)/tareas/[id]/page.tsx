@@ -131,7 +131,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
           { label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' },
-          { label: 'Horas cargadas', value: Math.round(totalLogged * 100) / 100 + 'h' },
+          { label: 'Horas usadas', value: Math.round(totalLogged * 100) / 100 + 'h' },
           { label: 'Responsable', value: (t.direct_responsible as any)?.full_name ?? '—' },
           { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', alert: isOverdue },
         ].map(({ label, value, alert }) => (

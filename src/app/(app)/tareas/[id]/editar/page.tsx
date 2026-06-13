@@ -143,7 +143,7 @@ export default function EditarTareaPage() {
           </div>
           <div className="grid grid-cols-5 gap-1 px-1">
             <span className="col-span-3 text-xs text-gray-400">Persona</span>
-            <span className="col-span-2 text-xs text-gray-400">Horas</span>
+            <span className="col-span-2 text-xs text-gray-400">Horas estimadas</span>
           </div>
 
           {/* Responsable */}

@@ -106,7 +106,7 @@ export default function ProyectosClient({ proyectos, clientes, isAdmin, canDelet
     { key: 'name' as SortKey,         label: 'Proyecto',          span: 'col-span-2' },
     { key: 'cliente' as SortKey,       label: 'Cliente',           span: 'col-span-2' },
     { key: 'service_type' as SortKey,  label: 'Tipo de servicio',  span: 'col-span-2' },
-    { key: 'sold_hours' as SortKey,    label: 'Horas',             span: 'col-span-1 text-right' },
+    { key: 'sold_hours' as SortKey,    label: 'Horas vendidas',    span: 'col-span-1 text-right' },
     { key: 'start_date' as SortKey,    label: 'Inicio',            span: 'col-span-1 text-center' },
     { key: 'end_date' as SortKey,      label: 'Fin',               span: 'col-span-1 text-center' },
     { key: 'is_active' as SortKey,     label: 'Estado',            span: 'col-span-1 text-center' },

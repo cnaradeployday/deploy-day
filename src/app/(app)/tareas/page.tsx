@@ -6,7 +6,9 @@ import TareasTable from './TareasTable'
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const sp = await searchParams
-  const { status, priority, cliente, proyecto, responsable, mes } = sp
+  const mesActual = new Date().toISOString().slice(0, 7)
+  const { status, priority, cliente, proyecto, responsable } = sp
+  const mes = sp.mes ?? mesActual
 
   const { data: clientes } = await supabase.from('clients').select('id, name').order('name')
   const { data: proyectosAll } = await supabase.from('projects').select('id, name, client_id').order('name')
