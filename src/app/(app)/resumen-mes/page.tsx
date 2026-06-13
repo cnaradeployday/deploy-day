@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import ResumenMesClient from './ResumenMesClient'
+
+function getAdmin() {
+  return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+}
 
 export default async function ResumenMesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -64,7 +69,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
   const { data: entries } = taskIds.length
-    ? await supabase
+    ? await getAdmin()
         .from('time_entries')
         .select('task_id, hours_logged')
         .in('task_id', taskIds)

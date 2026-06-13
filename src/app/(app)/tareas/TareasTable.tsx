@@ -85,7 +85,7 @@ function MultiSelect({ label, options, selected, onChange, disabled }: { label: 
   )
 }
 
-export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string; clientId?: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number }) {
+export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0, mesesDisponibles = [] }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string; clientId?: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number; mesesDisponibles?: string[] }) {
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams()
   const [sortKey, setSortKey] = useState('due_date'); const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null); const [search, setSearch] = useState('')
@@ -108,7 +108,8 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
 
   const clear = () => { setSelStatus([]); setSelPriority([]); setSelCliente([]); setSelProyecto([]); setSelResponsable([]); setSelMes([]); setSearch(''); router.push(pathname) }
   function toggleSort(key: string) { if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(key); setSortDir('asc') } }
-  const mesesUnicos = useMemo(() => [...new Set(tareas.map(t => mesDeDate(t.due_date)).filter(Boolean))].sort(), [tareas])
+  const mesesDeTareas = useMemo(() => [...new Set(tareas.map(t => mesDeDate(t.due_date)).filter(Boolean))].sort(), [tareas])
+  const mesesUnicos = mesesDisponibles.length > 0 ? mesesDisponibles : mesesDeTareas
 
   const tareasVivas = tareas.filter(t => !deletedIds.includes(t.id))
   const filtered = useMemo(() => tareasVivas.filter(t => {
@@ -146,8 +147,12 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
     if (!confirm('Eliminar esta tarea?')) return
     setLoading(taskId)
     try {
-      await deleteTaskAction(taskId)
-      setDeletedIds(prev => [...prev, taskId])
+      const result = await deleteTaskAction(taskId)
+      if (result?.error) {
+        alert('Error al eliminar: ' + result.error)
+      } else {
+        setDeletedIds(prev => [...prev, taskId])
+      }
     } catch (e: any) {
       alert('Error al eliminar: ' + e.message)
     }

@@ -75,16 +75,15 @@ export async function updateTaskAction(taskId: string, data: {
 }
 
 export async function deleteTaskAction(taskId: string): Promise<{ error: string | null }> {
-  const supabase = await createClient()
-  // Clean up all FK references before deleting the task
-  await supabase.from('time_entries').delete().eq('task_id', taskId)
-  await supabase.from('task_collaborators').delete().eq('task_id', taskId)
-  await supabase.from('task_comments').delete().eq('task_id', taskId)
-  await supabase.from('task_attachments').delete().eq('task_id', taskId)
-  await supabase.from('hour_requests').delete().eq('task_id', taskId)
-  // Null out task references in messages (FK may be RESTRICT)
-  await supabase.from('messages').update({ task_id: null }).eq('task_id', taskId)
-  const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+  const admin = getAdminClient()
+  // Clean up all FK references using admin client to bypass RLS
+  await admin.from('time_entries').delete().eq('task_id', taskId)
+  await admin.from('task_collaborators').delete().eq('task_id', taskId)
+  await admin.from('task_comments').delete().eq('task_id', taskId)
+  await admin.from('task_attachments').delete().eq('task_id', taskId)
+  await admin.from('hour_requests').delete().eq('task_id', taskId)
+  await admin.from('messages').update({ task_id: null }).eq('task_id', taskId)
+  const { error } = await admin.from('tasks').delete().eq('id', taskId)
   if (error) return { error: error.message }
   revalidatePath('/tareas', 'page')
   revalidatePath('/mis-tareas', 'page')

@@ -71,6 +71,16 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     hours_logged: Math.round((horasPorTarea[t.id] ?? 0) * 10) / 10,
   })) ?? []
 
+  // Todos los meses que tienen tareas (sin filtro de mes)
+  const { data: mesesRaw } = await admin
+    .from('tasks')
+    .select('due_date')
+    .not('due_date', 'is', null)
+  const mesesDisponibles = [...new Set(
+    (mesesRaw ?? []).map((t: any) => t.due_date?.slice(0, 7)).filter(Boolean)
+  )].sort() as string[]
+  if (!mesesDisponibles.includes(mesActual)) mesesDisponibles.push(mesActual)
+
   const proyectosFiltrados = cliente
     ? proyectosAll?.filter(p => p.client_id === cliente)
     : proyectosAll
@@ -97,6 +107,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
         proyectos={proyectosAll?.map(p => ({ value: p.id, label: p.name, clientId: p.client_id })) ?? []}
         usuarios={usuarios?.map(u => ({ value: u.id, label: u.full_name })) ?? []}
         filters={{ status, priority, cliente, proyecto, responsable, mes }}
+        mesesDisponibles={mesesDisponibles}
       />
     </div>
   )
