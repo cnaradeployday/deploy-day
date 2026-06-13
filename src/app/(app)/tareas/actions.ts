@@ -70,6 +70,7 @@ export async function updateTaskAction(taskId: string, data: {
 
   revalidatePath(`/tareas/${taskId}`)
   revalidatePath('/tareas')
+  revalidatePath('/mis-tareas')
   return { error: null }
 }
 

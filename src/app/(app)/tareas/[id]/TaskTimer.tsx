@@ -10,6 +10,7 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
   const [loading, setLoading] = useState(false)
   const [startTime, setStartTime] = useState<Date | null>(null)
   const [accumulatedSeconds, setAccumulatedSeconds] = useState(0)
+  const [timerError, setTimerError] = useState<string | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const router = useRouter()
   const storageKey = `timer_${taskId}_${userId}`
@@ -70,14 +71,18 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
   }
 
   function startTimer() {
-    const toRemove: string[] = []
+    setTimerError(null)
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key && key.startsWith('timer_') && key !== 'timer_bubble_pos' && key !== storageKey) {
-        toRemove.push(key)
-      }
+      if (!key || !key.startsWith('timer_') || key === 'timer_bubble_pos' || key === storageKey) continue
+      try {
+        const data = JSON.parse(localStorage.getItem(key) ?? '{}')
+        if (data.userId === userId) {
+          setTimerError(`Tenés el cronómetro de "${data.taskTitle ?? 'otra tarea'}" en curso. Detenelo antes de iniciar uno nuevo.`)
+          return
+        }
+      } catch {}
     }
-    toRemove.forEach(k => localStorage.removeItem(k))
 
     const now = new Date()
     setStartTime(now)
@@ -129,13 +134,20 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
 
   if (!running) {
     return (
-      <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
-        <Clock size={14} className="text-gray-400 shrink-0"/>
-        <span className="text-xs text-gray-400 flex-1">Cronómetro</span>
-        <button onClick={startTimer}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all">
-          <Play size={11}/> Iniciar
-        </button>
+      <div className="space-y-2">
+        <div className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3">
+          <Clock size={14} className="text-gray-400 shrink-0"/>
+          <span className="text-xs text-gray-400 flex-1">Cronómetro</span>
+          <button onClick={startTimer}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-all">
+            <Play size={11}/> Iniciar
+          </button>
+        </div>
+        {timerError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-xs px-3 py-2 rounded-xl">
+            {timerError}
+          </div>
+        )}
       </div>
     )
   }
