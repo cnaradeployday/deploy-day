@@ -94,7 +94,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
         totalVendidas={totalVendidas}
         tareas={tareasConHoras}
         clientes={clientes?.map(c => ({ value: c.id, label: c.name })) ?? []}
-        proyectos={proyectosFiltrados?.map(p => ({ value: p.id, label: p.name })) ?? []}
+        proyectos={proyectosAll?.map(p => ({ value: p.id, label: p.name, clientId: p.client_id })) ?? []}
         usuarios={usuarios?.map(u => ({ value: u.id, label: u.full_name })) ?? []}
         filters={{ status, priority, cliente, proyecto, responsable, mes }}
       />

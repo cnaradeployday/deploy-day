@@ -57,22 +57,35 @@ function PersonChip({ name, assignedHours, usedHours }: { name: string; assigned
   )
 }
 
-function MultiSelect({ label, options, selected, onChange }: { label: string; options: { value: string; label: string }[]; selected: string[]; onChange: (vals: string[]) => void }) {
+function MultiSelect({ label, options, selected, onChange, disabled }: { label: string; options: { value: string; label: string }[]; selected: string[]; onChange: (vals: string[]) => void; disabled?: boolean }) {
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const toggle = (val: string) => { if (selected.includes(val)) onChange(selected.filter(v => v !== val)); else onChange([...selected, val]) }
+  const filtered = search.trim() ? options.filter(o => o.label.toLowerCase().includes(search.trim().toLowerCase())) : options
   return (
     <div className="relative">
       <label className="block text-xs text-gray-400 mb-1">{label}</label>
-      <button type="button" onClick={() => setOpen(!open)} className={"w-full px-3 py-2 border rounded-xl text-xs text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white " + (selected.length > 0 ? 'border-[#1B9BF0] text-[#1B9BF0]' : 'border-gray-200 text-gray-500')}>
+      <button type="button" disabled={disabled} onClick={() => { setOpen(!open); setSearch('') }} className={"w-full px-3 py-2 border rounded-xl text-xs text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white " + (disabled ? 'opacity-40 cursor-not-allowed ' : '') + (selected.length > 0 ? 'border-[#1B9BF0] text-[#1B9BF0]' : 'border-gray-200 text-gray-500')}>
         <span className="truncate">{selected.length === 0 ? 'Todos' : selected.length === 1 ? (options.find(o => o.value === selected[0])?.label ?? selected[0]) : selected.length + ' seleccionados'}</span>
         <ChevronDown size={11} className="shrink-0 ml-1"/>
       </button>
-      {open && (<><div className="fixed inset-0 z-10" onClick={() => setOpen(false)}/><div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">{options.map(o => (<label key={o.value} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-xs text-gray-700"><input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} className="rounded border-gray-300"/><span className="truncate">{o.label}</span></label>))}</div></>)}
+      {open && !disabled && (<>
+        <div className="fixed inset-0 z-10" onClick={() => setOpen(false)}/>
+        <div className="absolute top-full left-0 mt-1 w-60 bg-white border border-gray-200 rounded-xl shadow-lg z-20 flex flex-col">
+          <div className="p-2 border-b border-gray-100">
+            <input autoFocus type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? <p className="text-xs text-gray-400 px-3 py-3 text-center">Sin resultados</p>
+              : filtered.map(o => (<label key={o.value} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer text-xs text-gray-700"><input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)} className="rounded border-gray-300"/><span className="truncate">{o.label}</span></label>))}
+          </div>
+        </div>
+      </>)}
     </div>
   )
 }
 
-export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number }) {
+export default function TareasTable({ tareas, clientes, proyectos, usuarios, filters, hideColumns = [], totalVendidas = 0 }: { tareas: any[]; clientes: { value: string; label: string }[]; proyectos: { value: string; label: string; clientId?: string }[]; usuarios: { value: string; label: string }[]; filters: Record<string, string | undefined>; hideColumns?: string[]; totalVendidas?: number }) {
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams()
   const [sortKey, setSortKey] = useState('due_date'); const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null); const [search, setSearch] = useState('')
@@ -80,6 +93,18 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const [selStatus, setSelStatus] = useState<string[]>([]); const [selPriority, setSelPriority] = useState<string[]>([])
   const [selCliente, setSelCliente] = useState<string[]>([]); const [selProyecto, setSelProyecto] = useState<string[]>([])
   const [selResponsable, setSelResponsable] = useState<string[]>([]); const [selMes, setSelMes] = useState<string[]>([])
+
+  const proyectosFiltradosPorCliente = selCliente.length
+    ? proyectos.filter(p => p.clientId && selCliente.includes(p.clientId))
+    : proyectos
+
+  function handleClienteChange(vals: string[]) {
+    setSelCliente(vals)
+    if (vals.length > 0) {
+      const validIds = new Set(proyectos.filter(p => p.clientId && vals.includes(p.clientId)).map(p => p.value))
+      setSelProyecto(prev => prev.filter(id => validIds.has(id)))
+    }
+  }
 
   const clear = () => { setSelStatus([]); setSelPriority([]); setSelCliente([]); setSelProyecto([]); setSelResponsable([]); setSelMes([]); setSearch(''); router.push(pathname) }
   function toggleSort(key: string) { if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setSortKey(key); setSortDir('asc') } }
@@ -161,8 +186,8 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
           <MultiSelect label="Mes" options={mesesUnicos.map(m => ({ value: m, label: nombreMes(m) }))} selected={selMes} onChange={setSelMes}/>
           <MultiSelect label="Estado" options={Object.entries(statusLabels).map(([v, l]) => ({ value: v, label: l }))} selected={selStatus} onChange={setSelStatus}/>
           <MultiSelect label="Prioridad" options={['baja','media','alta','critica'].map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))} selected={selPriority} onChange={setSelPriority}/>
-          {show('client') && <MultiSelect label="Cliente" options={clientes} selected={selCliente} onChange={setSelCliente}/>}
-          <MultiSelect label="Proyecto" options={proyectos} selected={selProyecto} onChange={setSelProyecto}/>
+          {show('client') && <MultiSelect label="Cliente" options={clientes} selected={selCliente} onChange={handleClienteChange}/>}
+          <MultiSelect label="Proyecto" options={proyectosFiltradosPorCliente} selected={selProyecto} onChange={setSelProyecto}/>
           {show('responsible') && <MultiSelect label="Responsable" options={usuarios} selected={selResponsable} onChange={setSelResponsable}/>}
         </div>
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
