@@ -25,6 +25,14 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     canCreateTask = perm?.can_read ?? false
   }
 
+  let canVerHorasEstimadas = isAdmin
+  if (!canVerHorasEstimadas && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'ver_horas_estimadas').single()
+    canVerHorasEstimadas = perm?.can_read ?? false
+  }
+
   // Tareas donde soy responsable — incluye project_id explícito para segmentos
   const { data: directas } = await supabase
     .from('tasks')
@@ -133,6 +141,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       filters={{ status, priority, proyecto, cliente, mes }}
       mesActual={mesActual}
       canCreateTask={canCreateTask}
+      canVerHorasEstimadas={canVerHorasEstimadas}
       horasEstimadasDelMes={Math.round(horasEstimadasDelMes * 10) / 10}
       userId={user?.id ?? ''}
     />
