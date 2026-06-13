@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -26,11 +25,14 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-white">
       {/* Left panel — branding */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-[#0a0a0a] p-12">
-        <Image src="/logo.jpeg" alt="Deploy Day" width={160} height={48} className="object-contain rounded-lg" />
-        <div className="flex flex-col items-center justify-center flex-1 py-12">
-          <Image src="/mascota.jpeg" alt="Deploy Day mascot" width={280} height={280} className="object-contain rounded-2xl" />
+        {/* Logo en contenedor blanco para que se vea sobre el fondo oscuro */}
+        <div className="bg-white rounded-2xl px-6 py-3 inline-flex self-start">
+          <img src="/logo.jpeg" alt="Deploy Day" className="h-10 w-auto object-contain" />
         </div>
-        <p className="text-gray-600 text-sm">Sistema de gestión de proyectos y tareas</p>
+        <div className="flex flex-col items-center justify-center flex-1 py-12">
+          <img src="/mascota.jpeg" alt="Deploy Day mascot" className="w-72 h-auto object-contain rounded-2xl" />
+        </div>
+        <p className="text-gray-500 text-sm">Sistema de gestión de proyectos y tareas</p>
       </div>
 
       {/* Right panel — form */}
@@ -38,7 +40,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <Image src="/logo.jpeg" alt="Deploy Day" width={140} height={42} className="object-contain rounded-lg" />
+            <img src="/logo.jpeg" alt="Deploy Day" className="h-10 w-auto object-contain" />
           </div>
 
           <div className="mb-8">
