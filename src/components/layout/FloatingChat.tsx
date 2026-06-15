@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { findOrCreateDM, createGroupConversation, fetchConversations, markConversationRead, updateConversationLastMessage } from '@/app/(app)/chat/conversationActions'
-import { MessageSquare, X, Send, Users, Hash, UserPlus, Search, Check } from 'lucide-react'
+import { MessageSquare, X, Send, Users, Hash, UserPlus, Search, Check, Image as ImageIcon } from 'lucide-react'
 import Image from 'next/image'
 
 const GLOBAL_ID = '__global__'
@@ -73,8 +73,11 @@ export default function FloatingChat({ userId }: { userId: string }) {
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [groupMembers, setGroupMembers] = useState<string[]>([])
+  const [pendingDmName, setPendingDmName] = useState<string | null>(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const groupNameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { openRef.current = open }, [open])
   useEffect(() => { activeIdRef.current = activeId }, [activeId])
@@ -148,6 +151,34 @@ export default function FloatingChat({ userId }: { userId: string }) {
     if (messages.length > 0) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
+  // ─── Image paste ─────────────────────────────────────────────────────────
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items)
+    const imageItem = items.find(i => i.type.startsWith('image/'))
+    if (!imageItem || !activeId) return
+    e.preventDefault()
+    const file = imageItem.getAsFile()
+    if (!file) return
+    setUploadingImage(true)
+    const ext = file.type.split('/')[1] ?? 'png'
+    const path = `${userId}/${Date.now()}.${ext}`
+    const { data: up, error } = await sb.storage.from('chat-images').upload(path, file, { contentType: file.type })
+    if (error || !up) { setUploadingImage(false); return }
+    const { data: urlData } = sb.storage.from('chat-images').getPublicUrl(up.path)
+    const url = urlData.publicUrl
+    setUploadingImage(false)
+    const isGlobal = activeId === GLOBAL_ID
+    const { data } = await sb.from('messages').insert({
+      content: url, user_id: userId,
+      is_global: isGlobal,
+      conversation_id: isGlobal ? null : activeId,
+    }).select('id, content, created_at, user_id, conversation_id, is_global, user:users(id, full_name)').single()
+    if (data) {
+      setMessages(prev => prev.find(m => m.id === (data as any).id) ? prev : [...prev, data as any])
+      if (!isGlobal) { await updateConversationLastMessage(activeId); loadConversations() }
+    }
+  }
+
   // ─── Send ────────────────────────────────────────────────────────────────
   async function sendMessage() {
     if (!input.trim() || sending || !activeId) return
@@ -172,12 +203,13 @@ export default function FloatingChat({ userId }: { userId: string }) {
   }
 
   // ─── Open / create DM ────────────────────────────────────────────────────
-  async function openDM(targetId: string) {
+  async function openDM(targetId: string, targetName: string) {
     setTab('convs')
     setSearch('')
     setDmError(null)
+    setPendingDmName(targetName)
     const result = await findOrCreateDM(userId, targetId)
-    if ('error' in result) { setDmError(result.error); return }
+    if ('error' in result) { setDmError(result.error); setPendingDmName(null); return }
     await loadConversations()
     setActiveId(result.id)
   }
@@ -187,8 +219,10 @@ export default function FloatingChat({ userId }: { userId: string }) {
     if (!groupName.trim() || groupMembers.length === 0) return
     const result = await createGroupConversation(groupName.trim(), groupMembers, userId)
     if ('error' in result) { setDmError(result.error); return }
+    const name = groupName.trim()
     setGroupName(''); setGroupMembers([]); setShowNewGroup(false)
     await loadConversations()
+    setPendingDmName(name)
     setActiveId(result.id)
   }
 
@@ -206,8 +240,10 @@ export default function FloatingChat({ userId }: { userId: string }) {
   const totalUnread = globalUnread + conversations.reduce((s, c) => s + c.unread, 0)
   const badgeNum = totalUnread > 9 ? '9+' : String(totalUnread)
   const activeConv = activeId && activeId !== GLOBAL_ID ? conversations.find(c => c.id === activeId) ?? null : null
-  const activeName = activeId === GLOBAL_ID ? 'Chat del equipo' : (activeConv ? convName(activeConv) : '')
+  const activeName = activeId === GLOBAL_ID ? 'Chat del equipo' : (activeConv ? convName(activeConv) : (pendingDmName ?? ''))
   const activeOtherUser = activeConv ? convOtherUser(activeConv) : null
+  // Clear pendingDmName once the conversation is loaded
+  useEffect(() => { if (activeConv) setPendingDmName(null) }, [activeConv?.id])
 
   const filteredConvs = conversations.filter(c =>
     !search || convName(c).toLowerCase().includes(search.toLowerCase())
@@ -221,7 +257,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
       {open && (
         <div
           className="fixed z-50 shadow-2xl rounded-2xl overflow-hidden flex bg-white border border-gray-200"
-          style={{ bottom: 80, right: 24, width: 660, height: 520 }}
+          style={{ bottom: 80, right: 24, width: 'min(660px, calc(100vw - 32px))', height: 'min(520px, calc(100vh - 120px))' }}
         >
           {/* ── LEFT: conversation list ── */}
           <div className="w-56 border-r border-gray-100 flex flex-col shrink-0">
@@ -322,7 +358,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
                     </div>
                   )}
                   {filteredUsers.map(u => (
-                    <button key={u.id} onClick={() => openDM(u.id)}
+                    <button key={u.id} onClick={() => openDM(u.id, u.full_name)}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors">
                       <Av name={u.full_name} url={u.avatar_url} size={36} />
                       <span className="text-xs text-gray-700 truncate">{u.full_name}</span>
@@ -402,10 +438,12 @@ export default function FloatingChat({ userId }: { userId: string }) {
                                   ? 'bg-[#D9FDD3] text-gray-900 rounded-tr-sm'
                                   : 'bg-white text-gray-900 rounded-tl-sm'
                               }`}>
-                                {msg.content}
+                                {/^https?:\/\/.+\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(msg.content)
+                                  ? <img src={msg.content} alt="imagen" className="max-w-[220px] max-h-[160px] rounded-lg object-cover mb-1" />
+                                  : msg.content
+                                }
                                 <span className={`text-[9px] ml-2 align-bottom ${own ? 'text-green-600/60' : 'text-gray-400'}`}>
                                   {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                                  {own && <Check size={10} className="inline ml-0.5" />}
                                 </span>
                               </div>
                             </div>
@@ -424,15 +462,18 @@ export default function FloatingChat({ userId }: { userId: string }) {
                       ref={inputRef} value={input}
                       onChange={e => setInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                      placeholder="Escribí un mensaje..."
+                      onPaste={handlePaste}
+                      placeholder={uploadingImage ? 'Subiendo imagen...' : 'Escribí un mensaje o pegá una imagen...'}
                       rows={1}
-                      className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none max-h-24"
+                      disabled={uploadingImage}
+                      className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none max-h-24 disabled:opacity-50"
                       onInput={e => {
                         const t = e.target as HTMLTextAreaElement
                         t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'
                       }}
                     />
-                    <button onClick={sendMessage} disabled={!input.trim() || sending}
+                    {uploadingImage && <ImageIcon size={14} className="text-[#1B9BF0] animate-pulse shrink-0" />}
+                    <button onClick={sendMessage} disabled={!input.trim() || sending || uploadingImage}
                       className="w-8 h-8 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-full flex items-center justify-center disabled:opacity-30 transition-all shrink-0">
                       <Send size={13} />
                     </button>
@@ -447,10 +488,11 @@ export default function FloatingChat({ userId }: { userId: string }) {
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
               <div className="bg-white rounded-2xl p-5 w-80 shadow-xl">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Nuevo grupo</h3>
-                <input value={groupName} onChange={e => setGroupName(e.target.value)}
-                  placeholder="Nombre del grupo"
+                <input ref={groupNameRef} value={groupName} onChange={e => setGroupName(e.target.value)}
+                  placeholder="Nombre del grupo *"
+                  autoFocus
                   className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
-                <p className="text-xs text-gray-500 mb-2">Participantes:</p>
+                <p className="text-xs text-gray-500 mb-2">Participantes (elegí al menos uno):</p>
                 <div className="max-h-44 overflow-y-auto space-y-0.5 mb-4 -mx-1">
                   {users.filter(u => u.id !== userId).map(u => {
                     const checked = groupMembers.includes(u.id)
