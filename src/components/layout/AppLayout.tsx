@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, MessageSquare, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock } from 'lucide-react'
+import FloatingChat from './FloatingChat'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -20,7 +21,6 @@ const navItems = [
   { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/cronometros',       label: 'Cronómetros',        icon: AlarmClock,      roles: ['admin','gerente_operaciones'] },
-  { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/mi-pizarra',       label: 'Mi pizarra',         icon: StickyNote,      roles: ['admin','gerente_operaciones'], badge: true },
   { href: '/pizarron',         label: 'Pizarrón',           icon: LayoutGrid,      roles: ['admin','gerente_operaciones'] },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
@@ -41,7 +41,6 @@ const bottomNav = [
   { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/chat',          label: 'Chat',       icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/liquidaciones', label: 'Liquid.',    icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
 ]
 
@@ -117,7 +116,6 @@ export default function AppLayout({
   const router = useRouter()
   const mainRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
   const [pizarraUnread, setPizarraUnread] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -166,26 +164,8 @@ export default function AppLayout({
   }
   const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)
-  const isChat = pathname === '/chat'
   const isCollapsed = mounted && collapsed
   const newsPx = hasNews ? 40 : 0
-
-  useEffect(() => {
-    if (!userId) return
-    const sb = createClient()
-    const lastRead = localStorage.getItem('chat_last_read') ?? '1970-01-01'
-    sb.from('messages').select('id', { count: 'exact', head: true }).eq('is_global', true).gt('created_at', lastRead).neq('user_id', userId)
-      .then(({ count }) => setUnreadCount(count ?? 0))
-    const channel = sb.channel('chat-badge-' + userId)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'is_global=eq.true' },
-        (p) => { if (p.new.user_id !== userId) setUnreadCount(c => c + 1) })
-      .subscribe()
-    return () => { sb.removeChannel(channel) }
-  }, [userId])
-
-  useEffect(() => {
-    if (isChat) { localStorage.setItem('chat_last_read', new Date().toISOString()); setUnreadCount(0) }
-  }, [isChat])
 
   const isPizarra = pathname === '/mi-pizarra'
 
@@ -261,7 +241,7 @@ export default function AppLayout({
               </Link>
             : <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
                 active={pathname === item.href || pathname.startsWith(item.href + '/')}
-                badge={item.badge} unreadCount={item.href === '/mi-pizarra' ? pizarraUnread : unreadCount}/>
+                badge={item.badge} unreadCount={pizarraUnread}/>
           )}
           {canManageNews && (isCollapsed
             ? <Link href="/news" title="Anuncios" className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -292,11 +272,6 @@ export default function AppLayout({
         <div className="flex items-center gap-2">
           <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
-            {unreadCount > 0 && !open && (
-              <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
           </button>
         </div>
       </header>
@@ -320,7 +295,7 @@ export default function AppLayout({
               {visible.map(item => (
                 <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
                   active={pathname === item.href || pathname.startsWith(item.href + '/')}
-                  badge={item.badge} unreadCount={item.href === '/mi-pizarra' ? pizarraUnread : unreadCount} onClick={() => setOpen(false)}/>
+                  badge={item.badge} unreadCount={pizarraUnread} onClick={() => setOpen(false)}/>
               ))}
               {canManageNews && <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0} onClick={() => setOpen(false)}/>}
               <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0} onClick={() => setOpen(false)}/>
@@ -343,19 +318,20 @@ export default function AppLayout({
         {visibleBottom.map(item => (
           <BottomNavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
             active={pathname === item.href || pathname.startsWith(item.href + '/')}
-            badge={item.badge} unreadCount={unreadCount}/>
+            badge={item.badge} unreadCount={pizarraUnread}/>
         ))}
       </nav>
 
       <main
         ref={mainRef}
         style={{ marginTop: newsPx }}
-        className={`min-h-screen pt-14 md:pt-0 pb-20 md:pb-0 transition-all duration-200${isChat ? ' flex flex-col' : ''}`}
+        className="min-h-screen pt-14 md:pt-0 pb-20 md:pb-0 transition-all duration-200"
       >
         {children}
       </main>
 
       {userId && <FloatingTimer userId={userId} userName={userName} />}
+      {userId && <FloatingChat userId={userId} />}
     </div>
   )
 }
