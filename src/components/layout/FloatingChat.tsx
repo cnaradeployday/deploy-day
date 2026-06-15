@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { findOrCreateDM, createGroupConversation } from '@/app/(app)/chat/conversationActions'
 import { MessageSquare, X, Send, Users, Hash, UserPlus, Search, Check } from 'lucide-react'
 import Image from 'next/image'
 
@@ -226,54 +227,20 @@ export default function FloatingChat({ userId }: { userId: string }) {
     setTab('convs')
     setSearch('')
     setDmError(null)
-    const { data: myDirectRows, error: membErr } = await sb.from('conversation_members')
-      .select('conversation_id').eq('user_id', userId)
-
-    if (membErr) {
-      setDmError('Error: ' + membErr.message)
-      return
-    }
-
-    const myIds = (myDirectRows ?? []).map((r: any) => r.conversation_id)
-
-    if (myIds.length > 0) {
-      const { data: shared } = await sb.from('conversation_members')
-        .select('conversation_id').eq('user_id', targetId).in('conversation_id', myIds)
-      for (const row of (shared ?? []) as any[]) {
-        const { data: conv } = await sb.from('conversations').select('type').eq('id', row.conversation_id).single()
-        if ((conv as any)?.type === 'direct') { setActiveId(row.conversation_id); return }
-      }
-    }
-
-    const { data: newConv, error: convErr } = await sb.from('conversations')
-      .insert({ type: 'direct', created_by: userId }).select().single()
-    if (convErr || !newConv) {
-      setDmError('Error creando conversación: ' + (convErr?.message ?? 'sin datos'))
-      return
-    }
-    const { error: membInsertErr } = await sb.from('conversation_members').insert([
-      { conversation_id: (newConv as any).id, user_id: userId },
-      { conversation_id: (newConv as any).id, user_id: targetId },
-    ])
-    if (membInsertErr) {
-      setDmError('Error agregando miembros: ' + membInsertErr.message)
-      return
-    }
+    const result = await findOrCreateDM(userId, targetId)
+    if ('error' in result) { setDmError(result.error); return }
     await loadConversations()
-    setActiveId((newConv as any).id)
+    setActiveId(result.id)
   }
 
   // ─── Create group ────────────────────────────────────────────────────────
   async function createGroup() {
     if (!groupName.trim() || groupMembers.length === 0) return
-    const { data: newConv } = await sb.from('conversations')
-      .insert({ type: 'group', name: groupName.trim(), created_by: userId }).select().single()
-    if (!newConv) return
-    const allMembers = [...new Set([userId, ...groupMembers])]
-    await sb.from('conversation_members').insert(allMembers.map(uid => ({ conversation_id: (newConv as any).id, user_id: uid })))
+    const result = await createGroupConversation(groupName.trim(), groupMembers, userId)
+    if ('error' in result) { setDmError(result.error); return }
     setGroupName(''); setGroupMembers([]); setShowNewGroup(false)
     await loadConversations()
-    setActiveId((newConv as any).id)
+    setActiveId(result.id)
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
