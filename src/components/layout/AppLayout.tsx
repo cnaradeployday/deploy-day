@@ -37,7 +37,7 @@ const navItems = [
   { href: '/equipo',            label: 'Equipo',             icon: UserCircle,      roles: ['admin','gerente_operaciones'] },
 ]
 
-const bottomNav = [
+const bottomNav: { href: string; label: string; icon: any; roles: string[]; badge?: boolean }[] = [
   { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
