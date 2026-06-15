@@ -93,7 +93,7 @@ export async function checkComputedNotifications(): Promise<void> {
   const ultimoDia = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
   const userId = user.id
 
-  async function upsert(n: Parameters<typeof createNotification>[0]) {
+  async function upsert(n: Omit<Parameters<typeof createNotification>[0], 'user_id'>) {
     if (n.dedup_key) {
       await admin.from('notifications').upsert(
         { ...n, user_id: userId, created_at: new Date().toISOString() },
