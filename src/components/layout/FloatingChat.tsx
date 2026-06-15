@@ -66,6 +66,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
   const [globalUnread, setGlobalUnread] = useState(0)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [dmError, setDmError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'convs' | 'users'>('convs')
   const [showNewGroup, setShowNewGroup] = useState(false)
@@ -224,11 +225,12 @@ export default function FloatingChat({ userId }: { userId: string }) {
   async function openDM(targetId: string) {
     setTab('convs')
     setSearch('')
+    setDmError(null)
     const { data: myDirectRows, error: membErr } = await sb.from('conversation_members')
       .select('conversation_id').eq('user_id', userId)
 
     if (membErr) {
-      console.error('Chat DM error (¿corriste la migración SQL?):', membErr)
+      setDmError('Error: ' + membErr.message)
       return
     }
 
@@ -245,11 +247,18 @@ export default function FloatingChat({ userId }: { userId: string }) {
 
     const { data: newConv, error: convErr } = await sb.from('conversations')
       .insert({ type: 'direct', created_by: userId }).select().single()
-    if (convErr || !newConv) { console.error('Error creando conversación:', convErr); return }
-    await sb.from('conversation_members').insert([
+    if (convErr || !newConv) {
+      setDmError('Error creando conversación: ' + (convErr?.message ?? 'sin datos'))
+      return
+    }
+    const { error: membInsertErr } = await sb.from('conversation_members').insert([
       { conversation_id: (newConv as any).id, user_id: userId },
       { conversation_id: (newConv as any).id, user_id: targetId },
     ])
+    if (membInsertErr) {
+      setDmError('Error agregando miembros: ' + membInsertErr.message)
+      return
+    }
     await loadConversations()
     setActiveId((newConv as any).id)
   }
@@ -391,6 +400,11 @@ export default function FloatingChat({ userId }: { userId: string }) {
 
               {tab === 'users' && (
                 <>
+                  {dmError && (
+                    <div className="mx-2 mt-2 px-2 py-1.5 bg-red-50 border border-red-200 rounded-lg text-[9px] text-red-600 break-all">
+                      {dmError}
+                    </div>
+                  )}
                   {filteredUsers.map(u => (
                     <button key={u.id} onClick={() => openDM(u.id)}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors">

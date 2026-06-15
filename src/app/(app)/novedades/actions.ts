@@ -19,13 +19,11 @@ export async function createNotification(n: {
 }) {
   const admin = getAdmin()
   if (n.dedup_key) {
-    await admin.from('notifications').upsert(
-      { ...n, created_at: new Date().toISOString() },
-      { onConflict: 'user_id,dedup_key', ignoreDuplicates: true }
-    )
-  } else {
-    await admin.from('notifications').insert(n)
+    const { data: existing } = await admin.from('notifications')
+      .select('id').eq('user_id', n.user_id).eq('dedup_key', n.dedup_key).maybeSingle()
+    if (existing) return
   }
+  await admin.from('notifications').insert(n)
 }
 
 // ─── Fetch + mark read ────────────────────────────────────────────────────────
@@ -90,13 +88,11 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
 
   async function upsert(n: Omit<Parameters<typeof createNotification>[0], 'user_id'>) {
     if (n.dedup_key) {
-      await admin.from('notifications').upsert(
-        { ...n, user_id: userId, created_at: new Date().toISOString() },
-        { onConflict: 'user_id,dedup_key', ignoreDuplicates: true }
-      )
-    } else {
-      await admin.from('notifications').insert({ ...n, user_id: userId })
+      const { data: existing } = await admin.from('notifications')
+        .select('id').eq('user_id', userId).eq('dedup_key', n.dedup_key).maybeSingle()
+      if (existing) return
     }
+    await admin.from('notifications').insert({ ...n, user_id: userId })
   }
 
   // ── 1. Horas: asignadas vs realizadas ──────────────────────────────────────
