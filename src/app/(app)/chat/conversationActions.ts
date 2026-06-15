@@ -103,7 +103,7 @@ export async function createGroupConversation(
   const db = admin()
   // Groups have a name
   const { data: newConv, error } = await db.from('conversations')
-    .insert({ name, created_by: createdBy }).select('id').single()
+    .insert({ name, created_by: createdBy, last_message_at: new Date().toISOString() }).select('id').single()
   if (error || !newConv) return { error: error?.message ?? 'Error creando grupo' }
 
   const allMembers = [...new Set([createdBy, ...memberIds])]

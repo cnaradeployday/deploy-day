@@ -1,8 +1,14 @@
 'use client'
 import { useState } from 'react'
 import { Bell, CheckCheck, Clock, AlertTriangle, StickyNote, LayoutGrid, CheckSquare, Timer, Check } from 'lucide-react'
-import { markNotificationRead, markAllNotificationsRead } from './actions'
+import { markNotificationRead, markAllNotificationsRead, markTaskDone } from './actions'
 import Link from 'next/link'
+
+function extractTaskId(dedupKey: string | null): string | null {
+  if (!dedupKey) return null
+  const m = dedupKey.match(/^task_(?:due_soon|overdue)_([0-9a-f-]{36})_/)
+  return m ? m[1] : null
+}
 
 const TYPE_META: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
   task_assigned:             { icon: CheckSquare,   color: 'text-blue-600',   bg: 'bg-blue-100',   label: 'Tarea asignada' },
@@ -53,6 +59,12 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
     await markNotificationRead(id)
   }
 
+  async function handleMarkTaskDone(notifId: string, taskId: string) {
+    await markTaskDone(taskId)
+    setNotifications(prev => prev.filter(n => n.id !== notifId))
+    await markNotificationRead(notifId)
+  }
+
   async function handleMarkAll() {
     setNotifications([])
     await markAllNotificationsRead()
@@ -96,6 +108,7 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
                 const meta = TYPE_META[n.type] ?? { icon: Bell, color: 'text-gray-500', bg: 'bg-gray-100', label: '' }
                 const Icon = meta.icon
                 const isUnread = !n.read_at
+                const taskId = n.type === 'task_due_soon' ? extractTaskId(n.dedup_key) : null
                 return (
                   <div key={n.id}
                     className={`group flex gap-4 px-5 py-4 transition-colors hover:bg-gray-50 ${isUnread ? 'bg-blue-50/40' : ''}`}>
@@ -114,10 +127,16 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
                         </button>
                       </div>
                       {n.body && <p className="text-sm text-gray-400 mt-0.5 leading-relaxed">{n.body}</p>}
-                      <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         <span className="text-[11px] text-gray-300">{timeAgo(n.created_at)}</span>
                         {meta.label && <span className="text-[11px] text-gray-300">·</span>}
                         <span className="text-[11px] text-gray-300">{meta.label}</span>
+                        {taskId && (
+                          <button onClick={() => handleMarkTaskDone(n.id, taskId)}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-all">
+                            <Check size={10} /> Marcar como terminada
+                          </button>
+                        )}
                         {n.link && (
                           <Link href={n.link}
                             className="text-[11px] text-[#1B9BF0] hover:underline font-medium ml-auto">

@@ -58,6 +58,15 @@ export async function markAllNotificationsRead() {
   await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).is('read_at', null)
 }
 
+export async function markTaskDone(taskId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'No autorizado' }
+  const { error } = await getAdmin().from('tasks').update({ status: 'terminado' }).eq('id', taskId)
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 // ─── Computed alerts (called when user opens the bell) ───────────────────────
 
 function getWeekKey(d: Date): string {
