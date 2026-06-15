@@ -173,7 +173,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
         .select('id, content, created_at, user_id, is_global, user:users(id, full_name)')
         .eq('is_global', true).order('created_at', { ascending: true }).limit(100)
         .then(({ data }) => {
-          setMessages((data ?? []) as Msg[])
+          setMessages((data ?? []) as unknown as Msg[])
           setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'instant' }), 60)
         })
       setGlobalUnread(0)
@@ -184,7 +184,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
       .select('id, content, created_at, user_id, conversation_id, user:users(id, full_name)')
       .eq('conversation_id', activeId).order('created_at', { ascending: true }).limit(100)
       .then(({ data }) => {
-        setMessages((data ?? []) as Msg[])
+        setMessages((data ?? []) as unknown as Msg[])
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'instant' }), 60)
       })
     sb.from('conversation_members')
