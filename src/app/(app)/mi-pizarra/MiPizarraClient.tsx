@@ -1,7 +1,8 @@
 'use client'
 import { useState, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Calendar, Building2, Pencil } from 'lucide-react'
+import { togglePostitDoneAction, sharePostitAction } from './actions'
+import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Calendar, Building2, Pencil, Share2, Users } from 'lucide-react'
 import Image from 'next/image'
 
 const COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -34,6 +35,12 @@ function isExpired(due_date: string | null | undefined): boolean {
 
 interface Client { id: string; name: string }
 
+interface PostitShare {
+  id: string
+  user_id: string
+  user: { id: string; full_name: string; avatar_url: string | null }
+}
+
 interface Postit {
   id: string
   content: string | null
@@ -47,6 +54,13 @@ interface Postit {
   client_id: string | null
   author: { id: string; full_name: string; avatar_url: string | null } | null
   client: { id: string; name: string } | null
+  shares: PostitShare[]
+  // for shared-with-me postits
+  is_shared_with_me?: boolean
+  share_id?: string
+  shared_by_id?: string
+  shared_by_name?: string
+  shared_by_avatar?: string | null
 }
 
 interface Teammate {
@@ -139,21 +153,16 @@ function ExpiredRibbon() {
       <div
         className="absolute flex items-center justify-center font-bold text-white text-[11px]"
         style={{
-          width: 72,
-          height: 20,
-          background: '#ef4444',
-          top: 14,
-          right: -18,
-          transform: 'rotate(45deg)',
+          width: 72, height: 20, background: '#ef4444',
+          top: 14, right: -18, transform: 'rotate(45deg)',
           boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
         }}
-      >
-        E
-      </div>
+      >E</div>
     </div>
   )
 }
 
+// Rendered at top level (no transform context) to avoid z-index trapping
 function EditPostitModal({ postit, clients, teammates, onSave, onClose }: {
   postit: Postit
   clients: Client[]
@@ -178,19 +187,18 @@ function EditPostitModal({ postit, clients, teammates, onSave, onClose }: {
       .select('id, content, color, done, created_at, board_owner_id, author_id, image_url, due_date, client_id, author:users!postits_author_id_fkey(id, full_name, avatar_url), client:clients(id, name)')
       .single()
     if (dbErr) { setError(dbErr.message); setSaving(false); return }
-    if (data) onSave(data as any)
+    if (data) onSave({ ...(data as any), shares: postit.shares })
     onClose()
     setSaving(false)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-gray-800">Editar post-it</p>
           <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
         </div>
-
         <div className="flex items-center gap-2 mb-3">
           {Object.entries(COLORS).map(([key, val]) => (
             <button key={key} onClick={() => setColor(key)}
@@ -202,15 +210,12 @@ function EditPostitModal({ postit, clients, teammates, onSave, onClose }: {
               }} title={val.label} />
           ))}
         </div>
-
         <MentionTextarea
           value={content} onChange={setContent} teammates={teammates}
-          placeholder="Contenido del post-it..."
-          rows={4} autoFocus
+          placeholder="Contenido del post-it..." rows={4} autoFocus
           style={{ backgroundColor: COLORS[color]?.bg ?? '#FEF9C3' }}
           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 transition-colors"
         />
-
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div>
             <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Calendar size={11}/> Vencimiento</label>
@@ -226,9 +231,7 @@ function EditPostitModal({ postit, clients, teammates, onSave, onClose }: {
             </select>
           </div>
         </div>
-
         {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
-
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all">
             Cancelar
@@ -243,18 +246,97 @@ function EditPostitModal({ postit, clients, teammates, onSave, onClose }: {
   )
 }
 
-function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, isDragOver,
-  onDelete, onToggle, onEdit, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function SharePostitModal({ postit, teammates, onSave, onClose }: {
+  postit: Postit
+  teammates: Teammate[]
+  onSave: (shares: PostitShare[]) => void
+  onClose: () => void
+}) {
+  const currentSharedIds = postit.shares.map(s => s.user_id)
+  const [selected, setSelected] = useState<Set<string>>(new Set(currentSharedIds))
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const filtered = teammates.filter(t => t.full_name.toLowerCase().includes(search.toLowerCase()))
+
+  function toggle(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleSave() {
+    setSaving(true); setError(null)
+    const result = await sharePostitAction(postit.id, [...selected])
+    if (result.error) { setError(result.error); setSaving(false); return }
+    onSave(result.shares)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-semibold text-gray-800">Compartir post-it</p>
+          <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
+        </div>
+        <div className="relative mb-3">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar compañero..." autoFocus
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
+        </div>
+        <div className="max-h-56 overflow-y-auto space-y-1 mb-4">
+          {filtered.map(t => {
+            const checked = selected.has(t.id)
+            return (
+              <button key={t.id} onClick={() => toggle(t.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${checked ? 'bg-[#E8F4FE]' : 'hover:bg-gray-50'}`}>
+                <UserAvatar url={t.avatar_url} name={t.full_name} size={7} />
+                <span className="text-sm text-gray-700 flex-1">{t.full_name}</span>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${checked ? 'bg-[#1B9BF0] border-[#1B9BF0]' : 'border-gray-300'}`}>
+                  {checked && <Check size={11} className="text-white" />}
+                </div>
+              </button>
+            )
+          })}
+          {filtered.length === 0 && <p className="text-sm text-gray-400 text-center py-4">Sin resultados</p>}
+        </div>
+        {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+        {selected.size > 0 && (
+          <p className="text-xs text-gray-400 mb-3 text-center">
+            {selected.size === 1 ? '1 persona seleccionada' : `${selected.size} personas seleccionadas`}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Compartiendo...</> : <><Share2 size={13}/> Compartir</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PostitCard({ postit, userId, rotation, isDragging, isDragOver,
+  onDelete, onToggle, onOpenEdit, onOpenShare, onDragStart, onDragOver, onDrop, onDragEnd }: {
   postit: Postit
   userId: string
-  clients: Client[]
-  teammates: Teammate[]
   rotation: number
   isDragging: boolean
   isDragOver: boolean
   onDelete: (id: string) => void
   onToggle: (id: string, done: boolean) => void
-  onEdit: (updated: Postit) => void
+  onOpenEdit: (p: Postit) => void
+  onOpenShare: (p: Postit) => void
   onDragStart: () => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: () => void
@@ -263,8 +345,8 @@ function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, 
   const [deleting, setDeleting] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [imgError, setImgError] = useState(false)
-  const [showEdit, setShowEdit] = useState(false)
-  const isOwn = postit.author_id === userId
+  const isOwn = !postit.is_shared_with_me && postit.author_id === userId
+  const isSharedWithMe = !!postit.is_shared_with_me
   const color = COLORS[postit.color] ?? COLORS.yellow
   const expired = isExpired(postit.due_date)
 
@@ -281,19 +363,19 @@ function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, 
 
   async function handleToggle() {
     setToggling(true)
-    await createClient().from('postits').update({ done: !postit.done }).eq('id', postit.id)
-    onToggle(postit.id, !postit.done)
+    const result = await togglePostitDoneAction(postit.id, !postit.done)
+    if (!result.error) onToggle(postit.id, !postit.done)
     setToggling(false)
   }
 
   return (
     <div
-      draggable
+      draggable={!isSharedWithMe}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
-      className="relative group cursor-grab active:cursor-grabbing transition-all duration-200"
+      className={`relative group transition-all duration-200 ${isSharedWithMe ? '' : 'cursor-grab active:cursor-grabbing'}`}
       style={{
         transform: `rotate(${rotation}deg) scale(${isDragOver ? 1.04 : 1})`,
         opacity: isDragging ? 0.35 : 1,
@@ -305,7 +387,6 @@ function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, 
       <div className="rounded-lg shadow-md group-hover:shadow-xl transition-shadow overflow-hidden"
         style={{ backgroundColor: color.bg, borderTop: `4px solid ${color.border}` }}>
 
-        {/* Ribbon de expirado */}
         {expired && <ExpiredRibbon />}
 
         {/* Pin */}
@@ -315,8 +396,17 @@ function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, 
         </div>
 
         <div className="p-4 pt-5">
-          {/* Author (messages from others) */}
-          {!isOwn && postit.author && (
+          {/* Shared-with-me header */}
+          {isSharedWithMe && postit.shared_by_name && (
+            <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b border-black/10">
+              <UserAvatar url={postit.shared_by_avatar ?? null} name={postit.shared_by_name} size={4} />
+              <span className="text-[10px] text-gray-600 font-semibold">{postit.shared_by_name}</span>
+              <span className="text-[10px] text-gray-400">compartió esto</span>
+            </div>
+          )}
+
+          {/* Author (notes from others in my board) */}
+          {!isOwn && !isSharedWithMe && postit.author && (
             <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b border-black/10">
               <UserAvatar url={postit.author.avatar_url} name={postit.author.full_name} size={4} />
               <span className="text-[10px] text-gray-600 font-semibold">{postit.author.full_name}</span>
@@ -348,6 +438,23 @@ function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, 
             </p>
           )}
 
+          {/* Share recipients */}
+          {isOwn && postit.shares.length > 0 && (
+            <div className="flex items-center gap-1 mt-2">
+              <Users size={9} className="text-gray-400" />
+              <div className="flex -space-x-1">
+                {postit.shares.slice(0, 4).map(s => (
+                  <div key={s.id} title={s.user.full_name} className="w-4 h-4 rounded-full border border-white overflow-hidden">
+                    <UserAvatar url={s.user.avatar_url} name={s.user.full_name} size={1} />
+                  </div>
+                ))}
+              </div>
+              {postit.shares.length > 4 && (
+                <span className="text-[9px] text-gray-400">+{postit.shares.length - 4}</span>
+              )}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="flex items-center justify-between mt-3 pt-2 border-t border-black/5">
             <div className="flex flex-col gap-0.5">
@@ -364,33 +471,33 @@ function PostitCard({ postit, userId, clients, teammates, rotation, isDragging, 
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               {isOwn && (
                 <>
-                  <button onClick={e => { e.stopPropagation(); setShowEdit(true) }}
+                  <button onClick={e => { e.stopPropagation(); onOpenShare(postit) }}
+                    className="p-1.5 rounded-lg hover:bg-black/10 transition-all" title="Compartir">
+                    <Share2 size={11} className="text-gray-500" />
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); onOpenEdit(postit) }}
                     className="p-1.5 rounded-lg hover:bg-black/10 transition-all" title="Editar">
                     <Pencil size={11} className="text-gray-500" />
                   </button>
-                  <button onClick={handleToggle} disabled={toggling}
-                    className="p-1.5 rounded-lg hover:bg-black/10 transition-all"
-                    title={postit.done ? 'Marcar pendiente' : 'Marcar hecho'}>
-                    {toggling
-                      ? <Loader2 size={11} className="animate-spin" />
-                      : <Check size={11} className={postit.done ? 'text-green-600' : 'text-gray-500'} />}
-                  </button>
                 </>
               )}
-              <button onClick={handleDelete} disabled={deleting}
-                className="p-1.5 rounded-lg hover:bg-red-100 transition-all" title="Eliminar">
-                {deleting ? <Loader2 size={11} className="animate-spin text-red-400" /> : <Trash2 size={11} className="text-red-400" />}
+              <button onClick={handleToggle} disabled={toggling}
+                className="p-1.5 rounded-lg hover:bg-black/10 transition-all"
+                title={postit.done ? 'Marcar pendiente' : 'Marcar hecho'}>
+                {toggling
+                  ? <Loader2 size={11} className="animate-spin" />
+                  : <Check size={11} className={postit.done ? 'text-green-600' : 'text-gray-500'} />}
               </button>
+              {!isSharedWithMe && (
+                <button onClick={handleDelete} disabled={deleting}
+                  className="p-1.5 rounded-lg hover:bg-red-100 transition-all" title="Eliminar">
+                  {deleting ? <Loader2 size={11} className="animate-spin text-red-400" /> : <Trash2 size={11} className="text-red-400" />}
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
-      {showEdit && (
-        <EditPostitModal
-          postit={postit} clients={clients} teammates={teammates}
-          onSave={onEdit} onClose={() => setShowEdit(false)}
-        />
-      )}
     </div>
   )
 }
@@ -436,23 +543,21 @@ function AddPostitModal({ userId, teammates, clients, onAdd, onClose }: {
     const { data, error: dbErr } = await sb.from('postits').insert({
       board_owner_id: userId, author_id: userId,
       content: content.trim() || null, color, done: false, image_url: imageUrl,
-      due_date: dueDate || null,
-      client_id: clientId || null,
+      due_date: dueDate || null, client_id: clientId || null,
     }).select('id, content, color, done, created_at, board_owner_id, author_id, image_url, due_date, client_id, author:users!postits_author_id_fkey(id, full_name, avatar_url), client:clients(id, name)').single()
 
     if (dbErr) { setError(dbErr.message); setSaving(false); return }
-    if (data) { onAdd(data as any); onClose() }
+    if (data) { onAdd({ ...(data as any), shares: [] }); onClose() }
     setSaving(false)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-gray-800">Nuevo post-it</p>
           <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
         </div>
-
         <div className="flex items-center gap-2 mb-3">
           {Object.entries(COLORS).map(([key, val]) => (
             <button key={key} onClick={() => setColor(key)}
@@ -464,7 +569,6 @@ function AddPostitModal({ userId, teammates, clients, onAdd, onClose }: {
               }} title={val.label} />
           ))}
         </div>
-
         {imagePreview && (
           <div className="relative w-full rounded-xl overflow-hidden border border-gray-100 mb-3" style={{ aspectRatio: '4/3' }}>
             <Image src={imagePreview} alt="preview" fill className="object-cover" unoptimized />
@@ -474,7 +578,6 @@ function AddPostitModal({ userId, teammates, clients, onAdd, onClose }: {
             </button>
           </div>
         )}
-
         <MentionTextarea
           value={content} onChange={setContent} teammates={teammates}
           placeholder="Escribí tu nota... (@nombre para mencionar)"
@@ -482,7 +585,6 @@ function AddPostitModal({ userId, teammates, clients, onAdd, onClose }: {
           style={{ backgroundColor: COLORS[color]?.bg ?? '#FEF9C3' }}
           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 transition-colors"
         />
-
         <div className="grid grid-cols-2 gap-2 mb-3">
           <div>
             <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Calendar size={11}/> Vencimiento</label>
@@ -498,9 +600,7 @@ function AddPostitModal({ userId, teammates, clients, onAdd, onClose }: {
             </select>
           </div>
         </div>
-
         {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
-
         <div className="flex items-center gap-2">
           <button onClick={() => fileRef.current?.click()}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-all">
@@ -545,13 +645,12 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl p-5 w-full max-w-md mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold text-gray-800">Dejar nota a un compañero</p>
           <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
         </div>
-
         {sent ? (
           <div className="text-center py-10">
             <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -618,52 +717,67 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
   )
 }
 
-export default function MiPizarraClient({ userId, userName, initialPostits, teammates, clients }: {
+export default function MiPizarraClient({ userId, userName, initialPostits, sharedWithMe: initialSharedWithMe, teammates, clients }: {
   userId: string
   userName: string
   initialPostits: Postit[]
+  sharedWithMe: Postit[]
   teammates: Teammate[]
   clients: Client[]
 }) {
   const [postits, setPostits] = useState<Postit[]>(initialPostits)
+  const [sharedWithMe, setSharedWithMe] = useState<Postit[]>(initialSharedWithMe)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showLeaveNote, setShowLeaveNote] = useState(false)
+  const [editingPostit, setEditingPostit] = useState<Postit | null>(null)
+  const [sharingPostit, setSharingPostit] = useState<Postit | null>(null)
 
-  // Filtros y ordenamiento
   const [filterClient, setFilterClient] = useState('')
   const [filterExpired, setFilterExpired] = useState<'all' | 'expired' | 'active'>('all')
   const [sortBy, setSortBy] = useState<'due_date' | 'created_at' | 'client'>('due_date')
 
   const today = new Date().toISOString().split('T')[0]
 
-  const processed = useMemo(() => {
-    let items = [...postits]
-    if (filterClient) items = items.filter(p => p.client_id === filterClient)
-    if (filterExpired === 'expired') items = items.filter(p => p.due_date && p.due_date < today)
-    if (filterExpired === 'active') items = items.filter(p => !p.due_date || p.due_date >= today)
-    items.sort((a, b) => {
-      if (sortBy === 'due_date') {
-        const da = a.due_date ?? '9999-12-31'
-        const db = b.due_date ?? '9999-12-31'
-        return da.localeCompare(db)
-      }
-      if (sortBy === 'client') {
-        return (a.client?.name ?? '').localeCompare(b.client?.name ?? '')
-      }
+  function applyFiltersAndSort(items: Postit[]) {
+    let result = [...items]
+    if (filterClient) result = result.filter(p => p.client_id === filterClient)
+    if (filterExpired === 'expired') result = result.filter(p => p.due_date && p.due_date < today)
+    if (filterExpired === 'active') result = result.filter(p => !p.due_date || p.due_date >= today)
+    result.sort((a, b) => {
+      if (sortBy === 'due_date') return (a.due_date ?? '9999-12-31').localeCompare(b.due_date ?? '9999-12-31')
+      if (sortBy === 'client') return (a.client?.name ?? '').localeCompare(b.client?.name ?? '')
       return b.created_at.localeCompare(a.created_at)
     })
-    return items
-  }, [postits, filterClient, filterExpired, sortBy, today])
+    return result
+  }
 
-  const myPostits = processed.filter(p => p.author_id === userId)
-  const received = processed.filter(p => p.author_id !== userId)
+  const processedOwn = useMemo(() => applyFiltersAndSort(postits.filter(p => !p.is_shared_with_me)), [postits, filterClient, filterExpired, sortBy, today])
+  const processedReceived = useMemo(() => applyFiltersAndSort(postits.filter(p => p.author_id !== userId && !p.is_shared_with_me)), [postits, filterClient, filterExpired, sortBy, today, userId])
+  const processedShared = useMemo(() => applyFiltersAndSort(sharedWithMe), [sharedWithMe, filterClient, filterExpired, sortBy, today])
+
+  const myPostits = useMemo(() => processedOwn.filter(p => p.author_id === userId), [processedOwn, userId])
+  const receivedPostits = processedReceived
 
   function handleAdd(p: Postit) { setPostits(prev => [p, ...prev]) }
-  function handleDelete(id: string) { setPostits(prev => prev.filter(p => p.id !== id)) }
-  function handleToggle(id: string, done: boolean) { setPostits(prev => prev.map(p => p.id === id ? { ...p, done } : p)) }
-  function handleEdit(updated: Postit) { setPostits(prev => prev.map(p => p.id === updated.id ? updated : p)) }
+  function handleDelete(id: string) {
+    setPostits(prev => prev.filter(p => p.id !== id))
+    setSharedWithMe(prev => prev.filter(p => p.id !== id))
+  }
+  function handleToggle(id: string, done: boolean) {
+    setPostits(prev => prev.map(p => p.id === id ? { ...p, done } : p))
+    setSharedWithMe(prev => prev.map(p => p.id === id ? { ...p, done } : p))
+  }
+  function handleEdit(updated: Postit) {
+    setPostits(prev => prev.map(p => p.id === updated.id ? updated : p))
+    setEditingPostit(null)
+  }
+  function handleShareSave(shares: PostitShare[]) {
+    if (!sharingPostit) return
+    setPostits(prev => prev.map(p => p.id === sharingPostit.id ? { ...p, shares } : p))
+    setSharingPostit(null)
+  }
 
   function handleDragStart(id: string) { setDraggingId(id) }
   function handleDragOver(e: React.DragEvent, id: string) {
@@ -686,29 +800,34 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
   function handleDragEnd() { setDraggingId(null); setDragOverId(null) }
 
   const hasFilters = filterClient || filterExpired !== 'all'
+  const totalVisible = myPostits.length + receivedPostits.length + processedShared.length
+
+  function renderCards(items: Postit[]) {
+    return items.map(p => (
+      <PostitCard
+        key={p.id + (p.is_shared_with_me ? '-shared' : '')}
+        postit={p} userId={userId}
+        rotation={getRotation(p.id)}
+        isDragging={draggingId === p.id}
+        isDragOver={dragOverId === p.id}
+        onDelete={handleDelete} onToggle={handleToggle}
+        onOpenEdit={setEditingPostit} onOpenShare={setSharingPostit}
+        onDragStart={() => handleDragStart(p.id)}
+        onDragOver={e => handleDragOver(e, p.id)}
+        onDrop={() => handleDrop(p.id)}
+        onDragEnd={handleDragEnd}
+      />
+    ))
+  }
 
   function renderSection(items: Postit[], label: string) {
     if (items.length === 0) return null
     return (
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-widest mb-5 px-1"
-          style={{ color: 'rgba(254,243,199,0.75)' }}>
-          {label}
-        </p>
+          style={{ color: 'rgba(254,243,199,0.75)' }}>{label}</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {items.map(p => (
-            <PostitCard
-              key={p.id} postit={p} userId={userId} clients={clients} teammates={teammates}
-              rotation={getRotation(p.id)}
-              isDragging={draggingId === p.id}
-              isDragOver={dragOverId === p.id}
-              onDelete={handleDelete} onToggle={handleToggle} onEdit={handleEdit}
-              onDragStart={() => handleDragStart(p.id)}
-              onDragOver={e => handleDragOver(e, p.id)}
-              onDrop={() => handleDrop(p.id)}
-              onDragEnd={handleDragEnd}
-            />
-          ))}
+          {renderCards(items)}
         </div>
       </div>
     )
@@ -735,7 +854,7 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         </div>
       </div>
 
-      {/* Filtros y ordenamiento */}
+      {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-3 mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Building2 size={13} className="text-gray-400 shrink-0"/>
@@ -745,7 +864,6 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-
         <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
           {([['all', 'Todos'], ['active', 'Vigentes'], ['expired', 'Vencidos']] as const).map(([v, l]) => (
             <button key={v} onClick={() => setFilterExpired(v)}
@@ -754,7 +872,6 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
             </button>
           ))}
         </div>
-
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">Ordenar:</span>
           <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
@@ -764,7 +881,6 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
             <option value="client">Por cliente</option>
           </select>
         </div>
-
         {hasFilters && (
           <button onClick={() => { setFilterClient(''); setFilterExpired('all') }}
             className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 ml-auto">
@@ -780,12 +896,14 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         }}>
 
         {renderSection(myPostits, `Mis pendientes (${myPostits.filter(p => !p.done).length} activos)`)}
-        {received.length > 0 && myPostits.length > 0 && (
-          <div className="border-t border-amber-800/30 mb-8" />
-        )}
-        {renderSection(received, `Mensajes recibidos (${received.length})`)}
 
-        {processed.length === 0 && (
+        {receivedPostits.length > 0 && myPostits.length > 0 && <div className="border-t border-amber-800/30 mb-8" />}
+        {renderSection(receivedPostits, `Mensajes recibidos (${receivedPostits.length})`)}
+
+        {processedShared.length > 0 && (myPostits.length > 0 || receivedPostits.length > 0) && <div className="border-t border-amber-800/30 mb-8" />}
+        {renderSection(processedShared, `Compartidos conmigo (${processedShared.length})`)}
+
+        {totalVisible === 0 && (
           <div className="text-center py-24">
             <StickyNote size={48} className="mx-auto mb-4" style={{ color: 'rgba(254,243,199,0.4)' }} />
             <p className="text-sm font-medium" style={{ color: 'rgba(254,243,199,0.85)' }}>
@@ -798,8 +916,17 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         )}
       </div>
 
+      {/* Modals rendered at root level — no transform context */}
       {showAdd && <AddPostitModal userId={userId} teammates={teammates} clients={clients} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
       {showLeaveNote && <LeaveNoteModal userId={userId} teammates={teammates} onClose={() => setShowLeaveNote(false)} />}
+      {editingPostit && (
+        <EditPostitModal postit={editingPostit} clients={clients} teammates={teammates}
+          onSave={handleEdit} onClose={() => setEditingPostit(null)} />
+      )}
+      {sharingPostit && (
+        <SharePostitModal postit={sharingPostit} teammates={teammates}
+          onSave={handleShareSave} onClose={() => setSharingPostit(null)} />
+      )}
     </div>
   )
 }
