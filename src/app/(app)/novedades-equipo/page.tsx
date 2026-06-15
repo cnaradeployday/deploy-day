@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
-import { checkComputedNotifications, fetchNotifications, markAllNotificationsRead } from './actions'
-import NovedadesClient from './NovedadesClient'
+import NovedadesEquipoClient from './NovedadesEquipoClient'
 
-export default async function NovedadesPage() {
+export default async function NovedadesEquipoPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -16,14 +16,18 @@ export default async function NovedadesPage() {
   if (!canAccess && profile?.custom_role_id) {
     const { data: perm } = await supabase
       .from('role_permissions').select('can_read')
-      .eq('role_id', profile.custom_role_id).eq('module', 'novedades').single()
+      .eq('role_id', profile.custom_role_id).eq('module', 'novedades_equipo').single()
     canAccess = perm?.can_read ?? false
   }
   if (!canAccess) redirect('/dashboard')
 
-  await checkComputedNotifications()
-  const { data: notifications } = await fetchNotifications()
-  await markAllNotificationsRead()
+  const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  return <NovedadesClient initialNotifications={notifications} />
+  const { data: notifications } = await admin
+    .from('notifications')
+    .select('*, user:users!notifications_user_id_fkey(id, full_name, avatar_url)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  return <NovedadesEquipoClient notifications={notifications ?? []} />
 }

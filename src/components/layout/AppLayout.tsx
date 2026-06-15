@@ -22,6 +22,7 @@ const navItems = [
   { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/cronometros',       label: 'Cronómetros',        icon: AlarmClock,      roles: ['admin','gerente_operaciones'] },
   { href: '/novedades',         label: 'Novedades',          icon: Bell,            roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/novedades-equipo', label: 'Novedades equipo',   icon: Bell,            roles: ['admin','gerente_operaciones'] },
   { href: '/mi-pizarra',       label: 'Mi pizarra',         icon: StickyNote,      roles: ['admin','gerente_operaciones'], badge: true },
   { href: '/pizarron',         label: 'Pizarrón',           icon: LayoutGrid,      roles: ['admin','gerente_operaciones'] },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },

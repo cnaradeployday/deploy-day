@@ -33,6 +33,8 @@ const MODULES = [
   { key: 'cargar_horas_otros',    label: 'Cargar horas en nombre de otros' },
   { key: 'online_users',          label: 'Ver usuarios online' },
   { key: 'news',                  label: 'Anuncios (crear/gestionar)' },
+  { key: 'novedades',             label: 'Novedades' },
+  { key: 'novedades_equipo',      label: 'Novedades — Ver novedades del equipo' },
 ]
 
 export default async function RolesPage() {
