@@ -80,18 +80,13 @@ function getBusinessDaysSince(last: Date, today: Date): number {
   return count
 }
 
-export async function checkComputedNotifications(): Promise<void> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-
+async function runComputedChecksForUser(userId: string): Promise<void> {
   const admin = getAdmin()
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0]
   const mesActual = todayStr.slice(0, 7)
   const primerDia = `${mesActual}-01`
   const ultimoDia = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
-  const userId = user.id
 
   async function upsert(n: Omit<Parameters<typeof createNotification>[0], 'user_id'>) {
     if (n.dedup_key) {
@@ -261,4 +256,18 @@ export async function checkComputedNotifications(): Promise<void> {
       })
     }
   }
+}
+
+export async function checkComputedNotifications(): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  await runComputedChecksForUser(user.id)
+}
+
+export async function checkAllUsersComputedNotifications(): Promise<void> {
+  const admin = getAdmin()
+  const { data: users } = await admin.from('users').select('id')
+  if (!users) return
+  await Promise.all(users.map((u: { id: string }) => runComputedChecksForUser(u.id)))
 }

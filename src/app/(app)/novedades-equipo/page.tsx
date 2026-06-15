@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
+import { checkAllUsersComputedNotifications } from '../novedades/actions'
 import NovedadesEquipoClient from './NovedadesEquipoClient'
 
 export default async function NovedadesEquipoPage() {
@@ -20,6 +21,8 @@ export default async function NovedadesEquipoPage() {
     canAccess = perm?.can_read ?? false
   }
   if (!canAccess) redirect('/dashboard')
+
+  await checkAllUsersComputedNotifications()
 
   const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
