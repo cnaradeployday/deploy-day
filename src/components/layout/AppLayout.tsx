@@ -6,6 +6,7 @@ import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
 import FloatingChat from './FloatingChat'
+import NotificationBell from './NotificationBell'
 import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
@@ -255,6 +256,11 @@ export default function AppLayout({
               </Link>
             : <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0}/>
           }
+          {userId && (
+            isCollapsed
+              ? null
+              : <NotificationBell userId={userId} collapsed={isCollapsed} />
+          )}
         </nav>
 
         <div className={`shrink-0 border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>

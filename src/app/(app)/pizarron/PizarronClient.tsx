@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { createPizarronPostAction } from './actions'
 import { Plus, Trash2, Loader2, X, ImageIcon, Send, LayoutGrid } from 'lucide-react'
 import Image from 'next/image'
 
@@ -250,11 +251,9 @@ function NewPostModal({ userId, userName, avatarUrl, teammates, selectedColor, o
       imageUrl = sb.storage.from('tablero-general').getPublicUrl(path).data.publicUrl
     }
 
-    const { data, error: dbErr } = await sb.from('tablero_posts').insert({
-      author_id: userId, content: content.trim() || null, image_url: imageUrl,
-    }).select('id, content, image_url, created_at, author_id, author:users!tablero_posts_author_id_fkey(id, full_name, avatar_url)').single()
+    const { data, error: dbErr } = await createPizarronPostAction(content.trim() || null, imageUrl, color)
 
-    if (dbErr) { setError(dbErr.message); setSaving(false); return }
+    if (dbErr) { setError(dbErr); setSaving(false); return }
     if (data) { onAdd(data as any); onClose() }
     setSaving(false)
   }

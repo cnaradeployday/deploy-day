@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { togglePostitDoneAction, sharePostitAction } from './actions'
+import { togglePostitDoneAction, sharePostitAction, sendNoteAction } from './actions'
 import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Calendar, Building2, Pencil, Share2, Users } from 'lucide-react'
 import Image from 'next/image'
 
@@ -635,11 +635,8 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
   async function handleSend() {
     if (!selected || !content.trim()) return
     setSaving(true); setError(null)
-    const { error: err } = await createClient().from('postits').insert({
-      board_owner_id: selected.id, author_id: userId,
-      content: content.trim(), color, done: false,
-    })
-    if (err) { setError(err.message); setSaving(false); return }
+    const result = await sendNoteAction(selected.id, content, color)
+    if (result.error) { setError(result.error); setSaving(false); return }
     setSent(true)
     setTimeout(onClose, 1800)
   }

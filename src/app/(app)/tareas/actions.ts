@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createNotification } from '@/app/(app)/novedades/actions'
 
 function getAdminClient() {
   return createAdminClient(
@@ -43,6 +44,12 @@ export async function updateTaskAction(taskId: string, data: {
   collaborators: { uid: string; hours: string }[]
 }): Promise<{ error: string | null }> {
   const admin = getAdminClient()
+
+  // Read current state to detect assignment changes
+  const { data: prev } = await admin
+    .from('tasks').select('direct_responsible_id, title, task_collaborators(user_id)')
+    .eq('id', taskId).single()
+
   const { error } = await admin.from('tasks').update({
     project_id: data.project_id,
     title: data.title,
@@ -57,6 +64,23 @@ export async function updateTaskAction(taskId: string, data: {
 
   if (error) return { error: error.message }
 
+  // Detect new direct responsible
+  if (data.direct_responsible_id && data.direct_responsible_id !== prev?.direct_responsible_id) {
+    await createNotification({
+      user_id: data.direct_responsible_id,
+      type: 'task_assigned',
+      title: `Te asignaron la tarea "${data.title}"`,
+      body: data.due_date ? `Vence el ${new Date(data.due_date + 'T12:00:00').toLocaleDateString('es-AR')}.` : undefined,
+      link: `/mis-tareas`,
+      dedup_key: `task_assigned_direct_${taskId}_${data.direct_responsible_id}`,
+    }).catch(() => {})
+  }
+
+  // Detect new collaborators
+  const prevCollabIds = ((prev as any)?.task_collaborators ?? []).map((c: any) => c.user_id as string)
+  const newCollabIds = data.collaborators.map(c => c.uid)
+  const addedCollabs = newCollabIds.filter(uid => !prevCollabIds.includes(uid))
+
   await admin.from('task_collaborators').delete().eq('task_id', taskId)
   if (data.collaborators.length > 0) {
     await admin.from('task_collaborators').insert(
@@ -67,6 +91,17 @@ export async function updateTaskAction(taskId: string, data: {
       }))
     )
   }
+
+  await Promise.all(addedCollabs.map(uid =>
+    createNotification({
+      user_id: uid,
+      type: 'task_assigned',
+      title: `Te agregaron como colaborador en "${data.title}"`,
+      body: data.due_date ? `Vence el ${new Date(data.due_date + 'T12:00:00').toLocaleDateString('es-AR')}.` : undefined,
+      link: `/mis-tareas`,
+      dedup_key: `task_assigned_collab_${taskId}_${uid}`,
+    }).catch(() => {})
+  ))
 
   revalidatePath(`/tareas/${taskId}`)
   revalidatePath('/tareas')
