@@ -6,8 +6,7 @@ import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
 import FloatingChat from './FloatingChat'
-import NotificationBell from './NotificationBell'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -22,6 +21,7 @@ const navItems = [
   { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/cronometros',       label: 'Cronómetros',        icon: AlarmClock,      roles: ['admin','gerente_operaciones'] },
+  { href: '/novedades',         label: 'Novedades',          icon: Bell,            roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/mi-pizarra',       label: 'Mi pizarra',         icon: StickyNote,      roles: ['admin','gerente_operaciones'], badge: true },
   { href: '/pizarron',         label: 'Pizarrón',           icon: LayoutGrid,      roles: ['admin','gerente_operaciones'] },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
@@ -118,6 +118,7 @@ export default function AppLayout({
   const mainRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [pizarraUnread, setPizarraUnread] = useState(0)
+  const [novedadesUnread, setNovedadesUnread] = useState(0)
   const [showProfile, setShowProfile] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -169,22 +170,35 @@ export default function AppLayout({
   const newsPx = hasNews ? 40 : 0
 
   const isPizarra = pathname === '/mi-pizarra'
+  const isNovedades = pathname === '/novedades'
 
   useEffect(() => {
     if (!userId) return
     const sb = createClient()
+    // Pizarra badge
     sb.from('postit_shares').select('id', { count: 'exact', head: true }).eq('user_id', userId).is('seen_at', null)
       .then(({ count }) => setPizarraUnread(count ?? 0))
-    const channel = sb.channel('pizarra-badge-' + userId)
+    const pizarraChannel = sb.channel('pizarra-badge-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'postit_shares', filter: `user_id=eq.${userId}` },
         () => { if (!isPizarra) setPizarraUnread(c => c + 1) })
       .subscribe()
-    return () => { sb.removeChannel(channel) }
+    // Novedades badge
+    sb.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).is('read_at', null)
+      .then(({ count }) => setNovedadesUnread(count ?? 0))
+    const novedadesChannel = sb.channel('novedades-badge-' + userId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        () => { if (!isNovedades) setNovedadesUnread(c => c + 1) })
+      .subscribe()
+    return () => { sb.removeChannel(pizarraChannel); sb.removeChannel(novedadesChannel) }
   }, [userId])
 
   useEffect(() => {
     if (isPizarra) setPizarraUnread(0)
   }, [isPizarra])
+
+  useEffect(() => {
+    if (isNovedades) setNovedadesUnread(0)
+  }, [isNovedades])
 
   async function logout() {
     await createClient().auth.signOut()
@@ -242,7 +256,7 @@ export default function AppLayout({
               </Link>
             : <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
                 active={pathname === item.href || pathname.startsWith(item.href + '/')}
-                badge={item.badge} unreadCount={pizarraUnread}/>
+                badge={item.badge} unreadCount={item.href === '/novedades' ? novedadesUnread : pizarraUnread}/>
           )}
           {canManageNews && (isCollapsed
             ? <Link href="/news" title="Anuncios" className={`flex items-center justify-center py-2.5 rounded-xl transition-all ${pathname === '/news' ? 'bg-[#E8F4FE] text-[#1B9BF0]' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -256,11 +270,6 @@ export default function AppLayout({
               </Link>
             : <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0}/>
           }
-          {userId && (
-            isCollapsed
-              ? null
-              : <NotificationBell userId={userId} collapsed={isCollapsed} />
-          )}
         </nav>
 
         <div className={`shrink-0 border-t border-gray-50 flex items-center ${isCollapsed ? 'px-1 py-3 justify-center flex-col gap-2' : 'px-4 py-3 justify-between'}`}>
@@ -301,7 +310,7 @@ export default function AppLayout({
               {visible.map(item => (
                 <NavItem key={item.href} href={item.href} label={item.label} Icon={item.icon}
                   active={pathname === item.href || pathname.startsWith(item.href + '/')}
-                  badge={item.badge} unreadCount={pizarraUnread} onClick={() => setOpen(false)}/>
+                  badge={item.badge} unreadCount={item.href === '/novedades' ? novedadesUnread : pizarraUnread} onClick={() => setOpen(false)}/>
               ))}
               {canManageNews && <NavItem href="/news" label="Anuncios" Icon={Megaphone} active={pathname === '/news'} unreadCount={0} onClick={() => setOpen(false)}/>}
               <NavItem href="/mi-perfil" label="Mi perfil" Icon={UserCog} active={pathname === '/mi-perfil'} unreadCount={0} onClick={() => setOpen(false)}/>
