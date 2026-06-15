@@ -246,16 +246,37 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
   } else if (lastEntry.entry_date) {
     const lastDate = new Date(lastEntry.entry_date + 'T12:00:00')
     const businessDays = getBusinessDaysSince(lastDate, today)
-    if (businessDays >= 2) {
+    if (businessDays >= 1) {
       await upsert({
         type: 'no_hours_logged',
-        title: `Hace ${businessDays} días hábiles que no cargás horas`,
+        title: businessDays === 1
+          ? 'Ayer no cargaste horas'
+          : `Hace ${businessDays} días hábiles que no cargás horas`,
         body: `Tu último registro fue el ${lastDate.toLocaleDateString('es-AR')}. No te olvides de registrar tu tiempo.`,
         link: '/mis-horas',
         dedup_key: `no_hours_${todayStr}`,
       })
     }
   }
+
+  // ── 4. Resumen mensual de horas (siempre se genera, una vez por mes) ───────
+  const horasLabel = horasRealizadas === 0
+    ? 'Todavía no registraste horas este mes.'
+    : `Llevás ${horasRealizadas.toFixed(1)}h registradas este mes.`
+
+  const disponiblesLabel = horasDisponibles > 0
+    ? ` Disponibilidad: ${horasDisponibles.toFixed(1)}h.`
+    : ''
+
+  await upsert({
+    type: 'no_hours_logged',
+    title: horasRealizadas === 0
+      ? 'Sin horas registradas este mes'
+      : `Resumen de horas — ${mesActual}`,
+    body: horasLabel + disponiblesLabel,
+    link: '/mis-horas',
+    dedup_key: `monthly_summary_${mesActual}`,
+  })
 }
 
 export async function checkComputedNotifications(): Promise<void> {

@@ -224,8 +224,14 @@ export default function FloatingChat({ userId }: { userId: string }) {
   async function openDM(targetId: string) {
     setTab('convs')
     setSearch('')
-    const { data: myDirectRows } = await sb.from('conversation_members')
+    const { data: myDirectRows, error: membErr } = await sb.from('conversation_members')
       .select('conversation_id').eq('user_id', userId)
+
+    if (membErr) {
+      console.error('Chat DM error (¿corriste la migración SQL?):', membErr)
+      return
+    }
+
     const myIds = (myDirectRows ?? []).map((r: any) => r.conversation_id)
 
     if (myIds.length > 0) {
@@ -237,9 +243,9 @@ export default function FloatingChat({ userId }: { userId: string }) {
       }
     }
 
-    const { data: newConv } = await sb.from('conversations')
+    const { data: newConv, error: convErr } = await sb.from('conversations')
       .insert({ type: 'direct', created_by: userId }).select().single()
-    if (!newConv) return
+    if (convErr || !newConv) { console.error('Error creando conversación:', convErr); return }
     await sb.from('conversation_members').insert([
       { conversation_id: (newConv as any).id, user_id: userId },
       { conversation_id: (newConv as any).id, user_id: targetId },
