@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { findOrCreateDM, createGroupConversation } from '@/app/(app)/chat/conversationActions'
+import { findOrCreateDM, createGroupConversation, fetchConversations, markConversationRead, updateConversationLastMessage } from '@/app/(app)/chat/conversationActions'
 import { MessageSquare, X, Send, Users, Hash, UserPlus, Search, Check } from 'lucide-react'
 import Image from 'next/image'
 
@@ -81,57 +81,9 @@ export default function FloatingChat({ userId }: { userId: string }) {
 
   // ─── Load conversations ──────────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
-    const { data: myRows } = await sb
-      .from('conversation_members')
-      .select('conversation_id, last_read_at')
-      .eq('user_id', userId)
-    if (!myRows || myRows.length === 0) { setConversations([]); return }
-
-    const convIds = (myRows as any[]).map(r => r.conversation_id)
-    const readMap = new Map((myRows as any[]).map(r => [r.conversation_id, r.last_read_at]))
-
-    const [{ data: convData }, { data: allMembers }, { data: recentMsgs }] = await Promise.all([
-      sb.from('conversations').select('id, type, name, last_message_at').in('id', convIds),
-      sb.from('conversation_members').select('conversation_id, user_id, user:users(id, full_name, avatar_url)').in('conversation_id', convIds),
-      sb.from('messages').select('conversation_id, content, created_at').in('conversation_id', convIds).order('created_at', { ascending: false }).limit(convIds.length * 5),
-    ])
-
-    const membersByConv = new Map<string, ConvMember[]>()
-    ;(allMembers ?? []).forEach((m: any) => {
-      if (!membersByConv.has(m.conversation_id)) membersByConv.set(m.conversation_id, [])
-      membersByConv.get(m.conversation_id)!.push({ user_id: m.user_id, user: m.user })
-    })
-
-    const lastMsgByConv = new Map<string, any>()
-    ;(recentMsgs ?? []).forEach((m: any) => {
-      if (!lastMsgByConv.has(m.conversation_id)) lastMsgByConv.set(m.conversation_id, m)
-    })
-
-    const msgsByConv = new Map<string, any[]>()
-    ;(recentMsgs ?? []).forEach((m: any) => {
-      if (!msgsByConv.has(m.conversation_id)) msgsByConv.set(m.conversation_id, [])
-      msgsByConv.get(m.conversation_id)!.push(m)
-    })
-
-    const convs: ConvRow[] = (convData ?? []).map((c: any) => {
-      const myLastRead = readMap.get(c.id) ?? '1970-01-01'
-      const msgs = msgsByConv.get(c.id) ?? []
-      const unread = msgs.filter(m => m.created_at > myLastRead).length
-      const lastMsg = lastMsgByConv.get(c.id)
-      return {
-        id: c.id, type: c.type, name: c.name,
-        last_message_at: c.last_message_at,
-        myLastRead,
-        members: membersByConv.get(c.id) ?? [],
-        lastMsg: lastMsg?.content ?? null,
-        unread,
-      }
-    }).sort((a: ConvRow, b: ConvRow) =>
-      new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-    )
-
-    setConversations(convs)
-  }, [userId, sb])
+    const convs = await fetchConversations(userId)
+    setConversations(convs as ConvRow[])
+  }, [userId])
 
   // ─── Init ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -189,10 +141,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
         setMessages((data ?? []) as unknown as Msg[])
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'instant' }), 60)
       })
-    sb.from('conversation_members')
-      .update({ last_read_at: new Date().toISOString() })
-      .eq('conversation_id', activeId).eq('user_id', userId)
-      .then(() => loadConversations())
+    markConversationRead(activeId, userId).then(() => loadConversations())
   }, [activeId])
 
   useEffect(() => {
@@ -213,7 +162,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
     if (data) {
       setMessages(prev => prev.find(m => m.id === (data as any).id) ? prev : [...prev, data as any])
       if (!isGlobal) {
-        await sb.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', activeId)
+        await updateConversationLastMessage(activeId)
         loadConversations()
       }
     }
