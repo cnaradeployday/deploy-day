@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { checkComputedNotifications, fetchNotifications, markAllNotificationsRead } from './actions'
+import { checkComputedNotifications, fetchNotifications } from './actions'
 import NovedadesClient from './NovedadesClient'
 
 export default async function NovedadesPage() {
@@ -23,7 +23,6 @@ export default async function NovedadesPage() {
 
   await checkComputedNotifications()
   const { data: notifications } = await fetchNotifications()
-  await markAllNotificationsRead()
 
   return <NovedadesClient initialNotifications={notifications} />
 }

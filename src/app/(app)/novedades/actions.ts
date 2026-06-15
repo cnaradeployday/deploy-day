@@ -37,11 +37,11 @@ export async function fetchNotifications(): Promise<{ data: any[]; unread: numbe
     .from('notifications')
     .select('*')
     .eq('user_id', user.id)
+    .is('read_at', null)
     .order('created_at', { ascending: false })
     .limit(60)
 
-  const unread = (data ?? []).filter(n => !n.read_at).length
-  return { data: data ?? [], unread }
+  return { data: data ?? [], unread: (data ?? []).length }
 }
 
 export async function markNotificationRead(id: string) {

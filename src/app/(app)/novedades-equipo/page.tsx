@@ -29,6 +29,7 @@ export default async function NovedadesEquipoPage() {
   const { data: notifications } = await admin
     .from('notifications')
     .select('*, user:users!notifications_user_id_fkey(id, full_name, avatar_url)')
+    .is('read_at', null)
     .order('created_at', { ascending: false })
     .limit(200)
 
