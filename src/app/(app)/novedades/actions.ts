@@ -170,35 +170,67 @@ export async function checkComputedNotifications(): Promise<void> {
     }
   }
 
-  // ── 2. Tareas próximas a vencer sin iniciar ────────────────────────────────
+  // ── 2. Tareas próximas a vencer (no terminadas) ───────────────────────────
   const in7Days = new Date(today)
   in7Days.setDate(today.getDate() + 7)
   const in7DaysStr = in7Days.toISOString().split('T')[0]
   const weekKey = getWeekKey(today)
 
-  const [{ data: tasksDue }, { data: collabDue }] = await Promise.all([
-    admin.from('tasks').select('id, title, due_date')
-      .eq('direct_responsible_id', userId).eq('status', 'creado')
+  const notStartedStatuses = ['creado', 'estimado']
+
+  const [{ data: tasksDue }, { data: collabDue }, { data: tasksOverdue }, { data: collabOverdue }] = await Promise.all([
+    // Próximas a vencer (sin terminar)
+    admin.from('tasks').select('id, title, due_date, status')
+      .eq('direct_responsible_id', userId)
+      .in('status', notStartedStatuses)
       .gte('due_date', todayStr).lte('due_date', in7DaysStr),
     admin.from('task_collaborators')
       .select('task:tasks!inner(id, title, due_date, status)')
-      .eq('user_id', userId).eq('task.status', 'creado')
+      .eq('user_id', userId)
+      .in('task.status', notStartedStatuses)
       .gte('task.due_date', todayStr).lte('task.due_date', in7DaysStr),
+    // Vencidas y sin terminar
+    admin.from('tasks').select('id, title, due_date, status')
+      .eq('direct_responsible_id', userId)
+      .not('status', 'in', '(terminado,presentado)')
+      .lt('due_date', todayStr),
+    admin.from('task_collaborators')
+      .select('task:tasks!inner(id, title, due_date, status)')
+      .eq('user_id', userId)
+      .not('task.status', 'in', '(terminado,presentado)')
+      .lt('task.due_date', todayStr),
   ])
 
   const allDueSoon = [
     ...(tasksDue ?? []),
     ...(collabDue ?? []).map((c: any) => c.task).filter(Boolean),
-  ] as { id: string; title: string; due_date: string }[]
+  ] as { id: string; title: string; due_date: string; status: string }[]
 
   for (const task of allDueSoon) {
     const fechaStr = new Date(task.due_date + 'T12:00:00').toLocaleDateString('es-AR')
+    const statusLabel = task.status === 'creado' ? 'Creada' : 'Iniciada'
     await upsert({
       type: 'task_due_soon',
       title: `Tarea próxima a vencer: "${task.title}"`,
-      body: `Vence el ${fechaStr} y todavía está en estado "Creada". ¿Ya la estimaste?`,
+      body: `Vence el ${fechaStr} y está en estado "${statusLabel}". Asegurate de avanzar.`,
       link: `/mis-tareas`,
       dedup_key: `task_due_soon_${task.id}_${weekKey}`,
+    })
+  }
+
+  const allOverdue = [
+    ...(tasksOverdue ?? []),
+    ...(collabOverdue ?? []).map((c: any) => c.task).filter(Boolean),
+  ] as { id: string; title: string; due_date: string }[]
+
+  for (const task of allOverdue) {
+    const fechaStr = new Date(task.due_date + 'T12:00:00').toLocaleDateString('es-AR')
+    await upsert({
+      type: 'task_due_soon',
+      title: `Tarea vencida: "${task.title}"`,
+      body: `Venció el ${fechaStr} y todavía no está terminada.`,
+      link: `/mis-tareas`,
+      dedup_key: `task_overdue_${task.id}_${weekKey}`,
     })
   }
 
@@ -207,7 +239,16 @@ export async function checkComputedNotifications(): Promise<void> {
     .from('time_entries').select('entry_date').eq('user_id', userId)
     .order('entry_date', { ascending: false }).limit(1).maybeSingle()
 
-  if (lastEntry?.entry_date) {
+  if (!lastEntry) {
+    // Nunca cargó horas
+    await upsert({
+      type: 'no_hours_logged',
+      title: 'Todavía no cargaste ninguna hora',
+      body: 'Registrá tu tiempo en "Mis horas" para que quede reflejado en los reportes.',
+      link: '/mis-horas',
+      dedup_key: `no_hours_ever_${mesActual}`,
+    })
+  } else if (lastEntry.entry_date) {
     const lastDate = new Date(lastEntry.entry_date + 'T12:00:00')
     const businessDays = getBusinessDaysSince(lastDate, today)
     if (businessDays >= 2) {
