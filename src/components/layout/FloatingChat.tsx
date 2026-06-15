@@ -73,6 +73,9 @@ export default function FloatingChat({ userId }: { userId: string }) {
   const [showNewGroup, setShowNewGroup] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [groupMembers, setGroupMembers] = useState<string[]>([])
+  const [groupError, setGroupError] = useState<string | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const [imagePreview, setImagePreview] = useState<{ file: File; url: string } | null>(null)
   const [pendingDmName, setPendingDmName] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -151,21 +154,39 @@ export default function FloatingChat({ userId }: { userId: string }) {
     if (messages.length > 0) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  // ─── Image paste ─────────────────────────────────────────────────────────
-  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+  // ─── Image paste — show preview, send on click ───────────────────────────
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const items = Array.from(e.clipboardData.items)
-    const imageItem = items.find(i => i.type.startsWith('image/'))
-    if (!imageItem || !activeId) return
+    const imageItem = items.find((i: any) => i.type.startsWith('image/'))
+    if (!imageItem) return
     e.preventDefault()
-    const file = imageItem.getAsFile()
+    const file = (imageItem as any).getAsFile() as File | null
     if (!file) return
+    setImageError(null)
+    const previewUrl = URL.createObjectURL(file)
+    setImagePreview({ file, url: previewUrl })
+  }
+
+  async function sendImage() {
+    if (!imagePreview || !activeId) return
     setUploadingImage(true)
+    setImageError(null)
+    const { file } = imagePreview
     const ext = file.type.split('/')[1] ?? 'png'
     const path = `${userId}/${Date.now()}.${ext}`
+
+    // Try to create bucket if it doesn't exist
+    await sb.storage.createBucket('chat-images', { public: true }).catch(() => {})
+
     const { data: up, error } = await sb.storage.from('chat-images').upload(path, file, { contentType: file.type })
-    if (error || !up) { setUploadingImage(false); return }
+    if (error || !up) {
+      setImageError('No se pudo subir la imagen. Verificá que el bucket "chat-images" esté creado en Supabase Storage como público.')
+      setUploadingImage(false)
+      return
+    }
     const { data: urlData } = sb.storage.from('chat-images').getPublicUrl(up.path)
     const url = urlData.publicUrl
+    setImagePreview(null)
     setUploadingImage(false)
     const isGlobal = activeId === GLOBAL_ID
     const { data } = await sb.from('messages').insert({
@@ -216,9 +237,11 @@ export default function FloatingChat({ userId }: { userId: string }) {
 
   // ─── Create group ────────────────────────────────────────────────────────
   async function createGroup() {
-    if (!groupName.trim() || groupMembers.length === 0) return
+    if (!groupName.trim()) { setGroupError('Ingresá un nombre para el grupo'); groupNameRef.current?.focus(); return }
+    if (groupMembers.length === 0) { setGroupError('Seleccioná al menos un participante'); return }
+    setGroupError(null)
     const result = await createGroupConversation(groupName.trim(), groupMembers, userId)
-    if ('error' in result) { setDmError(result.error); return }
+    if ('error' in result) { setGroupError(result.error); return }
     const name = groupName.trim()
     setGroupName(''); setGroupMembers([]); setShowNewGroup(false)
     await loadConversations()
@@ -457,23 +480,41 @@ export default function FloatingChat({ userId }: { userId: string }) {
 
                 {/* Input */}
                 <div className="bg-[#F0F2F5] px-3 py-2 shrink-0">
+                  {imageError && (
+                    <div className="mb-1.5 px-2 py-1 bg-red-50 border border-red-200 rounded-lg text-[9px] text-red-600">
+                      {imageError}
+                      <button onClick={() => { setImageError(null); setImagePreview(null) }} className="ml-2 underline">Cerrar</button>
+                    </div>
+                  )}
+                  {imagePreview && (
+                    <div className="mb-1.5 flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-gray-200">
+                      <img src={imagePreview.url} alt="preview" className="h-14 w-14 object-cover rounded-lg shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] text-gray-500 truncate">Imagen lista para enviar</p>
+                      </div>
+                      <button onClick={() => { setImagePreview(null); URL.revokeObjectURL(imagePreview.url) }}
+                        className="p-1 rounded-lg hover:bg-gray-100 shrink-0"><X size={12} className="text-gray-400" /></button>
+                      <button onClick={sendImage} disabled={uploadingImage}
+                        className="w-8 h-8 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-full flex items-center justify-center disabled:opacity-30 transition-all shrink-0">
+                        {uploadingImage ? <ImageIcon size={12} className="animate-pulse" /> : <Send size={13} />}
+                      </button>
+                    </div>
+                  )}
                   <div className="flex items-end gap-2 bg-white rounded-2xl px-3 py-2 shadow-sm">
                     <textarea
                       ref={inputRef} value={input}
                       onChange={e => setInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
                       onPaste={handlePaste}
-                      placeholder={uploadingImage ? 'Subiendo imagen...' : 'Escribí un mensaje o pegá una imagen...'}
+                      placeholder="Escribí un mensaje o pegá una imagen..."
                       rows={1}
-                      disabled={uploadingImage}
-                      className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none max-h-24 disabled:opacity-50"
+                      className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none max-h-24"
                       onInput={e => {
                         const t = e.target as HTMLTextAreaElement
                         t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'
                       }}
                     />
-                    {uploadingImage && <ImageIcon size={14} className="text-[#1B9BF0] animate-pulse shrink-0" />}
-                    <button onClick={sendMessage} disabled={!input.trim() || sending || uploadingImage}
+                    <button onClick={sendMessage} disabled={!input.trim() || sending}
                       className="w-8 h-8 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-full flex items-center justify-center disabled:opacity-30 transition-all shrink-0">
                       <Send size={13} />
                     </button>
@@ -491,10 +532,13 @@ export default function FloatingChat({ userId }: { userId: string }) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-2xl p-5 w-80 shadow-xl">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Nuevo grupo</h3>
-                <input ref={groupNameRef} value={groupName} onChange={e => setGroupName(e.target.value)}
-                  placeholder="Nombre del grupo *"
+                <input ref={groupNameRef} value={groupName} onChange={e => { setGroupName(e.target.value); setGroupError(null) }}
+                  placeholder="Nombre del grupo"
                   autoFocus
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
+                  onKeyDown={e => { if (e.key === 'Enter') createGroup() }}
+                  className={`w-full px-3 py-2 border rounded-xl text-sm mb-1 focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] ${groupError && !groupName.trim() ? 'border-red-400' : 'border-gray-200'}`} />
+                {groupError && <p className="text-[10px] text-red-500 mb-2">{groupError}</p>}
+                {!groupError && <div className="mb-2" />}
                 <p className="text-xs text-gray-500 mb-2">Participantes (elegí al menos uno):</p>
                 <div className="max-h-44 overflow-y-auto space-y-0.5 mb-4 -mx-1">
                   {users.filter(u => u.id !== userId).map(u => {
@@ -512,10 +556,10 @@ export default function FloatingChat({ userId }: { userId: string }) {
                   })}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => { setShowNewGroup(false); setGroupName(''); setGroupMembers([]) }}
+                  <button onClick={() => { setShowNewGroup(false); setGroupName(''); setGroupMembers([]); setGroupError(null) }}
                     className="flex-1 py-2 rounded-xl border border-gray-200 text-xs text-gray-500 hover:bg-gray-50">Cancelar</button>
-                  <button onClick={createGroup} disabled={!groupName.trim() || groupMembers.length === 0}
-                    className="flex-1 py-2 rounded-xl bg-[#1B9BF0] text-white text-xs font-semibold disabled:opacity-40">
+                  <button onClick={createGroup}
+                    className="flex-1 py-2 rounded-xl bg-[#1B9BF0] text-white text-xs font-semibold hover:bg-[#0F7ACC]">
                     Crear grupo
                   </button>
                 </div>
