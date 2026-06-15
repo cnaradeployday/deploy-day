@@ -27,3 +27,6 @@ ALTER TABLE conversation_members ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "auth_conversations" ON conversations FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "auth_conv_members" ON conversation_members FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Rename 'type' (reserved word in PostgreSQL) to 'conv_type'
+ALTER TABLE conversations RENAME COLUMN type TO conv_type;

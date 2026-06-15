@@ -15,7 +15,7 @@ export async function fetchConversations(userId: string) {
   const readMap = new Map((myRows as any[]).map(r => [r.conversation_id, r.last_read_at]))
 
   const [{ data: convData }, { data: allMembers }, { data: recentMsgs }] = await Promise.all([
-    db.from('conversations').select('id, type, name, last_message_at').in('id', convIds),
+    db.from('conversations').select('id, conv_type, name, last_message_at').in('id', convIds),
     db.from('conversation_members').select('conversation_id, user_id, user:users(id, full_name, avatar_url)').in('conversation_id', convIds),
     db.from('messages').select('conversation_id, content, created_at').in('conversation_id', convIds).order('created_at', { ascending: false }).limit(convIds.length * 5),
   ])
@@ -39,7 +39,7 @@ export async function fetchConversations(userId: string) {
     const msgs = msgsByConv.get(c.id) ?? []
     const unread = msgs.filter((m: any) => m.created_at > myLastRead).length
     return {
-      id: c.id, type: c.type, name: c.name,
+      id: c.id, type: c.conv_type, name: c.name,
       last_message_at: c.last_message_at,
       myLastRead,
       members: membersByConv.get(c.id) ?? [],
@@ -63,7 +63,6 @@ export async function updateConversationLastMessage(conversationId: string) {
 
 export async function findOrCreateDM(myId: string, targetId: string): Promise<{ id: string } | { error: string }> {
   const db = admin()
-  // Find existing direct conversation between the two users
   const { data: myRows } = await db.from('conversation_members').select('conversation_id').eq('user_id', myId)
   const myIds = (myRows ?? []).map((r: any) => r.conversation_id)
 
@@ -71,14 +70,13 @@ export async function findOrCreateDM(myId: string, targetId: string): Promise<{ 
     const { data: shared } = await db.from('conversation_members')
       .select('conversation_id').eq('user_id', targetId).in('conversation_id', myIds)
     for (const row of (shared ?? []) as any[]) {
-      const { data: conv } = await db.from('conversations').select('type').eq('id', row.conversation_id).single()
-      if ((conv as any)?.type === 'direct') return { id: row.conversation_id }
+      const { data: conv } = await db.from('conversations').select('conv_type').eq('id', row.conversation_id).single()
+      if ((conv as any)?.conv_type === 'direct') return { id: row.conversation_id }
     }
   }
 
-  // Create new DM
   const { data: newConv, error } = await db.from('conversations')
-    .insert({ type: 'direct', created_by: myId }).select('id').single()
+    .insert({ conv_type: 'direct', created_by: myId }).select('id').single()
   if (error || !newConv) return { error: error?.message ?? 'Error creando conversación' }
 
   await db.from('conversation_members').insert([
@@ -93,7 +91,7 @@ export async function createGroupConversation(
 ): Promise<{ id: string } | { error: string }> {
   const db = admin()
   const { data: newConv, error } = await db.from('conversations')
-    .insert({ type: 'group', name, created_by: createdBy }).select('id').single()
+    .insert({ conv_type: 'group', name, created_by: createdBy }).select('id').single()
   if (error || !newConv) return { error: error?.message ?? 'Error creando grupo' }
 
   const allMembers = [...new Set([createdBy, ...memberIds])]
