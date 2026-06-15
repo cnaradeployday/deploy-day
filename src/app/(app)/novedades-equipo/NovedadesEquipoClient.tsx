@@ -1,8 +1,9 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Bell, Clock, AlertTriangle, StickyNote, LayoutGrid, CheckSquare, Timer, Search, X } from 'lucide-react'
+import { Bell, Clock, AlertTriangle, StickyNote, LayoutGrid, CheckSquare, Timer, Search, X, Check } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { markNotificationRead } from '../novedades/actions'
 
 const TYPE_META: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
   task_assigned:             { icon: CheckSquare,   color: 'text-blue-600',   bg: 'bg-blue-100',   label: 'Tarea asignada' },
@@ -52,7 +53,8 @@ const TYPE_FILTER_OPTIONS = [
   { value: 'pizarron_new_post', label: 'Pizarrón' },
 ]
 
-export default function NovedadesEquipoClient({ notifications }: { notifications: any[] }) {
+export default function NovedadesEquipoClient({ notifications: initial }: { notifications: any[] }) {
+  const [notifications, setNotifications] = useState(initial)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterRead, setFilterRead] = useState<'all' | 'unread' | 'read'>('all')
@@ -79,6 +81,11 @@ export default function NovedadesEquipoClient({ notifications }: { notifications
       return true
     })
   }, [notifications, filterUser, filterType, filterRead, search])
+
+  async function handleMarkRead(id: string) {
+    setNotifications(prev => prev.filter(n => n.id !== id))
+    await markNotificationRead(id)
+  }
 
   const unreadCount = notifications.filter(n => !n.read_at).length
   const hasFilters = filterUser || filterType || filterRead !== 'all' || search
@@ -160,6 +167,10 @@ export default function NovedadesEquipoClient({ notifications }: { notifications
                   {n.link && (
                     <Link href={n.link} className="text-[10px] text-[#1B9BF0] hover:underline font-medium">Ver →</Link>
                   )}
+                  <button onClick={() => handleMarkRead(n.id)}
+                    className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                    <Check size={10} /> Leído
+                  </button>
                 </div>
               </div>
             </div>

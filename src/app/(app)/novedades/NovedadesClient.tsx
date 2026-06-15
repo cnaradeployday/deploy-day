@@ -49,12 +49,12 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
   const unread = notifications.filter(n => !n.read_at).length
 
   async function handleMarkRead(id: string) {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+    setNotifications(prev => prev.filter(n => n.id !== id))
     await markNotificationRead(id)
   }
 
   async function handleMarkAll() {
-    setNotifications(prev => prev.map(n => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })))
+    setNotifications([])
     await markAllNotificationsRead()
   }
 
@@ -107,13 +107,11 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
                         <p className={`text-sm font-semibold leading-snug ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
                           {n.title}
                         </p>
-                        {isUnread && (
-                          <button onClick={() => handleMarkRead(n.id)}
-                            className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-gray-200 transition-all"
-                            title="Marcar como leído">
-                            <Check size={12} className="text-gray-400" />
-                          </button>
-                        )}
+                        <button onClick={() => handleMarkRead(n.id)}
+                          className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+                          title="Marcar como leído">
+                          <Check size={10} /> Leído
+                        </button>
                       </div>
                       {n.body && <p className="text-sm text-gray-400 mt-0.5 leading-relaxed">{n.body}</p>}
                       <div className="flex items-center gap-3 mt-1.5">
