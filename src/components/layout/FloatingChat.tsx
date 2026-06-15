@@ -483,10 +483,13 @@ export default function FloatingChat({ userId }: { userId: string }) {
             )}
           </div>
 
-          {/* ── New group modal ── */}
-          {showNewGroup && (
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-              <div className="bg-white rounded-2xl p-5 w-80 shadow-xl">
+        </div>
+      )}
+
+      {/* ── New group modal (outside panel to avoid overflow-hidden clipping) ── */}
+      {showNewGroup && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-2xl p-5 w-80 shadow-xl">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Nuevo grupo</h3>
                 <input ref={groupNameRef} value={groupName} onChange={e => setGroupName(e.target.value)}
                   placeholder="Nombre del grupo *"
@@ -516,9 +519,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
                     Crear grupo
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
