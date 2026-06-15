@@ -53,7 +53,11 @@ export async function fetchConversations(userId: string) {
       lastMsg: lastMsgByConv.get(c.id)?.content ?? null,
       unread,
     }
-  }).sort((a: any, b: any) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime())
+  }).sort((a: any, b: any) => {
+    const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : Date.now()
+    const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : Date.now()
+    return tb - ta
+  })
 }
 
 export async function markConversationRead(conversationId: string, userId: string) {
@@ -103,7 +107,7 @@ export async function createGroupConversation(
   const db = admin()
   // Groups have a name
   const { data: newConv, error } = await db.from('conversations')
-    .insert({ name, created_by: createdBy, last_message_at: new Date().toISOString() }).select('id').single()
+    .insert({ name, created_by: createdBy }).select('id').single()
   if (error || !newConv) return { error: error?.message ?? 'Error creando grupo' }
 
   const allMembers = [...new Set([createdBy, ...memberIds])]

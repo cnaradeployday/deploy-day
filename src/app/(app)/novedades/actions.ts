@@ -58,6 +58,22 @@ export async function markAllNotificationsRead() {
   await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('user_id', user.id).is('read_at', null)
 }
 
+export async function dismissStaleHoursNotifs(): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  const todayStr = new Date().toISOString().split('T')[0]
+  const { data: todayEntry } = await getAdmin()
+    .from('time_entries').select('id').eq('user_id', user.id).eq('entry_date', todayStr).limit(1).maybeSingle()
+  if (!todayEntry) return
+  // User logged hours today → mark stale no_hours_logged notifications as read
+  await getAdmin().from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .eq('type', 'no_hours_logged')
+    .is('read_at', null)
+}
+
 export async function markTaskDone(taskId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -179,23 +195,21 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
   const notStartedStatuses = ['creado', 'estimado']
 
   const [{ data: tasksDue }, { data: collabDue }, { data: tasksOverdue }, { data: collabOverdue }] = await Promise.all([
-    // Próximas a vencer (sin terminar)
-    admin.from('tasks').select('id, title, due_date, status')
+    admin.from('tasks').select('id, title, due_date, status, project:projects(name, client:clients(name))')
       .eq('direct_responsible_id', userId)
       .in('status', notStartedStatuses)
       .gte('due_date', todayStr).lte('due_date', in7DaysStr),
     admin.from('task_collaborators')
-      .select('task:tasks!inner(id, title, due_date, status)')
+      .select('task:tasks!inner(id, title, due_date, status, project:projects(name, client:clients(name)))')
       .eq('user_id', userId)
       .in('task.status', notStartedStatuses)
       .gte('task.due_date', todayStr).lte('task.due_date', in7DaysStr),
-    // Vencidas y sin terminar
-    admin.from('tasks').select('id, title, due_date, status')
+    admin.from('tasks').select('id, title, due_date, status, project:projects(name, client:clients(name))')
       .eq('direct_responsible_id', userId)
       .not('status', 'in', '(terminado,presentado)')
       .lt('due_date', todayStr),
     admin.from('task_collaborators')
-      .select('task:tasks!inner(id, title, due_date, status)')
+      .select('task:tasks!inner(id, title, due_date, status, project:projects(name, client:clients(name)))')
       .eq('user_id', userId)
       .not('task.status', 'in', '(terminado,presentado)')
       .lt('task.due_date', todayStr),
@@ -204,7 +218,7 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
   const allDueSoon = [
     ...(tasksDue ?? []),
     ...(collabDue ?? []).map((c: any) => c.task).filter(Boolean),
-  ] as { id: string; title: string; due_date: string; status: string }[]
+  ] as { id: string; title: string; due_date: string; status: string; project?: { name: string; client?: { name: string } } }[]
 
   for (const task of allDueSoon) {
     const fechaStr = new Date(task.due_date + 'T12:00:00').toLocaleDateString('es-AR')
@@ -215,13 +229,14 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
       body: `Vence el ${fechaStr} y está en estado "${statusLabel}". Asegurate de avanzar.`,
       link: `/mis-tareas`,
       dedup_key: `task_due_soon_${task.id}_${weekKey}`,
+      metadata: { client_name: task.project?.client?.name ?? null, project_name: task.project?.name ?? null },
     })
   }
 
   const allOverdue = [
     ...(tasksOverdue ?? []),
     ...(collabOverdue ?? []).map((c: any) => c.task).filter(Boolean),
-  ] as { id: string; title: string; due_date: string }[]
+  ] as { id: string; title: string; due_date: string; project?: { name: string; client?: { name: string } } }[]
 
   for (const task of allOverdue) {
     const fechaStr = new Date(task.due_date + 'T12:00:00').toLocaleDateString('es-AR')
@@ -231,6 +246,7 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
       body: `Venció el ${fechaStr} y todavía no está terminada.`,
       link: `/mis-tareas`,
       dedup_key: `task_overdue_${task.id}_${weekKey}`,
+      metadata: { client_name: task.project?.client?.name ?? null, project_name: task.project?.name ?? null },
     })
   }
 

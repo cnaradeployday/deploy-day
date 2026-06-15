@@ -162,6 +162,11 @@ export default function NovedadesEquipoClient({ notifications: initial }: { noti
                 </div>
                 <p className={`text-sm font-medium leading-snug ${isUnread ? 'text-gray-900' : 'text-gray-500'}`}>{n.title}</p>
                 {n.body && <p className="text-xs text-gray-400 mt-0.5">{n.body}</p>}
+                {(n.metadata?.client_name || n.metadata?.project_name) && (
+                  <p className="text-[10px] text-[#1B9BF0] mt-0.5 font-medium">
+                    {[n.metadata.client_name, n.metadata.project_name].filter(Boolean).join(' · ')}
+                  </p>
+                )}
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-[10px] text-gray-300">{timeAgo(n.created_at)}</span>
                   {n.link && (

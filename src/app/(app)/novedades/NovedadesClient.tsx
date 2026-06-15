@@ -127,6 +127,11 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
                         </button>
                       </div>
                       {n.body && <p className="text-sm text-gray-400 mt-0.5 leading-relaxed">{n.body}</p>}
+                      {(n.metadata?.client_name || n.metadata?.project_name) && (
+                        <p className="text-[11px] text-[#1B9BF0] mt-1 font-medium">
+                          {[n.metadata.client_name, n.metadata.project_name].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         <span className="text-[11px] text-gray-300">{timeAgo(n.created_at)}</span>
                         {meta.label && <span className="text-[11px] text-gray-300">·</span>}
