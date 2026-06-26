@@ -92,7 +92,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   const [deletedIds, setDeletedIds] = useState<string[]>([])
   const [selStatus, setSelStatus] = useState<string[]>([]); const [selPriority, setSelPriority] = useState<string[]>([])
   const [selCliente, setSelCliente] = useState<string[]>([]); const [selProyecto, setSelProyecto] = useState<string[]>([])
-  const [selResponsable, setSelResponsable] = useState<string[]>([]); const [selMes, setSelMes] = useState<string[]>([])
+  const [selResponsable, setSelResponsable] = useState<string[]>([]); const [selMes, setSelMes] = useState<string[]>(filters.mes ? [filters.mes] : [new Date().toISOString().slice(0, 7)])
 
   const proyectosFiltradosPorCliente = selCliente.length
     ? proyectos.filter(p => p.clientId && selCliente.includes(p.clientId))

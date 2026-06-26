@@ -31,12 +31,6 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     const ids = proyectosAll?.filter(p => p.client_id === cliente).map(p => p.id) ?? []
     if (ids.length) query = query.in('project_id', ids)
   }
-  if (mes) {
-    const [y, m] = mes.split('-').map(Number)
-    const desde = new Date(y, m - 1, 1).toISOString().split('T')[0]
-    const hasta = new Date(y, m, 0).toISOString().split('T')[0]
-    query = query.gte('due_date', desde).lte('due_date', hasta)
-  }
 
   const { data: tareas } = await query
 
