@@ -36,7 +36,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
 
   if (customRoleId) {
     const [{ data: customRole }, { data: perms }] = await Promise.all([
-      admin.from('custom_roles').select('name').eq('id', customRoleId).single(),
+      admin.from('roles').select('name').eq('id', customRoleId).single(),
       admin.from('role_permissions').select('module, can_read').eq('role_id', customRoleId),
     ])
     customRoleName = customRole?.name ?? null
