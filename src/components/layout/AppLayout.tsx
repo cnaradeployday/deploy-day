@@ -160,7 +160,7 @@ export default function AppLayout({
   const canSeeItem = (item: { href: string; roles: string[] }) => {
     if (customRoleName !== null) {
       const key = item.href.replace('/', '').replace(/-/g, '_')
-      return customPermissions.includes(key)
+      return (customPermissions ?? []).includes(key)
     }
     return item.roles.includes(userRole)
   }
