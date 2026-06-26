@@ -158,12 +158,11 @@ export default function AppLayout({
   }
 
   const canSeeItem = (item: { href: string; roles: string[] }) => {
-    if (item.roles.includes(userRole)) return true
-    if (customPermissions && customPermissions.length > 0) {
+    if (customRoleName !== null) {
       const key = item.href.replace('/', '').replace(/-/g, '_')
       return customPermissions.includes(key)
     }
-    return false
+    return item.roles.includes(userRole)
   }
   const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)

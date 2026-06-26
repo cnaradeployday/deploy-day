@@ -37,7 +37,6 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const { data: proyectos } = await supabase
     .from('projects')
     .select('id, name, sold_hours, start_date, end_date, client:clients(id, name)')
-    .eq('is_active', true)
     .order('name')
 
   const proyectosDelMes = (proyectos ?? []).filter(p => {
