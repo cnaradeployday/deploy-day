@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import AppLayout from '@/components/layout/AppLayout'
 
@@ -20,9 +21,13 @@ export default async function Layout({ children }: { children: React.ReactNode }
   let customPermissions: string[] = []
 
   if (profile?.custom_role_id) {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
     const [{ data: customRole }, { data: perms }] = await Promise.all([
-      supabase.from('custom_roles').select('name').eq('id', profile.custom_role_id).single(),
-      supabase.from('role_permissions').select('module, can_read').eq('role_id', profile.custom_role_id),
+      admin.from('custom_roles').select('name').eq('id', profile.custom_role_id).single(),
+      admin.from('role_permissions').select('module, can_read').eq('role_id', profile.custom_role_id),
     ])
     customRoleName = customRole?.name ?? null
     if (perms) {
