@@ -14,20 +14,30 @@ export default async function Layout({ children }: { children: React.ReactNode }
     .eq('id', user.id)
     .single()
 
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  // Use admin client to read custom_role_id — RLS on users table may not
+  // expose this column to the user themselves via the regular client.
+  const { data: fullProfile } = await admin
+    .from('users')
+    .select('custom_role_id')
+    .eq('id', user.id)
+    .single()
+  const customRoleId = fullProfile?.custom_role_id ?? null
+
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
   let canSeeOnlineUsers = isAdmin
   let canManageNews = isAdmin
   let customRoleName: string | null = null
   let customPermissions: string[] = []
 
-  if (profile?.custom_role_id) {
-    const admin = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+  if (customRoleId) {
     const [{ data: customRole }, { data: perms }] = await Promise.all([
-      admin.from('custom_roles').select('name').eq('id', profile.custom_role_id).single(),
-      admin.from('role_permissions').select('module, can_read').eq('role_id', profile.custom_role_id),
+      admin.from('custom_roles').select('name').eq('id', customRoleId).single(),
+      admin.from('role_permissions').select('module, can_read').eq('role_id', customRoleId),
     ])
     customRoleName = customRole?.name ?? null
     if (perms) {
