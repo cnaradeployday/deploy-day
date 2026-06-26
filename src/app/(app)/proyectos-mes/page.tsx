@@ -27,21 +27,23 @@ export default async function ProyectosMesPage({ searchParams }: { searchParams:
   const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
-  // Proyectos que tienen segmentos en el mes
-  const { data: segmentos } = await supabase
-    .from('project_hour_segments')
-    .select('project_id, horas')
-    .lte('desde', ultimoDia)
-    .gte('hasta', primerDia)
+  // Proyectos cuyo rango de fechas se superpone con el mes seleccionado
+  const { data: proyectos } = await supabase
+    .from('projects')
+    .select('id, name, service_type, sold_hours, is_active, start_date, end_date, price_per_hour, currency, client:clients(id, name)')
+    .or(`start_date.is.null,start_date.lte.${ultimoDia}`)
+    .or(`end_date.is.null,end_date.gte.${primerDia}`)
+    .order('name')
 
-  const proyectoIds = [...new Set((segmentos ?? []).map(s => s.project_id))]
+  const proyectoIds = (proyectos ?? []).map(p => p.id)
 
-  const { data: proyectos } = proyectoIds.length
+  // Segmentos de horas dentro del mes para esos proyectos
+  const { data: segmentos } = proyectoIds.length
     ? await supabase
-        .from('projects')
-        .select('id, name, service_type, sold_hours, is_active, start_date, end_date, price_per_hour, currency, client:clients(id, name)')
-        .in('id', proyectoIds)
-        .order('name')
+        .from('project_hour_segments')
+        .select('project_id, horas')
+        .lte('desde', ultimoDia)
+        .gte('hasta', primerDia)
     : { data: [] }
 
   // Horas del segmento del mes por proyecto
