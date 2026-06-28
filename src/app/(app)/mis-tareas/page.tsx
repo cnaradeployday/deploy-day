@@ -40,24 +40,34 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .not('status', 'in', '(presentado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
-  // Tareas donde soy colaborador — usa admin client para evitar que RLS en tasks bloquee el join
-  const adminSupabase = createAdminClient()
-  const { data: colaboraciones } = await adminSupabase
+  // Paso 1: obtener task_ids donde soy colaborador (el anon client puede leer sus propias filas)
+  const { data: misColabs } = await supabase
     .from('task_collaborators')
-    .select(`
-      assigned_hours,
-      task:tasks(
-        id, title, status, priority, due_date, estimated_hours,
-        project_id,
-        project:projects(id, name, client:clients(id, name)),
-        direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)
-      )
-    `)
+    .select('task_id, assigned_hours')
     .eq('user_id', user?.id)
 
-  const colabTasks = (colaboraciones ?? [])
-    .map((c: any) => c.task ? { ...c.task, my_assigned_hours: c.assigned_hours, es_colaborador: true } : null)
-    .filter(Boolean)
+  const colabTaskIds = (misColabs ?? []).map((c: any) => c.task_id).filter(Boolean)
+
+  // Paso 2: obtener los tasks por ID — usando admin client para evitar que RLS bloquee tasks donde no soy responsable
+  const adminSupabase = createAdminClient()
+  const { data: colabTasksData } = colabTaskIds.length
+    ? await adminSupabase
+        .from('tasks')
+        .select(`
+          id, title, status, priority, due_date, estimated_hours,
+          project_id,
+          project:projects(id, name, client:clients(id, name)),
+          direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)
+        `)
+        .in('id', colabTaskIds)
+        .not('status', 'in', '(presentado)')
+    : { data: [] }
+
+  const horasPorTask: Record<string, number> = {}
+  ;(misColabs ?? []).forEach((c: any) => { if (c.task_id) horasPorTask[c.task_id] = c.assigned_hours })
+
+  const colabTasks = (colabTasksData ?? [])
+    .map((t: any) => ({ ...t, my_assigned_hours: horasPorTask[t.id] ?? null, es_colaborador: true }))
     .filter((t: any) => t.status !== 'presentado')
 
   const directasMapped = (directas ?? []).map((t: any) => ({
