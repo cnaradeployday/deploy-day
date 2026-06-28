@@ -5,7 +5,8 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const sp = await searchParams
-  const { status, priority, proyecto, cliente } = sp
+  const { priority, proyecto, cliente, todas } = sp
+  const status = sp.status // comma-separated statuses, or undefined = default (exclude terminado)
 
   const mesActual = new Date().toISOString().slice(0, 7)
   const mes = sp.mes ?? mesActual
@@ -85,11 +86,19 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     segPorProyecto[s.project_id] = (segPorProyecto[s.project_id] ?? 0) + s.horas
   })
 
+  const mostrarTodas = todas === '1'
   const allTasks = allTasksRaw
     .map((t: any) => ({ ...t, desde_segmento: false }))
+    .filter((t: any) => mostrarTodas || (t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia))
+
+  const selectedStatuses = status ? status.split(',') : null // null = default (exclude terminado)
 
   let tareasFiltered = [...allTasks]
-  if (status)   tareasFiltered = tareasFiltered.filter((t: any) => t.status === status)
+  if (selectedStatuses) {
+    tareasFiltered = tareasFiltered.filter((t: any) => selectedStatuses.includes(t.status))
+  } else {
+    tareasFiltered = tareasFiltered.filter((t: any) => t.status !== 'terminado')
+  }
   if (priority) tareasFiltered = tareasFiltered.filter((t: any) => t.priority === priority)
   if (proyecto) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.id === proyecto)
   if (cliente)  tareasFiltered = tareasFiltered.filter((t: any) => t.project?.client?.id === cliente)
@@ -130,7 +139,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       tareas={tareasConHoras}
       proyectos={proyectosUnicos}
       clientes={clientesUnicos}
-      filters={{ status, priority, proyecto, cliente, mes }}
+      filters={{ status, priority, proyecto, cliente, mes, todas }}
       mesActual={mesActual}
       canCreateTask={canCreateTask}
       horasEstimadasDelMes={Math.round(horasEstimadasDelMes * 10) / 10}

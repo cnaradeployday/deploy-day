@@ -1,7 +1,7 @@
 'use client'
 import { logActivity } from '@/lib/logActivity'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil } from 'lucide-react'
@@ -55,8 +55,49 @@ export default function MisTareasClient({
     router.push(pathname + '?' + p.toString())
   }, [params, pathname, router])
 
+  // Status multi-select: null = default (all except terminado)
+  const ALL_STATUSES = Object.keys(statusLabels)
+  const DEFAULT_STATUSES = ALL_STATUSES.filter(s => s !== 'terminado')
+  const selectedStatuses: string[] = filters.status
+    ? filters.status.split(',')
+    : DEFAULT_STATUSES
+
+  const [statusOpen, setStatusOpen] = useState(false)
+  const statusRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  function toggleStatus(s: string) {
+    let next: string[]
+    if (selectedStatuses.includes(s)) {
+      next = selectedStatuses.filter(x => x !== s)
+    } else {
+      next = [...selectedStatuses, s]
+    }
+    // If same as default, clear the param
+    const isDefault = next.length === DEFAULT_STATUSES.length && DEFAULT_STATUSES.every(d => next.includes(d))
+    update('status', isDefault ? '' : next.join(','))
+  }
+
+  const statusLabel = (() => {
+    if (selectedStatuses.length === ALL_STATUSES.length) return 'Todos'
+    if (selectedStatuses.length === 0) return 'Ninguno'
+    if (selectedStatuses.length === DEFAULT_STATUSES.length && DEFAULT_STATUSES.every(s => selectedStatuses.includes(s))) return 'Todos menos Terminado'
+    if (selectedStatuses.length === 1) return statusLabels[selectedStatuses[0]]
+    return selectedStatuses.length + ' estados'
+  })()
+
+  const mostrarTodas = filters.todas === '1'
+  function toggleTodas() { update('todas', mostrarTodas ? '' : '1') }
+
   const clear = () => router.push(pathname)
-  const hasFilters = Object.values(filters).some(v => v && v !== filters.mes)
+  const hasFilters = !!(filters.priority || filters.proyecto || filters.cliente || filters.status || filters.todas)
 
   const meses: string[] = []
   const now = new Date()
@@ -170,13 +211,26 @@ export default function MisTareasClient({
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div>
+          {/* Estado multi-select */}
+          <div ref={statusRef} className="relative">
             <label className="block text-xs text-gray-400 mb-1">Estado</label>
-            <select value={filters.status ?? ''} onChange={e => update('status', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-              <option value="">Todos</option>
-              {Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
+            <button type="button" onClick={() => setStatusOpen(o => !o)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white text-left flex items-center justify-between gap-1">
+              <span className="truncate text-gray-700">{statusLabel}</span>
+              <ChevronDown size={12} className="shrink-0 text-gray-400"/>
+            </button>
+            {statusOpen && (
+              <div className="absolute z-20 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                {ALL_STATUSES.map(s => (
+                  <label key={s} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" checked={selectedStatuses.includes(s)}
+                      onChange={() => toggleStatus(s)}
+                      className="rounded accent-[#1B9BF0]"/>
+                    <span className="text-xs text-gray-700">{statusLabels[s]}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-400 mb-1">Prioridad</label>
@@ -203,13 +257,20 @@ export default function MisTareasClient({
             </select>
           </div>
         </div>
-        {hasFilters && (
-          <div className="flex justify-end mt-3 pt-3 border-t border-gray-50">
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div onClick={toggleTodas}
+              className={'relative w-8 h-4 rounded-full transition-colors ' + (mostrarTodas ? 'bg-[#1B9BF0]' : 'bg-gray-200')}>
+              <div className={'absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ' + (mostrarTodas ? 'translate-x-4' : 'translate-x-0.5')}/>
+            </div>
+            <span className="text-xs text-gray-500">Todas las tareas pendientes</span>
+          </label>
+          {hasFilters && (
             <button onClick={clear} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
               <X size={12}/> Limpiar
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Tabla desktop */}
