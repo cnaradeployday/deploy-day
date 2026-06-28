@@ -86,7 +86,6 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   })
 
   const allTasks = allTasksRaw
-    .filter((t: any) => t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia)
     .map((t: any) => ({ ...t, desde_segmento: false }))
 
   let tareasFiltered = [...allTasks]
