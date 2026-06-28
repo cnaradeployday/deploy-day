@@ -40,16 +40,17 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .not('status', 'in', '(presentado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
-  // Paso 1: obtener task_ids donde soy colaborador (el anon client puede leer sus propias filas)
-  const { data: misColabs } = await supabase
+  // Admin client bypasses RLS en ambas tablas — necesario porque RLS en task_collaborators
+  // puede bloquear lecturas directas (solo las permite como join anidado desde tasks)
+  const adminSupabase = createAdminClient()
+
+  const { data: misColabs } = await adminSupabase
     .from('task_collaborators')
     .select('task_id, assigned_hours')
     .eq('user_id', user?.id)
 
   const colabTaskIds = (misColabs ?? []).map((c: any) => c.task_id).filter(Boolean)
 
-  // Paso 2: obtener los tasks por ID — usando admin client para evitar que RLS bloquee tasks donde no soy responsable
-  const adminSupabase = createAdminClient()
   const { data: colabTasksData } = colabTaskIds.length
     ? await adminSupabase
         .from('tasks')
