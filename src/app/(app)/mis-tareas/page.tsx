@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import MisTareasClient from './MisTareasClient'
 
 export default async function MisTareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -39,8 +40,9 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .not('status', 'in', '(presentado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
-  // Tareas donde soy colaborador — incluye project_id explícito
-  const { data: colaboraciones } = await supabase
+  // Tareas donde soy colaborador — usa admin client para evitar que RLS en tasks bloquee el join
+  const adminSupabase = createAdminClient()
+  const { data: colaboraciones } = await adminSupabase
     .from('task_collaborators')
     .select(`
       assigned_hours,
