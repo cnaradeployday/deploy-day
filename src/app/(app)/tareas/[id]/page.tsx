@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
+import { applyNickname } from '@/lib/utils/displayName'
 import TaskActions from './TaskActions'
 import TaskTimer from './TaskTimer'
 import TaskAttachments from './TaskAttachments'
@@ -40,7 +41,10 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   if (!t) notFound()
 
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('users').select('role, full_name, custom_role_id').eq('id', user?.id ?? '').single()
+  const { data: profile } = await supabase.from('users').select('role, full_name, nickname, custom_role_id').eq('id', user?.id ?? '').single()
+  const nickname = profile?.nickname ?? null
+  const displayName = profile?.nickname || profile?.full_name || ''
+  const tWithNick = applyNickname(t, user?.id ?? '', nickname)
 
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
@@ -70,10 +74,11 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   const isAssigned = isDirectResponsible || isCollaborator
   const canUseTimer = ['estimado','en_proceso'].includes(t.status) && isAssigned
 
-  const { data: comments } = await supabase
+  const { data: commentsRaw } = await supabase
     .from('task_comments')
     .select('id, content, created_at, user:users(id, full_name)')
     .eq('task_id', id)
+  const comments = applyNickname(commentsRaw ?? [], user?.id ?? '', nickname)
 
   const { data: attachments } = await supabase
     .from('task_attachments')
@@ -106,10 +111,10 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         </div>
       </div>
 
-      {(t.task_collaborators as any[])?.length > 0 && (
+      {(tWithNick.task_collaborators as any[])?.length > 0 && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="text-xs text-gray-400">Colaboradores:</span>
-          {(t.task_collaborators as any[]).map((c: any) => (
+          {(tWithNick.task_collaborators as any[]).map((c: any) => (
             <span key={c.id} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
               {c.user?.full_name}
             </span>
@@ -121,7 +126,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         {[
           { label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' },
           { label: 'Horas cargadas', value: Math.round(totalLogged * 100) / 100 + 'h' },
-          { label: 'Responsable', value: (t.direct_responsible as any)?.full_name ?? '—' },
+          { label: 'Responsable', value: (tWithNick.direct_responsible as any)?.full_name ?? '—' },
           { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', alert: isOverdue },
         ].map(({ label, value, alert }) => (
           <div key={label} className={'bg-white rounded-2xl border px-4 py-3 ' + (alert ? 'border-red-200' : 'border-gray-100')}>
@@ -169,7 +174,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <TaskAttachments
         taskId={t.id}
         userId={user?.id ?? ''}
-        userName={profile?.full_name ?? ''}
+        userName={displayName}
         canUpload={isAssigned || isAdmin}
         initialAttachments={attachments ?? []}
       />
@@ -177,8 +182,8 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       <TaskComments
         taskId={t.id}
         currentUserId={user?.id ?? ''}
-        currentUserName={profile?.full_name ?? ''}
-        initialComments={comments ?? []}
+        currentUserName={displayName}
+        initialComments={comments}
       />
     </div>
   )
