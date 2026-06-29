@@ -101,6 +101,11 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
       savingRef.current = false
       return
     }
+    localStorage.removeItem(storageKey)
+    setRunning(false)
+    setSeconds(0)
+    setAccumulatedSeconds(0)
+    setStartTime(null)
     setLoading(true)
 
     const { error } = await createClient().from('time_entries').insert({
@@ -118,11 +123,6 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
       return
     }
 
-    setRunning(false)
-    setSeconds(0)
-    setAccumulatedSeconds(0)
-    setStartTime(null)
-    localStorage.removeItem(storageKey)
     router.refresh()
     setLoading(false)
     savingRef.current = false
