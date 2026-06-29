@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { ChevronUp, ChevronDown, Download, RefreshCw, Users } from 'lucide-react'
+import Link from 'next/link'
 
 type SortKey = 'nombre' | 'disponibilidad' | 'programadas' | 'disponibles' | 'realizadas'
 
@@ -17,6 +18,15 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
   const router = useRouter()
   const [sortKey, setSortKey] = useState<SortKey>('nombre')
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  function toggleExpand(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -119,37 +129,98 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
             {sorted.map(f => {
               const pct = f.disponibilidad > 0 ? Math.min(100, Math.round((f.realizadas / f.disponibilidad) * 100)) : null
               const excedida = f.disponibilidad > 0 && f.programadas > f.disponibilidad
+              const isOpen = expanded.has(f.id)
+              const hasTareas = f.tareas?.length > 0
               return (
-                <tr key={f.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{f.nombre}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{f.disponibilidad > 0 ? f.disponibilidad + 'h' : <span className="text-gray-300">—</span>}</td>
-                  <td className="px-4 py-3 text-sm font-medium">
-                    <span className={excedida ? 'text-red-500' : 'text-gray-700'}>
-                      {f.programadas > 0 ? f.programadas + 'h' : <span className="text-gray-300">—</span>}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold">
-                    <span className={f.disponibilidad === 0 ? 'text-gray-300' : f.disponibles < 0 ? 'text-red-500' : 'text-green-600'}>
-                      {f.disponibilidad > 0 ? f.disponibles + 'h' : '—'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className={f.realizadas > 0 ? 'text-sm font-medium text-[#1B9BF0]' : 'text-sm text-gray-300'}>
-                        {f.realizadas > 0 ? f.realizadas + 'h' : '—'}
+                <>
+                  <tr key={f.id}
+                    onClick={() => hasTareas && toggleExpand(f.id)}
+                    className={'border-b border-gray-50 transition-colors ' + (hasTareas ? 'cursor-pointer hover:bg-gray-50' : '')}>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      <div className="flex items-center gap-2">
+                        {hasTareas
+                          ? <ChevronDown size={13} className={'text-gray-400 transition-transform shrink-0 ' + (isOpen ? 'rotate-180' : '')}/>
+                          : <span className="w-[13px] shrink-0"/>
+                        }
+                        {f.nombre}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{f.disponibilidad > 0 ? f.disponibilidad + 'h' : <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-3 text-sm font-medium">
+                      <span className={excedida ? 'text-red-500' : 'text-gray-700'}>
+                        {f.programadas > 0 ? f.programadas + 'h' : <span className="text-gray-300">—</span>}
                       </span>
-                      {pct !== null && f.realizadas > 0 && (
-                        <div className="flex items-center gap-1">
-                          <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
-                              style={{ width: pct + '%' }}/>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold">
+                      <span className={f.disponibilidad === 0 ? 'text-gray-300' : f.disponibles < 0 ? 'text-red-500' : 'text-green-600'}>
+                        {f.disponibilidad > 0 ? f.disponibles + 'h' : '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className={f.realizadas > 0 ? 'text-sm font-medium text-[#1B9BF0]' : 'text-sm text-gray-300'}>
+                          {f.realizadas > 0 ? f.realizadas + 'h' : '—'}
+                        </span>
+                        {pct !== null && f.realizadas > 0 && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
+                                style={{ width: pct + '%' }}/>
+                            </div>
+                            <span className="text-xs text-gray-400">{pct}%</span>
                           </div>
-                          <span className="text-xs text-gray-400">{pct}%</span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {isOpen && hasTareas && (
+                    <tr key={f.id + '-detail'} className="border-b border-gray-50 bg-gray-50/60">
+                      <td colSpan={5} className="px-4 pb-3 pt-1">
+                        <table className="w-full">
+                          <thead>
+                            <tr>
+                              <th className="text-left text-[10px] font-medium text-gray-400 pb-1.5 pr-3 w-1/2">Tarea</th>
+                              <th className="text-left text-[10px] font-medium text-gray-400 pb-1.5 pr-3">Cliente / Proyecto</th>
+                              <th className="text-left text-[10px] font-medium text-gray-400 pb-1.5 pr-3">Vence</th>
+                              <th className="text-right text-[10px] font-medium text-gray-400 pb-1.5 pr-3">Estimadas</th>
+                              <th className="text-right text-[10px] font-medium text-gray-400 pb-1.5">Realizadas</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {f.tareas.map((t: any) => (
+                              <tr key={t.id} className="border-t border-gray-100">
+                                <td className="pr-3 py-1.5">
+                                  <Link href={'/tareas/' + t.id}
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-xs text-gray-700 hover:text-[#1B9BF0] transition-colors line-clamp-1">
+                                    {t.title}
+                                  </Link>
+                                  {t.es_colaborador && (
+                                    <span className="text-[10px] text-gray-400 ml-1">(col.)</span>
+                                  )}
+                                </td>
+                                <td className="pr-3 py-1.5">
+                                  <span className="text-xs text-gray-500 line-clamp-1">{t.client_name} / {t.project_name}</span>
+                                </td>
+                                <td className="pr-3 py-1.5">
+                                  <span className="text-xs text-gray-500">{t.due_date ?? '—'}</span>
+                                </td>
+                                <td className="pr-3 py-1.5 text-right">
+                                  <span className="text-xs text-gray-600">{t.horas_estimadas > 0 ? t.horas_estimadas + 'h' : '—'}</span>
+                                </td>
+                                <td className="py-1.5 text-right">
+                                  <span className={t.horas_realizadas > 0 ? 'text-xs font-medium text-[#1B9BF0]' : 'text-xs text-gray-300'}>
+                                    {t.horas_realizadas > 0 ? t.horas_realizadas + 'h' : '—'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  )}
+                </>
               )
             })}
           </tbody>
