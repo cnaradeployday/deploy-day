@@ -41,19 +41,20 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   const adminSupabase = createAdminClient()
 
   const { data: tareasDirectas } = await adminSupabase
-    .from('tasks').select('direct_responsible_id, direct_hours')
+    .from('tasks')
+    .select('id, title, status, due_date, direct_responsible_id, direct_hours, project:projects(name, client:clients(name))')
     .not('status', 'in', '(presentado)')
     .gte('due_date', primerDia).lte('due_date', ultimoDia)
     .not('direct_responsible_id', 'is', null)
 
   const { data: tareasColab } = await adminSupabase
     .from('task_collaborators')
-    .select('user_id, assigned_hours, task:tasks(due_date, status)')
+    .select('user_id, assigned_hours, task:tasks(id, title, status, due_date, project:projects(name, client:clients(name)))')
     .gte('task.due_date', primerDia)
     .lte('task.due_date', ultimoDia)
 
   const { data: timeEntries } = userIds.length ? await adminSupabase
-    .from('time_entries').select('user_id, hours_logged')
+    .from('time_entries').select('user_id, task_id, hours_logged')
     .in('user_id', userIds).gte('entry_date', primerDia).lte('entry_date', ultimoDia)
     : { data: [] }
 
@@ -62,30 +63,76 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
     disponibilidadPorUser[d.user_id] = (disponibilidadPorUser[d.user_id] ?? 0) + d.horas
   })
 
-  const programadasPorUser: Record<string, number> = {}
-  ;(tareasDirectas ?? []).forEach((t: any) => {
-    if (t.direct_responsible_id && t.direct_hours)
-      programadasPorUser[t.direct_responsible_id] = (programadasPorUser[t.direct_responsible_id] ?? 0) + t.direct_hours
-  })
-  ;(tareasColab ?? []).filter((c: any) => {
-    const dd = c.task?.due_date
-    return dd && dd >= primerDia && dd <= ultimoDia && c.task?.status !== 'presentado'
-  }).forEach((c: any) => {
-    if (c.assigned_hours)
-      programadasPorUser[c.user_id] = (programadasPorUser[c.user_id] ?? 0) + c.assigned_hours
+  // Horas realizadas por usuario y tarea
+  const realizadasPorUserTask: Record<string, Record<string, number>> = {}
+  ;(timeEntries ?? []).forEach((e: any) => {
+    if (!realizadasPorUserTask[e.user_id]) realizadasPorUserTask[e.user_id] = {}
+    realizadasPorUserTask[e.user_id][e.task_id] = (realizadasPorUserTask[e.user_id][e.task_id] ?? 0) + e.hours_logged
   })
 
   const realizadasPorUser: Record<string, number> = {}
-  ;(timeEntries ?? []).forEach((e: any) => {
-    realizadasPorUser[e.user_id] = (realizadasPorUser[e.user_id] ?? 0) + e.hours_logged
+  Object.entries(realizadasPorUserTask).forEach(([uid, tasks]) => {
+    realizadasPorUser[uid] = Object.values(tasks).reduce((s, h) => s + h, 0)
+  })
+
+  // Tareas detalle por usuario
+  const tareasPorUser: Record<string, any[]> = {}
+
+  ;(tareasDirectas ?? []).forEach((t: any) => {
+    const uid = t.direct_responsible_id
+    if (!uid) return
+    if (!tareasPorUser[uid]) tareasPorUser[uid] = []
+    tareasPorUser[uid].push({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      due_date: t.due_date,
+      project_name: t.project?.name ?? '—',
+      client_name: t.project?.client?.name ?? '—',
+      horas_estimadas: t.direct_hours ?? 0,
+      horas_realizadas: Math.round((realizadasPorUserTask[uid]?.[t.id] ?? 0) * 10) / 10,
+      es_colaborador: false,
+    })
+  })
+
+  const colabsFiltrados = (tareasColab ?? []).filter((c: any) => {
+    const dd = c.task?.due_date
+    return dd && dd >= primerDia && dd <= ultimoDia && c.task?.status !== 'presentado'
+  })
+
+  colabsFiltrados.forEach((c: any) => {
+    const uid = c.user_id
+    const t = c.task
+    if (!uid || !t?.id) return
+    // evitar duplicar si ya es responsable directo
+    if (tareasPorUser[uid]?.some((x: any) => x.id === t.id)) return
+    if (!tareasPorUser[uid]) tareasPorUser[uid] = []
+    tareasPorUser[uid].push({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      due_date: t.due_date,
+      project_name: t.project?.name ?? '—',
+      client_name: t.project?.client?.name ?? '—',
+      horas_estimadas: c.assigned_hours ?? 0,
+      horas_realizadas: Math.round((realizadasPorUserTask[uid]?.[t.id] ?? 0) * 10) / 10,
+      es_colaborador: true,
+    })
+  })
+
+  const programadasPorUser: Record<string, number> = {}
+  Object.entries(tareasPorUser).forEach(([uid, tareas]) => {
+    programadasPorUser[uid] = Math.round(tareas.reduce((s, t) => s + (t.horas_estimadas ?? 0), 0) * 10) / 10
   })
 
   const filas = (usuarios ?? []).map((u: any) => {
     const disponibilidad = Math.round((disponibilidadPorUser[u.id] ?? 0) * 10) / 10
     const programadas    = Math.round((programadasPorUser[u.id] ?? 0) * 10) / 10
     const realizadas     = Math.round((realizadasPorUser[u.id] ?? 0) * 10) / 10
+    const tareas = (tareasPorUser[u.id] ?? []).sort((a: any, b: any) =>
+      (a.due_date ?? '').localeCompare(b.due_date ?? ''))
     return { id: u.id, nombre: u.full_name, disponibilidad, programadas, realizadas,
-      disponibles: Math.round((disponibilidad - programadas) * 10) / 10 }
+      disponibles: Math.round((disponibilidad - programadas) * 10) / 10, tareas }
   })
 
   const { data: segmentos } = await supabase
