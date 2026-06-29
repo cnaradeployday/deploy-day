@@ -39,8 +39,15 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
       }
     }
 
-    // Check for other active timers
+    // Check for other active timers and detect external stop (e.g. from FloatingTimer)
     function checkOtherTimers() {
+      // If our own timer was removed externally (stopped from the bubble), reset state
+      if (!localStorage.getItem(storageKey)) {
+        setRunning(false)
+        setSeconds(0)
+        setAccumulatedSeconds(0)
+        setStartTime(null)
+      }
       let found: string | null = null
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
