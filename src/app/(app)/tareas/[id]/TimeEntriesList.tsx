@@ -9,14 +9,16 @@ interface Entry {
   hours_logged: number
   entry_date: string
   notes: string | null
-  user: { full_name: string } | null
+  user_id?: string
+  user: { id?: string; full_name: string } | null
 }
 
 export default function TimeEntriesList({
-  entries, canEdit, currentUserId,
+  entries, canEdit, isAdmin, currentUserId,
 }: {
   entries: Entry[]
   canEdit: boolean
+  isAdmin?: boolean
   currentUserId: string
 }) {
   const router = useRouter()
@@ -105,7 +107,7 @@ export default function TimeEntriesList({
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
                       <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
                     </div>
-                    {canEdit && (
+                    {(isAdmin || (e.user_id ?? e.user?.id) === currentUserId) && (
                       <>
                         <button onClick={() => startEdit(e)} title="Editar"
                           className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
