@@ -9,7 +9,8 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('role, custom_role_id').eq('id', user.id).single()
+    .from('users').select('role, custom_role_id, nickname').eq('id', user.id).single()
+  const nickname = profile?.nickname ?? null
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
   let canAccess = isAdmin
@@ -131,7 +132,8 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
     const realizadas     = Math.round((realizadasPorUser[u.id] ?? 0) * 10) / 10
     const tareas = (tareasPorUser[u.id] ?? []).sort((a: any, b: any) =>
       (a.due_date ?? '').localeCompare(b.due_date ?? ''))
-    return { id: u.id, nombre: u.full_name, disponibilidad, programadas, realizadas,
+    const nombre = u.id === user.id && nickname ? nickname : u.full_name
+    return { id: u.id, nombre, disponibilidad, programadas, realizadas,
       disponibles: Math.round((disponibilidad - programadas) * 10) / 10, tareas }
   })
 

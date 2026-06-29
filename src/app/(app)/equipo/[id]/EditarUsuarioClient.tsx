@@ -13,8 +13,8 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
   const [loading, setLoading] = useState(false)
   const initialRole = miembro.custom_role_id ? 'custom:' + miembro.custom_role_id : miembro.role ?? 'colaborador'
   const [form, setForm] = useState({
-    full_name: miembro.full_name ?? '', email: miembro.email ?? '',
-    role: initialRole, is_active: miembro.is_active ?? true,
+    full_name: miembro.full_name ?? '', nickname: miembro.nickname ?? '',
+    email: miembro.email ?? '', role: initialRole, is_active: miembro.is_active ?? true,
     banco: miembro.banco ?? '', cbu: miembro.cbu ?? '',
     cuenta_nombre: miembro.cuenta_nombre ?? miembro.full_name ?? '',
   })
@@ -38,7 +38,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
     const customRoleId = isCustom ? form.role.replace('custom:', '') : null
     const realRole = isCustom ? 'colaborador' : form.role
     const { error } = await createClient().from('users').update({
-      full_name: form.full_name, email: form.email,
+      full_name: form.full_name, nickname: form.nickname || null, email: form.email,
       role: realRole, custom_role_id: customRoleId,
       is_active: form.is_active, banco: form.banco,
       cbu: form.cbu, cuenta_nombre: form.cuenta_nombre,
@@ -128,17 +128,24 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
         <div className="bg-white rounded-2xl border border-gray-100 p-5">
           <p className="text-sm font-semibold text-gray-700 mb-4">Información personal</p>
           <form onSubmit={guardarInfo} className="space-y-3">
-            {[
-              { key: 'full_name', label: 'Nombre completo', placeholder: 'Juan Pérez' },
-              { key: 'email', label: 'Email', placeholder: 'juan@deployday.com', type: 'email' },
-            ].map(({ key, label, placeholder, type }) => (
-              <div key={key}>
-                <label className="block text-xs text-gray-400 mb-1.5">{label}</label>
-                <input type={type ?? 'text'} value={(form as any)[key]} onChange={e => set(key, e.target.value)}
-                  placeholder={placeholder}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-              </div>
-            ))}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Nombre completo</label>
+              <input type="text" value={form.full_name} onChange={e => set('full_name', e.target.value)}
+                placeholder="Juan Pérez"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Pseudo nombre <span className="text-gray-300">(solo visible para el propio usuario)</span></label>
+              <input type="text" value={form.nickname} onChange={e => set('nickname', e.target.value)}
+                placeholder="Ej: Chris"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5">Email</label>
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
+                placeholder="juan@deployday.com"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Rol</label>

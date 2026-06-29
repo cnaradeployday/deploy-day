@@ -2,9 +2,14 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
+import { applyNickname } from '@/lib/utils/displayName'
 
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profileNick } = await supabase.from('users').select('nickname').eq('id', user?.id ?? '').single()
+  const nickname = profileNick?.nickname ?? null
+
   const sp = await searchParams
   const { status, priority, cliente, proyecto, responsable, mes } = sp
 
@@ -59,10 +64,10 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     horasPorTarea[e.task_id] = (horasPorTarea[e.task_id] ?? 0) + e.hours_logged
   })
 
-  const tareasConHoras = tareas?.map(t => ({
-    ...t,
-    hours_logged: Math.round((horasPorTarea[t.id] ?? 0) * 10) / 10,
-  })) ?? []
+  const tareasConHoras = applyNickname(
+    tareas?.map(t => ({ ...t, hours_logged: Math.round((horasPorTarea[t.id] ?? 0) * 10) / 10 })) ?? [],
+    user?.id ?? '', nickname
+  )
 
   const proyectosFiltrados = cliente
     ? proyectosAll?.filter(p => p.client_id === cliente)
@@ -88,7 +93,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
         tareas={tareasConHoras}
         clientes={clientes?.map(c => ({ value: c.id, label: c.name })) ?? []}
         proyectos={proyectosFiltrados?.map(p => ({ value: p.id, label: p.name })) ?? []}
-        usuarios={usuarios?.map(u => ({ value: u.id, label: u.full_name })) ?? []}
+        usuarios={applyNickname(usuarios ?? [], user?.id ?? '', nickname).map((u: any) => ({ value: u.id, label: u.full_name }))}
         filters={{ status, priority, cliente, proyecto, responsable, mes }}
       />
     </div>

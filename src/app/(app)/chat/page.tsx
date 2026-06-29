@@ -1,9 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import ChatLayout from './ChatLayout'
+import { applyNickname } from '@/lib/utils/displayName'
 
 export default async function ChatPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+
+  const { data: profileNick } = await supabase.from('users').select('nickname').eq('id', user?.id ?? '').single()
+  const nickname = profileNick?.nickname ?? null
 
   const { data: users } = await supabase
     .from('users')
@@ -46,14 +50,18 @@ export default async function ChatPage() {
     })
   )
 
+  const usersWithNick = applyNickname(users ?? [], user?.id ?? '', nickname)
+  const messagesWithNick = applyNickname(globalMessages ?? [], user?.id ?? '', nickname)
+  const convsWithNick = applyNickname(convsWithMembers, user?.id ?? '', nickname)
+
   return (
     <ChatLayout
       currentUserId={user?.id ?? ''}
-      users={users ?? []}
+      users={usersWithNick}
       tasks={tasks ?? []}
       projects={projects ?? []}
-      globalMessages={globalMessages ?? []}
-      conversations={convsWithMembers}
+      globalMessages={messagesWithNick}
+      conversations={convsWithNick}
     />
   )
 }
