@@ -9,6 +9,15 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
   const { data: profile } = await supabase.from('users').select('*').eq('id', user?.id ?? '').single()
   if (!profile) redirect('/login')
 
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile.role ?? '')
+  // Custom role users need explicit liquidaciones permission
+  if (!isAdmin && profile.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'liquidaciones').single()
+    if (!perm?.can_read) redirect('/dashboard')
+  }
+
   const sp = await searchParams
   const isColaborador = profile.role === 'colaborador'
   const tab = sp.tab ?? (isColaborador ? 'mis-liquidaciones' : 'resumen')

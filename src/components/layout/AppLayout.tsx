@@ -12,15 +12,15 @@ import Image from 'next/image'
 const APP_VERSION = '1.6.0'
 
 const navItems = [
-  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/clientes',          label: 'Clientes',           icon: Users,           roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos',         label: 'Proyectos',          icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos-mes',     label: 'Proyectos del mes',  icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
   { href: '/tareas',            label: 'Tareas',             icon: CheckSquare,     roles: ['admin','gerente_operaciones'] },
-  { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
+  { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/cronometros',       label: 'Cronómetros',        icon: AlarmClock,      roles: ['admin','gerente_operaciones'] },
-  { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/chat',              label: 'Chat',               icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true, alwaysVisible: true },
   { href: '/mi-pizarra',       label: 'Mi pizarra',         icon: StickyNote,      roles: ['admin','gerente_operaciones'] },
   { href: '/pizarron',         label: 'Pizarrón',           icon: LayoutGrid,      roles: ['admin','gerente_operaciones'] },
   { href: '/resumen-mes',       label: 'Resumen del mes',    icon: BarChart3,       roles: ['admin','gerente_operaciones'] },
@@ -38,10 +38,10 @@ const navItems = [
 ]
 
 const bottomNav = [
-  { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/chat',          label: 'Chat',       icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true },
+  { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
+  { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
+  { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
+  { href: '/chat',          label: 'Chat',       icon: MessageSquare,   roles: ['admin','gerente_operaciones','colaborador'], badge: true, alwaysVisible: true },
   { href: '/liquidaciones', label: 'Liquid.',    icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
 ]
 
@@ -155,13 +155,14 @@ export default function AppLayout({
     }
   }
 
-  const canSeeItem = (item: { href: string; roles: string[] }) => {
-    if (item.roles.includes(userRole)) return true
+  const canSeeItem = (item: { href: string; roles: string[]; alwaysVisible?: boolean }) => {
+    if (item.alwaysVisible) return true
+    // If user has a custom role, custom permissions override system role checks
     if (customPermissions && customPermissions.length > 0) {
       const key = item.href.replace('/', '').replace(/-/g, '_')
       return customPermissions.includes(key)
     }
-    return false
+    return item.roles.includes(userRole)
   }
   const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)
