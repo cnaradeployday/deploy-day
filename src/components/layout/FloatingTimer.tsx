@@ -35,6 +35,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   const hasDragged = useRef(false)
   const posRef = useRef({ x: 0, y: 0 })
   const presenceChannelRef = useRef<any>(null)
+  const stoppingRef = useRef<Set<string>>(new Set())
   const router = useRouter()
 
   function readTimers(): TimerEntry[] {
@@ -153,10 +154,16 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   }, [])
 
   async function stopTimer(taskId: string) {
+    if (stoppingRef.current.has(taskId)) return
+    stoppingRef.current.add(taskId)
     const entry = timers.find(t => t.taskId === taskId)
-    if (!entry) return
+    if (!entry) { stoppingRef.current.delete(taskId); return }
     const secs = calcSeconds(entry)
     const hours = Math.round((secs / 3600) * 100) / 100
+    localStorage.removeItem(`timer_${taskId}_${userId}`)
+    const updated = timers.filter(t => t.taskId !== taskId)
+    setTimers(updated)
+    sendBroadcast(presenceChannelRef.current, updated)
     if (hours > 0) {
       await createClient().from('time_entries').insert({
         task_id: taskId, user_id: userId,
@@ -165,10 +172,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
         notes: 'Registrado con cronómetro',
       })
     }
-    localStorage.removeItem(`timer_${taskId}_${userId}`)
-    const updated = timers.filter(t => t.taskId !== taskId)
-    setTimers(updated)
-    sendBroadcast(presenceChannelRef.current, updated)
+    stoppingRef.current.delete(taskId)
     router.refresh()
   }
 
