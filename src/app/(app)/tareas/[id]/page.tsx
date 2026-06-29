@@ -36,7 +36,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       project:projects(id, name, client:clients(name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
       task_collaborators(id, assigned_hours, user:users(id, full_name)),
-      time_entries(id, hours_logged, entry_date, notes, user:users(full_name))`)
+      time_entries(id, hours_logged, entry_date, notes, user_id, user:users(id, full_name))`)
     .eq('id', id).single()
   if (!t) notFound()
 
@@ -167,6 +167,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         <TimeEntriesList
           entries={(t.time_entries as any[]) ?? []}
           canEdit={isAdmin}
+          isAdmin={isAdmin}
           currentUserId={user?.id ?? ''}
         />
       </div>
