@@ -30,6 +30,7 @@ const navItems = [
   { href: '/facturacion',       label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
   { href: '/liquidaciones',     label: 'Liquidaciones',      icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/facturas-clientes', label: 'Facturas clientes',  icon: FileText,        roles: ['admin'] },
+  { href: '/resumen-facturas',  label: 'Resumen facturas',   icon: FileText,        roles: ['admin'] },
   { href: '/cotizaciones',      label: 'Cotizaciones USD',   icon: TrendingUp,      roles: ['admin'] },
   { href: '/roles',             label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
   { href: '/logs',              label: 'Logs',               icon: Activity,        roles: ['admin'] },
