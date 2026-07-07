@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
@@ -54,9 +55,11 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     .gte('hasta', hDesde)
   const totalVendidas = (segmentosMes ?? []).reduce((s, seg) => s + seg.horas, 0)
 
+  // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS
   const taskIds = tareas?.map(t => t.id) ?? []
+  const adminSupabase = createAdminClient()
   const { data: timeEntries } = taskIds.length
-    ? await supabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
+    ? await adminSupabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
     : { data: [] }
 
   const horasPorTarea: Record<string, number> = {}
