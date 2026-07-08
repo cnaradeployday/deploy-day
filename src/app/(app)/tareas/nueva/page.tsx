@@ -3,6 +3,7 @@ import { logActivity } from '@/lib/logActivity'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { createNotification } from '@/app/(app)/novedades/actions'
 import Link from 'next/link'
 import { ArrowLeft, X, AlertTriangle, CheckCircle } from 'lucide-react'
 
@@ -185,6 +186,23 @@ export default function NuevaTareaPage() {
       await supabase.from('task_collaborators').insert(
         colaboradores.map(c => ({ task_id: task.id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
       )
+    }
+    if (task) {
+      const fechaLabel = task.due_date ? ` Vence el ${new Date(task.due_date + 'T12:00:00').toLocaleDateString('es-AR')}.` : ''
+      const notifyIds = [
+        ...(task.direct_responsible_id ? [task.direct_responsible_id] : []),
+        ...colaboradores.map(c => c.uid),
+      ]
+      await Promise.all(notifyIds.map(uid =>
+        createNotification({
+          user_id: uid,
+          type: 'task_assigned',
+          title: `Te asignaron la tarea "${task.title}"`,
+          body: fechaLabel || undefined,
+          link: '/mis-tareas',
+          dedup_key: `task_assigned_${task.id}_${uid}`,
+        }).catch(() => {})
+      ))
     }
     // Subir archivos de brief si los hay
     if (briefFiles.length > 0 && task) {

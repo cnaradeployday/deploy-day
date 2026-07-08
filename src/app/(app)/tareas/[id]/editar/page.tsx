@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { createNotification } from '@/app/(app)/novedades/actions'
 import Link from 'next/link'
 import { ArrowLeft, X } from 'lucide-react'
 
@@ -15,6 +16,8 @@ export default function EditarTareaPage() {
   const [proyectos, setProyectos] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [colaboradores, setColaboradores] = useState<Colab[]>([])
+  const [prevResponsibleId, setPrevResponsibleId] = useState<string | null>(null)
+  const [prevCollabIds, setPrevCollabIds] = useState<string[]>([])
   const [form, setForm] = useState({
     project_id: '', title: '', description: '',
     priority: 'media', due_date: '',
@@ -40,6 +43,8 @@ export default function EditarTareaPage() {
           status: data.status ?? 'creado',
         })
         setColaboradores((data.task_collaborators ?? []).map((c: any) => ({ uid: c.user_id, hours: c.assigned_hours?.toString() ?? '' })))
+        setPrevResponsibleId(data.direct_responsible_id ?? null)
+        setPrevCollabIds((data.task_collaborators ?? []).map((c: any) => c.user_id as string))
       })
   }, [id])
 
@@ -72,6 +77,21 @@ export default function EditarTareaPage() {
         colaboradores.map(c => ({ task_id: id, user_id: c.uid, assigned_hours: c.hours ? parseFloat(c.hours) : null }))
       )
     }
+    const fechaLabel = form.due_date ? ` Vence el ${new Date(form.due_date + 'T12:00:00').toLocaleDateString('es-AR')}.` : ''
+    const newlyAssigned = [
+      ...(form.direct_responsible_id && form.direct_responsible_id !== prevResponsibleId ? [form.direct_responsible_id] : []),
+      ...colaboradores.map(c => c.uid).filter(uid => !prevCollabIds.includes(uid)),
+    ]
+    await Promise.all(newlyAssigned.map(uid =>
+      createNotification({
+        user_id: uid,
+        type: 'task_assigned',
+        title: `Te asignaron la tarea "${form.title}"`,
+        body: fechaLabel || undefined,
+        link: '/mis-tareas',
+        dedup_key: `task_assigned_${id}_${uid}`,
+      }).catch(() => {})
+    ))
     router.push('/tareas/' + id)
   }
 
