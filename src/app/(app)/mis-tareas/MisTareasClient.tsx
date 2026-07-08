@@ -33,11 +33,12 @@ interface Props {
   canCreateTask?: boolean
   horasEstimadasDelMes?: number
   userId?: string
+  canSeeEstimatedHours?: boolean
 }
 
 export default function MisTareasClient({
   tareas, proyectos, clientes, filters, mesActual,
-  canCreateTask = true, horasEstimadasDelMes = 0, userId = ''
+  canCreateTask = true, horasEstimadasDelMes = 0, userId = '', canSeeEstimatedHours = true
 }: Props) {
   const router = useRouter()
   const pathname = usePathname()
@@ -163,7 +164,8 @@ export default function MisTareasClient({
       Tarea: t.title, Rol: t.es_colaborador ? 'Colaborador' : 'Responsable',
       Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—',
       Estado: statusLabels[t.status] ?? t.status, Prioridad: t.priority,
-      'Mis horas': t.my_assigned_hours ?? '—', 'Horas usadas': t.hours_logged ?? 0,
+      ...(canSeeEstimatedHours ? { 'Mis horas': t.my_assigned_hours ?? '—' } : {}),
+      'Horas usadas': t.hours_logged ?? 0,
       Vence: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -278,20 +280,21 @@ export default function MisTareasClient({
         <table className="w-full table-fixed">
           <colgroup>
             <col style={{width:'16%'}}/><col style={{width:'8%'}}/><col style={{width:'10%'}}/>
-            <col style={{width:'14%'}}/><col style={{width:'13%'}}/><col style={{width:'5%'}}/>
+            <col style={{width:'14%'}}/><col style={{width:'13%'}}/>
+            {canSeeEstimatedHours && <col style={{width:'5%'}}/>}
             <col style={{width:'9%'}}/><col style={{width:'7%'}}/><col style={{width:'8%'}}/>
             <col style={{width:'9%'}}/><col style={{width:'6%'}}/>
           </colgroup>
           <thead>
             <tr className="border-b border-gray-50">
               {[
-                { key: 'title', label: 'Tarea' }, { key: 'es_colaborador', label: 'Rol' },
-                { key: 'client', label: 'Cliente' }, { key: 'project', label: 'Proyecto' },
-                { key: 'responsible', label: 'Responsable' }, { key: 'my_assigned_hours', label: 'Est.' },
-                { key: 'hours_logged', label: 'Usado' }, { key: 'due_date', label: 'Vence' },
-                { key: 'priority', label: 'Prioridad' }, { key: 'status', label: 'Estado' },
-                { key: 'actions', label: '' },
-              ].map(({ key, label }) => (
+                { key: 'title', label: 'Tarea', show: true }, { key: 'es_colaborador', label: 'Rol', show: true },
+                { key: 'client', label: 'Cliente', show: true }, { key: 'project', label: 'Proyecto', show: true },
+                { key: 'responsible', label: 'Responsable', show: true }, { key: 'my_assigned_hours', label: 'Est.', show: canSeeEstimatedHours },
+                { key: 'hours_logged', label: 'Usado', show: true }, { key: 'due_date', label: 'Vence', show: true },
+                { key: 'priority', label: 'Prioridad', show: true }, { key: 'status', label: 'Estado', show: true },
+                { key: 'actions', label: '', show: true },
+              ].filter(c => c.show).map(({ key, label }) => (
                 <th key={key} onClick={() => key !== 'actions' && toggleSort(key)}
                   className={'px-3 py-3 text-left text-xs font-medium text-gray-400 ' + (key !== 'actions' ? 'cursor-pointer hover:text-gray-600 select-none' : '')}>
                   <div className="flex items-center gap-1">{label}{key !== 'actions' && <SortIcon k={key}/>}</div>
@@ -301,7 +304,7 @@ export default function MisTareasClient({
           </thead>
           <tbody>
             {!sorted.length ? (
-              <tr><td colSpan={11} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
+              <tr><td colSpan={canSeeEstimatedHours ? 11 : 10} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
               const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
@@ -323,7 +326,9 @@ export default function MisTareasClient({
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.client?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.project?.name ?? '—'}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 truncate">{t.direct_responsible?.full_name ?? '—'}</td>
-                  <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  {canSeeEstimatedHours && (
+                    <td className="px-3 py-3 text-xs text-gray-700 font-semibold">{myHours > 0 ? myHours + 'h' : '—'}</td>
+                  )}
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged ?? 0}h</span>
@@ -386,7 +391,7 @@ export default function MisTareasClient({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
-                  <span>{t.hours_logged ?? 0}h{myHours > 0 ? '/' + myHours + 'h' : ''}</span>
+                  <span>{t.hours_logged ?? 0}h{canSeeEstimatedHours && myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Link href={`/tareas/${t.id}`} prefetch={false}

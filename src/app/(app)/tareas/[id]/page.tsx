@@ -65,6 +65,15 @@ export default async function TareaDetailPage({ params, searchParams }: { params
     canCargarHorasOtros = permHoras?.can_read ?? false
   }
 
+  // Permiso ver horas estimadas en Mis tareas
+  let canSeeEstimatedHours = isAdmin
+  if (!canSeeEstimatedHours && profile?.custom_role_id) {
+    const { data: permEst } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'ver_horas_estimadas_mis_tareas').single()
+    canSeeEstimatedHours = permEst?.can_read ?? false
+  }
+
   const isDirectResponsible = t.direct_responsible_id === user?.id
   const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
@@ -119,7 +128,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         {[
-          { label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' },
+          ...(canSeeEstimatedHours ? [{ label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' }] : []),
           { label: 'Horas cargadas', value: Math.round(totalLogged * 100) / 100 + 'h' },
           { label: 'Responsable', value: (t.direct_responsible as any)?.full_name ?? '—' },
           { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', alert: isOverdue },
@@ -132,7 +141,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         ))}
       </div>
 
-      {t.estimated_hours && (
+      {canSeeEstimatedHours && t.estimated_hours && (
         <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3 mb-4">
           <div className="flex justify-between text-xs text-gray-400 mb-1.5">
             <span>Progreso</span>
