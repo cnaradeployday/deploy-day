@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon } from 'lucide-react'
+import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Pencil } from 'lucide-react'
 import Image from 'next/image'
 
 const COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -123,15 +123,87 @@ function MentionTextarea({ value, onChange, teammates, placeholder, rows = 4, st
   )
 }
 
-function PostitCard({ postit, userId, rotation, isDragging, isDragOver,
-  onDelete, onToggle, onDragStart, onDragOver, onDrop, onDragEnd }: {
+function EditPostitModal({ postit, teammates, onSave, onClose }: {
+  postit: Postit
+  teammates: Teammate[]
+  onSave: (updated: Postit) => void
+  onClose: () => void
+}) {
+  const [content, setContent] = useState(postit.content ?? '')
+  const [color, setColor] = useState(postit.color)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave() {
+    setSaving(true); setError(null)
+    const sb = createClient()
+    const { data, error: dbErr } = await sb
+      .from('postits')
+      .update({ content: content.trim() || null, color })
+      .eq('id', postit.id)
+      .select('id, content, color, done, created_at, board_owner_id, author_id, image_url, author:users!postits_author_id_fkey(id, full_name, avatar_url)')
+      .single()
+    if (dbErr) { setError(dbErr.message); setSaving(false); return }
+    if (data) onSave(data as any)
+    onClose()
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl p-5 w-full max-w-sm mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-semibold text-gray-800">Editar post-it</p>
+          <button onClick={onClose}><X size={16} className="text-gray-400" /></button>
+        </div>
+
+        <div className="flex items-center gap-2 mb-3">
+          {Object.entries(COLORS).map(([key, val]) => (
+            <button key={key} onClick={() => setColor(key)}
+              className="w-7 h-7 rounded-full transition-all"
+              style={{
+                backgroundColor: val.bg,
+                border: `3px solid ${color === key ? '#374151' : val.border}`,
+                transform: color === key ? 'scale(1.2)' : 'scale(1)',
+              }} title={val.label} />
+          ))}
+        </div>
+
+        <MentionTextarea
+          value={content} onChange={setContent} teammates={teammates}
+          placeholder="Contenido del post-it..."
+          rows={4} autoFocus
+          style={{ backgroundColor: COLORS[color]?.bg ?? '#FEF9C3' }}
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 transition-colors"
+        />
+
+        {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Guardando...</> : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOver,
+  onDelete, onToggle, onEdit, onDragStart, onDragOver, onDrop, onDragEnd }: {
   postit: Postit
   userId: string
+  teammates: Teammate[]
   rotation: number
   isDragging: boolean
   isDragOver: boolean
   onDelete: (id: string) => void
   onToggle: (id: string, done: boolean) => void
+  onEdit: (updated: Postit) => void
   onDragStart: () => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: () => void
@@ -140,6 +212,7 @@ function PostitCard({ postit, userId, rotation, isDragging, isDragOver,
   const [deleting, setDeleting] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const isOwn = postit.author_id === userId
   const color = COLORS[postit.color] ?? COLORS.yellow
 
@@ -217,13 +290,19 @@ function PostitCard({ postit, userId, rotation, isDragging, isDragOver,
             </span>
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               {isOwn && (
-                <button onClick={handleToggle} disabled={toggling}
-                  className="p-1.5 rounded-lg hover:bg-black/10 transition-all"
-                  title={postit.done ? 'Marcar pendiente' : 'Marcar hecho'}>
-                  {toggling
-                    ? <Loader2 size={11} className="animate-spin" />
-                    : <Check size={11} className={postit.done ? 'text-green-600' : 'text-gray-500'} />}
-                </button>
+                <>
+                  <button onClick={e => { e.stopPropagation(); setShowEdit(true) }}
+                    className="p-1.5 rounded-lg hover:bg-black/10 transition-all" title="Editar">
+                    <Pencil size={11} className="text-gray-500" />
+                  </button>
+                  <button onClick={handleToggle} disabled={toggling}
+                    className="p-1.5 rounded-lg hover:bg-black/10 transition-all"
+                    title={postit.done ? 'Marcar pendiente' : 'Marcar hecho'}>
+                    {toggling
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : <Check size={11} className={postit.done ? 'text-green-600' : 'text-gray-500'} />}
+                  </button>
+                </>
               )}
               <button onClick={handleDelete} disabled={deleting}
                 className="p-1.5 rounded-lg hover:bg-red-100 transition-all" title="Eliminar">
@@ -233,6 +312,12 @@ function PostitCard({ postit, userId, rotation, isDragging, isDragOver,
           </div>
         </div>
       </div>
+      {showEdit && (
+        <EditPostitModal
+          postit={postit} teammates={teammates}
+          onSave={onEdit} onClose={() => setShowEdit(false)}
+        />
+      )}
     </div>
   )
 }
@@ -468,6 +553,9 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
   function handleToggle(id: string, done: boolean) {
     setPostits(prev => prev.map(p => p.id === id ? { ...p, done } : p))
   }
+  function handleEdit(updated: Postit) {
+    setPostits(prev => prev.map(p => p.id === updated.id ? updated : p))
+  }
 
   function handleDragStart(id: string) { setDraggingId(id) }
   function handleDragOver(e: React.DragEvent, id: string) {
@@ -500,11 +588,11 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {items.map(p => (
             <PostitCard
-              key={p.id} postit={p} userId={userId}
+              key={p.id} postit={p} userId={userId} teammates={teammates}
               rotation={getRotation(p.id)}
               isDragging={draggingId === p.id}
               isDragOver={dragOverId === p.id}
-              onDelete={handleDelete} onToggle={handleToggle}
+              onDelete={handleDelete} onToggle={handleToggle} onEdit={handleEdit}
               onDragStart={() => handleDragStart(p.id)}
               onDragOver={e => handleDragOver(e, p.id)}
               onDrop={() => handleDrop(p.id)}
