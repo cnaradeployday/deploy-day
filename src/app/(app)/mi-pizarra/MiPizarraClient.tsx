@@ -1,7 +1,7 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Pencil } from 'lucide-react'
+import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Pencil, Calendar, Building2 } from 'lucide-react'
 import Image from 'next/image'
 
 const COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -27,6 +27,13 @@ function renderMentions(text: string): React.ReactNode {
   )
 }
 
+function isExpired(due_date: string | null | undefined): boolean {
+  if (!due_date) return false
+  return due_date < new Date().toISOString().split('T')[0]
+}
+
+interface Client { id: string; name: string }
+
 interface Postit {
   id: string
   content: string
@@ -36,7 +43,10 @@ interface Postit {
   board_owner_id: string
   author_id: string
   image_url: string | null
+  due_date: string | null
+  client_id: string | null
   author: { id: string; full_name: string; avatar_url: string | null } | null
+  client: { id: string; name: string } | null
 }
 
 interface Teammate {
@@ -123,14 +133,38 @@ function MentionTextarea({ value, onChange, teammates, placeholder, rows = 4, st
   )
 }
 
-function EditPostitModal({ postit, teammates, onSave, onClose }: {
+function ExpiredRibbon() {
+  return (
+    <div className="absolute top-0 right-0 overflow-hidden w-16 h-16 pointer-events-none" style={{ borderRadius: '0 8px 0 0' }}>
+      <div
+        className="absolute flex items-center justify-center font-bold text-white text-[11px]"
+        style={{
+          width: 72,
+          height: 20,
+          background: '#ef4444',
+          top: 14,
+          right: -18,
+          transform: 'rotate(45deg)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+        }}
+      >
+        E
+      </div>
+    </div>
+  )
+}
+
+function EditPostitModal({ postit, teammates, clients, onSave, onClose }: {
   postit: Postit
   teammates: Teammate[]
+  clients: Client[]
   onSave: (updated: Postit) => void
   onClose: () => void
 }) {
   const [content, setContent] = useState(postit.content ?? '')
   const [color, setColor] = useState(postit.color)
+  const [dueDate, setDueDate] = useState(postit.due_date ?? '')
+  const [clientId, setClientId] = useState(postit.client_id ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -139,9 +173,9 @@ function EditPostitModal({ postit, teammates, onSave, onClose }: {
     const sb = createClient()
     const { data, error: dbErr } = await sb
       .from('postits')
-      .update({ content: content.trim() || null, color })
+      .update({ content: content.trim() || null, color, due_date: dueDate || null, client_id: clientId || null })
       .eq('id', postit.id)
-      .select('id, content, color, done, created_at, board_owner_id, author_id, image_url, author:users!postits_author_id_fkey(id, full_name, avatar_url)')
+      .select('id, content, color, done, created_at, board_owner_id, author_id, image_url, due_date, client_id, author:users!postits_author_id_fkey(id, full_name, avatar_url), client:clients(id, name)')
       .single()
     if (dbErr) { setError(dbErr.message); setSaving(false); return }
     if (data) onSave(data as any)
@@ -177,6 +211,22 @@ function EditPostitModal({ postit, teammates, onSave, onClose }: {
           className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 transition-colors"
         />
 
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Calendar size={11}/> Vencimiento</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Building2 size={11}/> Cliente</label>
+            <select value={clientId} onChange={e => setClientId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+              <option value="">Sin cliente</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+
         {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
 
         <div className="flex gap-2">
@@ -193,11 +243,12 @@ function EditPostitModal({ postit, teammates, onSave, onClose }: {
   )
 }
 
-function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOver,
+function PostitCard({ postit, userId, teammates, clients, rotation, isDragging, isDragOver,
   onDelete, onToggle, onEdit, onDragStart, onDragOver, onDrop, onDragEnd }: {
   postit: Postit
   userId: string
   teammates: Teammate[]
+  clients: Client[]
   rotation: number
   isDragging: boolean
   isDragOver: boolean
@@ -215,6 +266,7 @@ function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOve
   const [showEdit, setShowEdit] = useState(false)
   const isOwn = postit.author_id === userId
   const color = COLORS[postit.color] ?? COLORS.yellow
+  const expired = isExpired(postit.due_date)
 
   async function handleDelete() {
     setDeleting(true)
@@ -250,8 +302,12 @@ function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOve
         borderRadius: 8,
       }}
     >
-      <div className="rounded-lg shadow-md group-hover:shadow-xl transition-shadow"
+      <div className="rounded-lg shadow-md group-hover:shadow-xl transition-shadow overflow-hidden"
         style={{ backgroundColor: color.bg, borderTop: `4px solid ${color.border}` }}>
+
+        {/* Ribbon de expirado */}
+        {expired && <ExpiredRibbon />}
+
         {/* Pin */}
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full shadow-md z-10 flex items-center justify-center"
           style={{ background: 'radial-gradient(circle at 35% 35%, #f87171, #b91c1c)' }}>
@@ -264,6 +320,15 @@ function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOve
             <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b border-black/10">
               <UserAvatar url={postit.author.avatar_url} name={postit.author.full_name} size={4} />
               <span className="text-[10px] text-gray-600 font-semibold">{postit.author.full_name}</span>
+            </div>
+          )}
+
+          {/* Client badge */}
+          {postit.client && (
+            <div className="mb-2">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#1B9BF0] bg-blue-50 px-1.5 py-0.5 rounded-full">
+                <Building2 size={9}/> {postit.client.name}
+              </span>
             </div>
           )}
 
@@ -285,9 +350,17 @@ function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOve
 
           {/* Footer */}
           <div className="flex items-center justify-between mt-3 pt-2 border-t border-black/5">
-            <span className="text-[10px] text-gray-500">
-              {new Date(postit.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
-            </span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-gray-500">
+                {new Date(postit.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+              </span>
+              {postit.due_date && (
+                <span className={`text-[10px] font-medium flex items-center gap-0.5 ${expired ? 'text-red-500' : 'text-gray-500'}`}>
+                  <Calendar size={9}/> {new Date(postit.due_date + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                  {expired && ' · vencido'}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               {isOwn && (
                 <>
@@ -314,7 +387,7 @@ function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOve
       </div>
       {showEdit && (
         <EditPostitModal
-          postit={postit} teammates={teammates}
+          postit={postit} teammates={teammates} clients={clients}
           onSave={onEdit} onClose={() => setShowEdit(false)}
         />
       )}
@@ -322,14 +395,17 @@ function PostitCard({ postit, userId, teammates, rotation, isDragging, isDragOve
   )
 }
 
-function AddPostitModal({ userId, teammates, onAdd, onClose }: {
+function AddPostitModal({ userId, teammates, clients, onAdd, onClose }: {
   userId: string
   teammates: Teammate[]
+  clients: Client[]
   onAdd: (p: Postit) => void
   onClose: () => void
 }) {
   const [content, setContent] = useState('')
   const [color, setColor] = useState('yellow')
+  const [dueDate, setDueDate] = useState('')
+  const [clientId, setClientId] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -360,7 +436,9 @@ function AddPostitModal({ userId, teammates, onAdd, onClose }: {
     const { data, error: dbErr } = await sb.from('postits').insert({
       board_owner_id: userId, author_id: userId,
       content: content.trim() || null, color, done: false, image_url: imageUrl,
-    }).select('id, content, color, done, created_at, board_owner_id, author_id, image_url, author:users!postits_author_id_fkey(id, full_name, avatar_url)').single()
+      due_date: dueDate || null,
+      client_id: clientId || null,
+    }).select('id, content, color, done, created_at, board_owner_id, author_id, image_url, due_date, client_id, author:users!postits_author_id_fkey(id, full_name, avatar_url), client:clients(id, name)').single()
 
     if (dbErr) { setError(dbErr.message); setSaving(false); return }
     if (data) { onAdd(data as any); onClose() }
@@ -402,8 +480,24 @@ function AddPostitModal({ userId, teammates, onAdd, onClose }: {
           placeholder="Escribí tu nota... (@nombre para mencionar)"
           rows={4} autoFocus
           style={{ backgroundColor: COLORS[color]?.bg ?? '#FEF9C3' }}
-          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 w-full transition-colors"
+          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none mb-3 transition-colors"
         />
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Calendar size={11}/> Vencimiento</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1 flex items-center gap-1"><Building2 size={11}/> Cliente</label>
+            <select value={clientId} onChange={e => setClientId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+              <option value="">Sin cliente</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
 
         {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
 
@@ -524,32 +618,51 @@ function LeaveNoteModal({ userId, teammates, onClose }: {
   )
 }
 
-export default function MiPizarraClient({ userId, userName, initialPostits, teammates }: {
+export default function MiPizarraClient({ userId, userName, initialPostits, teammates, clients }: {
   userId: string
   userName: string
   initialPostits: Postit[]
   teammates: Teammate[]
+  clients: Client[]
 }) {
   const [postits, setPostits] = useState<Postit[]>(initialPostits)
-  const [orderedIds, setOrderedIds] = useState<string[]>(() => initialPostits.map(p => p.id))
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showLeaveNote, setShowLeaveNote] = useState(false)
 
-  const postitsById = Object.fromEntries(postits.map(p => [p.id, p]))
-  const sorted = orderedIds.map(id => postitsById[id]).filter(Boolean)
-  const myPostits = sorted.filter(p => p.author_id === userId)
-  const received = sorted.filter(p => p.author_id !== userId)
+  // Filtros y ordenamiento
+  const [filterClient, setFilterClient] = useState('')
+  const [filterExpired, setFilterExpired] = useState<'all' | 'expired' | 'active'>('all')
+  const [sortBy, setSortBy] = useState<'due_date' | 'created_at' | 'client'>('due_date')
 
-  function handleAdd(p: Postit) {
-    setPostits(prev => [p, ...prev])
-    setOrderedIds(prev => [p.id, ...prev])
-  }
-  function handleDelete(id: string) {
-    setPostits(prev => prev.filter(p => p.id !== id))
-    setOrderedIds(prev => prev.filter(i => i !== id))
-  }
+  const today = new Date().toISOString().split('T')[0]
+
+  const processed = useMemo(() => {
+    let items = [...postits]
+    if (filterClient) items = items.filter(p => p.client_id === filterClient)
+    if (filterExpired === 'expired') items = items.filter(p => p.due_date && p.due_date < today)
+    if (filterExpired === 'active') items = items.filter(p => !p.due_date || p.due_date >= today)
+    items.sort((a, b) => {
+      if (sortBy === 'due_date') {
+        const da = a.due_date ?? '9999-12-31'
+        const db = b.due_date ?? '9999-12-31'
+        return da.localeCompare(db)
+      }
+      if (sortBy === 'client') {
+        return (a.client?.name ?? '').localeCompare(b.client?.name ?? '')
+      }
+      return b.created_at.localeCompare(a.created_at)
+    })
+    return items
+  }, [postits, filterClient, filterExpired, sortBy, today])
+
+  const myPostits = processed.filter(p => p.author_id === userId)
+  const received = processed.filter(p => p.author_id !== userId)
+  const hasFilters = filterClient !== '' || filterExpired !== 'all'
+
+  function handleAdd(p: Postit) { setPostits(prev => [p, ...prev]) }
+  function handleDelete(id: string) { setPostits(prev => prev.filter(p => p.id !== id)) }
   function handleToggle(id: string, done: boolean) {
     setPostits(prev => prev.map(p => p.id === id ? { ...p, done } : p))
   }
@@ -564,13 +677,13 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
   }
   function handleDrop(targetId: string) {
     if (!draggingId || draggingId === targetId) { setDraggingId(null); setDragOverId(null); return }
-    setOrderedIds(prev => {
+    setPostits(prev => {
       const arr = [...prev]
-      const fromIdx = arr.indexOf(draggingId)
-      const toIdx = arr.indexOf(targetId)
+      const fromIdx = arr.findIndex(p => p.id === draggingId)
+      const toIdx = arr.findIndex(p => p.id === targetId)
       if (fromIdx === -1 || toIdx === -1) return prev
-      arr.splice(fromIdx, 1)
-      arr.splice(toIdx, 0, draggingId)
+      const [item] = arr.splice(fromIdx, 1)
+      arr.splice(toIdx, 0, item)
       return arr
     })
     setDraggingId(null); setDragOverId(null)
@@ -588,7 +701,7 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {items.map(p => (
             <PostitCard
-              key={p.id} postit={p} userId={userId} teammates={teammates}
+              key={p.id} postit={p} userId={userId} teammates={teammates} clients={clients}
               rotation={getRotation(p.id)}
               isDragging={draggingId === p.id}
               isDragOver={dragOverId === p.id}
@@ -606,7 +719,7 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Mi pizarra</h1>
           <p className="text-sm text-gray-400 mt-0.5">Tu espacio privado · solo vos podés ver esto</p>
@@ -625,6 +738,44 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         </div>
       </div>
 
+      {/* Filtros y ordenamiento */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-3 mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Building2 size={13} className="text-gray-400 shrink-0"/>
+          <select value={filterClient} onChange={e => setFilterClient(e.target.value)}
+            className="flex-1 min-w-0 px-2.5 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            <option value="">Todos los clientes</option>
+            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+          {([['all', 'Todos'], ['active', 'Vigentes'], ['expired', 'Vencidos']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setFilterExpired(v)}
+              className={'px-3 py-1 rounded-lg text-xs font-medium transition-all ' + (filterExpired === v ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700')}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">Ordenar:</span>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
+            className="px-2.5 py-1.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            <option value="due_date">Por fecha de vencimiento</option>
+            <option value="created_at">Por fecha de creación</option>
+            <option value="client">Por cliente</option>
+          </select>
+        </div>
+
+        {hasFilters && (
+          <button onClick={() => { setFilterClient(''); setFilterExpired('all') }}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 ml-auto">
+            <X size={11}/> Limpiar
+          </button>
+        )}
+      </div>
+
       <div className="rounded-2xl p-8 min-h-80"
         style={{
           background: 'linear-gradient(145deg, #c8935a 0%, #b5803f 40%, #a06e30 100%)',
@@ -637,16 +788,20 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
         )}
         {renderSection(received, `Mensajes recibidos (${received.length})`)}
 
-        {postits.length === 0 && (
+        {processed.length === 0 && (
           <div className="text-center py-24">
             <StickyNote size={48} className="mx-auto mb-4" style={{ color: 'rgba(254,243,199,0.4)' }} />
-            <p className="text-sm font-medium" style={{ color: 'rgba(254,243,199,0.85)' }}>Tu pizarra está vacía</p>
-            <p className="text-xs mt-1" style={{ color: 'rgba(254,243,199,0.45)' }}>Agregá tu primer post-it arriba</p>
+            <p className="text-sm font-medium" style={{ color: 'rgba(254,243,199,0.85)' }}>
+              {hasFilters ? 'Sin resultados para este filtro' : 'Tu pizarra está vacía'}
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(254,243,199,0.45)' }}>
+              {hasFilters ? 'Probá cambiando los filtros' : 'Agregá tu primer post-it arriba'}
+            </p>
           </div>
         )}
       </div>
 
-      {showAdd && <AddPostitModal userId={userId} teammates={teammates} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
+      {showAdd && <AddPostitModal userId={userId} teammates={teammates} clients={clients} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
       {showLeaveNote && <LeaveNoteModal userId={userId} teammates={teammates} onClose={() => setShowLeaveNote(false)} />}
     </div>
   )
