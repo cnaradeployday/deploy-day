@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import MisTareasClient from './MisTareasClient'
+import { applyNickname } from '@/lib/utils/displayName'
 
 export default async function MisTareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -16,7 +17,8 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
 
   const { data: profile } = await supabase
-    .from('users').select('role, custom_role_id').eq('id', user?.id ?? '').single()
+    .from('users').select('role, custom_role_id, nickname').eq('id', user?.id ?? '').single()
+  const nickname = profile?.nickname ?? null
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
   let canCreateTask = isAdmin
@@ -139,10 +141,13 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     }
   })
 
-  const tareasConHoras = tareasFiltered.map((t: any) => ({
-    ...t,
-    hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
-  }))
+  const tareasConHoras = applyNickname(
+    tareasFiltered.map((t: any) => ({
+      ...t,
+      hours_logged: Math.round((misHorasPorTarea[t.id] ?? 0) * 10) / 10,
+    })),
+    user?.id ?? '', nickname
+  )
 
   const horasEstimadasDelMes = tareasFiltered
     .filter((t: any) => !t.desde_segmento && t.due_date >= primerDia && t.due_date <= ultimoDia)

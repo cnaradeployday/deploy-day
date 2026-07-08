@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('users').select('full_name, role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('users').select('full_name, nickname, role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin'
   const isGerente = profile?.role === 'gerente_operaciones'
 
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Bienvenido, {profile?.full_name?.split(' ')[0]}</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Bienvenido, {(profile?.nickname || profile?.full_name)?.split(' ')[0]}</h1>
         <p className="text-sm text-gray-400 mt-0.5 capitalize">{profile?.role?.replace(/_/g, ' ')}</p>
       </div>
 
