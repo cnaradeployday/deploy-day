@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import ResumenMesClient from './ResumenMesClient'
 
@@ -63,8 +64,10 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
+  // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS
+  const adminSupabase = createAdminClient()
   const { data: entries } = taskIds.length
-    ? await supabase
+    ? await adminSupabase
         .from('time_entries')
         .select('task_id, hours_logged')
         .in('task_id', taskIds)

@@ -13,13 +13,13 @@ import Image from 'next/image'
 const APP_VERSION = '1.6.0'
 
 const navItems = [
-  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/clientes',          label: 'Clientes',           icon: Users,           roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos',         label: 'Proyectos',          icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos-mes',     label: 'Proyectos del mes',  icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
   { href: '/tareas',            label: 'Tareas',             icon: CheckSquare,     roles: ['admin','gerente_operaciones'] },
-  { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/mis-tareas',        label: 'Mis tareas',         icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
+  { href: '/mis-horas',         label: 'Mis horas',          icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/cronometros',       label: 'Cronómetros',        icon: AlarmClock,      roles: ['admin','gerente_operaciones'] },
   { href: '/novedades',         label: 'Novedades',          icon: Bell,            roles: ['admin','gerente_operaciones','colaborador'], badge: true },
   { href: '/novedades-equipo',  label: 'Novedades equipo',   icon: Bell,            roles: ['admin','gerente_operaciones'] },
@@ -32,17 +32,18 @@ const navItems = [
   { href: '/facturacion',       label: 'Facturación',        icon: Receipt,         roles: ['admin'] },
   { href: '/liquidaciones',     label: 'Liquidaciones',      icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/facturas-clientes', label: 'Facturas clientes',  icon: FileText,        roles: ['admin'] },
+  { href: '/resumen-facturas',  label: 'Resumen facturas',   icon: FileText,        roles: ['admin'] },
   { href: '/cotizaciones',      label: 'Cotizaciones USD',   icon: TrendingUp,      roles: ['admin'] },
   { href: '/roles',             label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
   { href: '/logs',              label: 'Logs',               icon: Activity,        roles: ['admin'] },
   { href: '/equipo',            label: 'Equipo',             icon: UserCircle,      roles: ['admin','gerente_operaciones'] },
 ]
 
-const bottomNav: { href: string; label: string; icon: any; roles: string[]; badge?: boolean }[] = [
-  { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'] },
-  { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'] },
+const bottomNav: { href: string; label: string; icon: any; roles: string[]; badge?: boolean; alwaysVisible?: boolean }[] = [
+  { href: '/dashboard',     label: 'Inicio',     icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
+  { href: '/mis-tareas',    label: 'Mis tareas', icon: Clock,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/novedades',     label: 'Novedades',  icon: Bell,            roles: ['admin','gerente_operaciones','colaborador'], badge: true },
-  { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'] },
+  { href: '/mis-horas',     label: 'Mis horas',  icon: Timer,           roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/liquidaciones', label: 'Liquid.',    icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
 ]
 
@@ -156,13 +157,14 @@ export default function AppLayout({
     }
   }
 
-  const canSeeItem = (item: { href: string; roles: string[] }) => {
-    if (item.roles.includes(userRole)) return true
+  const canSeeItem = (item: { href: string; roles: string[]; alwaysVisible?: boolean }) => {
+    if (item.alwaysVisible) return true
+    // If user has a custom role, custom permissions override system role checks
     if (customPermissions && customPermissions.length > 0) {
       const key = item.href.replace('/', '').replace(/-/g, '_')
       return customPermissions.includes(key)
     }
-    return false
+    return item.roles.includes(userRole)
   }
   const visible = navItems.filter(canSeeItem)
   const visibleBottom = bottomNav.filter(canSeeItem)

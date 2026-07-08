@@ -27,6 +27,7 @@ const MODULES = [
   { key: 'facturacion',           label: 'Facturación' },
   { key: 'liquidaciones',         label: 'Liquidaciones' },
   { key: 'facturas_clientes',     label: 'Facturas clientes' },
+  { key: 'resumen_facturas',      label: 'Resumen facturas' },
   { key: 'cotizaciones',          label: 'Cotizaciones USD' },
   { key: 'equipo',                label: 'Equipo' },
   { key: 'roles',                 label: 'Roles y permisos' },
