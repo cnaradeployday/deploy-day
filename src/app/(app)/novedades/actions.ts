@@ -1,6 +1,7 @@
 'use server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { sendQueuedWhatsapp } from '@/lib/whatsapp'
 
 function getAdmin() {
   return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -62,7 +63,7 @@ export async function enqueueWhatsapp(n: {
     if (existing) return
   }
 
-  await admin.from('whatsapp_notifications').insert({
+  const { data: row } = await admin.from('whatsapp_notifications').insert({
     user_id: n.user_id,
     task_id: n.task_id ?? null,
     phone: user.whatsapp_country_code + user.whatsapp_phone,
@@ -70,7 +71,11 @@ export async function enqueueWhatsapp(n: {
     template_name: n.template_name,
     template_vars: n.template_vars,
     dedup_key: n.dedup_key ?? null,
-  })
+  }).select('id').single()
+
+  // Se intenta enviar ahora mismo (no depende de un cron) — un fallo queda
+  // registrado en la fila y no se propaga a quien llamó a enqueueWhatsapp.
+  if (row) await sendQueuedWhatsapp(row.id).catch(() => {})
 }
 
 // ─── Fetch + mark read ────────────────────────────────────────────────────────
