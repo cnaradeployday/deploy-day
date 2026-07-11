@@ -112,10 +112,17 @@ export default function TaskActions({
 
   async function notifyReviewers() {
     const sb = createClient()
+    // "Puede revisar tareas" = admin/gerente_operaciones (siempre) + cualquier rol
+    // personalizado con el permiso otorgado. Debe coincidir con el mismo criterio
+    // que habilita los botones de Aprobar/Solicitar correcciones (canReview).
     const { data: roles } = await sb.from('role_permissions').select('role_id').eq('module', 'revisar_tareas').eq('can_read', true)
     const roleIds = (roles ?? []).map((r: any) => r.role_id)
-    if (roleIds.length === 0) return
-    const { data: reviewers } = await sb.from('users').select('id').in('custom_role_id', roleIds)
+    const { data: byRole } = roleIds.length
+      ? await sb.from('users').select('id').in('custom_role_id', roleIds)
+      : { data: [] }
+    const { data: byBaseRole } = await sb.from('users').select('id').in('role', ['admin', 'gerente_operaciones'])
+    const reviewerIds = Array.from(new Set([...(byRole ?? []), ...(byBaseRole ?? [])].map((r: any) => r.id)))
+    const reviewers = reviewerIds.map(id => ({ id }))
     await Promise.all((reviewers ?? []).map((r: any) => Promise.all([
       createNotification({
         user_id: r.id, type: 'task_review',
