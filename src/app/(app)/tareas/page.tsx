@@ -57,9 +57,17 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
   // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS
   const taskIds = tareas?.map(t => t.id) ?? []
   const adminSupabase = createAdminClient()
-  const { data: timeEntries } = taskIds.length
+  const { data: timeEntries, error: timeEntriesError } = taskIds.length
     ? await adminSupabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
-    : { data: [] }
+    : { data: [], error: null }
+
+  console.log('[DEBUG tareas]', {
+    viewerId: user?.id,
+    taskCount: taskIds.length,
+    timeEntriesError: timeEntriesError?.message ?? null,
+    timeEntriesRows: timeEntries?.length ?? 0,
+    totalHoras: (timeEntries ?? []).reduce((s, e) => s + e.hours_logged, 0),
+  })
 
   const horasPorTarea: Record<string, number> = {}
   timeEntries?.forEach(e => {
