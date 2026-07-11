@@ -6,6 +6,14 @@ import Link from 'next/link'
 import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2, KeyRound, Loader2, Check, Eye, EyeOff, MessageCircle } from 'lucide-react'
 import { CURRENCIES, Currency } from '@/lib/utils/currency'
 
+const WHATSAPP_EVENT_LABELS: { value: string; label: string }[] = [
+  { value: 'revision_disponible', label: 'Nuevas tareas disponibles para revisión' },
+  { value: 'correcciones_internas', label: 'Correcciones internas solicitadas' },
+  { value: 'correcciones_cliente', label: 'Modificaciones solicitadas por el cliente' },
+  { value: 'vencimiento_proximo', label: 'Vencimientos próximos' },
+  { value: 'incorporacion_tarea', label: 'Incorporación a una tarea' },
+]
+
 export default function EditarUsuarioClient({ miembro, historial, adminId, availability, customRoles }: {
   miembro: any; historial: any[]; adminId: string; availability: any[]; customRoles: any[]
 }) {
@@ -24,9 +32,21 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
   const [waForm, setWaForm] = useState({
     whatsapp_country_code: miembro.whatsapp_country_code ?? '',
     whatsapp_phone: miembro.whatsapp_phone ?? '',
+    whatsapp_enabled: miembro.whatsapp_enabled ?? false,
+    whatsapp_consent: miembro.whatsapp_consent ?? false,
+    whatsapp_notification_types: (miembro.whatsapp_notification_types ?? []) as string[],
   })
   const [savingWa, setSavingWa] = useState(false)
   const [savedWa, setSavedWa] = useState(false)
+
+  function toggleWaType(type: string) {
+    setWaForm(f => ({
+      ...f,
+      whatsapp_notification_types: f.whatsapp_notification_types.includes(type)
+        ? f.whatsapp_notification_types.filter(t => t !== type)
+        : [...f.whatsapp_notification_types, type],
+    }))
+  }
 
   // Password change state
   const [newPass, setNewPass] = useState('')
@@ -102,9 +122,14 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
   async function guardarWhatsapp(e: React.FormEvent) {
     e.preventDefault()
     setSavingWa(true)
+    const wasConsentGiven = !!miembro.whatsapp_consent
     const { error } = await createClient().from('users').update({
       whatsapp_country_code: waForm.whatsapp_country_code.trim() || null,
       whatsapp_phone: waForm.whatsapp_phone.trim() || null,
+      whatsapp_enabled: waForm.whatsapp_enabled,
+      whatsapp_consent: waForm.whatsapp_consent,
+      whatsapp_consent_at: waForm.whatsapp_consent && !wasConsentGiven ? new Date().toISOString() : undefined,
+      whatsapp_notification_types: waForm.whatsapp_notification_types,
     }).eq('id', miembro.id)
     if (error) alert('Error: ' + error.message)
     else { setSavedWa(true); setTimeout(() => setSavedWa(false), 2500); router.refresh() }
@@ -232,9 +257,36 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
               </div>
             </div>
-            <p className="text-xs text-gray-400">
-              Esto solo carga el número. Activar los avisos y dar el consentimiento lo hace cada persona desde su Mi perfil.
-            </p>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={waForm.whatsapp_enabled}
+                onChange={e => setWaForm(f => ({ ...f, whatsapp_enabled: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+              <span className="text-sm text-gray-700">Recibir avisos de DDS por WhatsApp</span>
+            </label>
+
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={waForm.whatsapp_consent}
+                onChange={e => setWaForm(f => ({ ...f, whatsapp_consent: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+              <span className="text-sm text-gray-700">
+                Tiene consentimiento para recibir mensajes de WhatsApp de Deployday con avisos sobre sus tareas.
+              </span>
+            </label>
+
+            <div className="border-t border-gray-50 pt-3">
+              <p className="text-xs font-medium text-gray-500 mb-2">¿Qué avisos recibe?</p>
+              <div className="space-y-2">
+                {WHATSAPP_EVENT_LABELS.map(({ value, label }) => (
+                  <label key={value} className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={waForm.whatsapp_notification_types.includes(value)}
+                      onChange={() => toggleWaType(value)}
+                      className="w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+                    <span className="text-xs text-gray-600">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <button type="submit" disabled={savingWa}
               className="w-full py-2.5 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
               {savingWa ? <><Loader2 size={15} className="animate-spin"/> Guardando...</>
