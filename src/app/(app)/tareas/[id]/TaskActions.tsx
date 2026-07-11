@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createNotification } from '@/app/(app)/novedades/actions'
+import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import { Loader2, UserCheck, Clock, AlertTriangle } from 'lucide-react'
 import { logActivity } from '@/lib/logActivity'
 
@@ -99,11 +99,15 @@ export default function TaskActions({
   const timerHours = Math.round((timerSecs / 3600) * 100) / 100
   const hasActiveTimer = timerSecs > 0
 
-  async function notifyAssignees(title: string, body?: string) {
+  async function notifyAssignees(
+    title: string, body?: string,
+    whatsapp?: { event_type: 'correcciones_cliente'; template_name: string; template_vars: Record<string, any> },
+  ) {
     const ids = [...(responsableId ? [responsableId] : []), ...collaboratorIds].filter(id => id !== userId)
-    await Promise.all(Array.from(new Set(ids)).map(uid =>
-      createNotification({ user_id: uid, type: 'task_review', title, body, link: '/tareas/' + task.id }).catch(() => {})
-    ))
+    await Promise.all(Array.from(new Set(ids)).map(uid => Promise.all([
+      createNotification({ user_id: uid, type: 'task_review', title, body, link: '/tareas/' + task.id }).catch(() => {}),
+      whatsapp ? enqueueWhatsapp({ user_id: uid, task_id: task.id, ...whatsapp }).catch(() => {}) : Promise.resolve(),
+    ])))
   }
 
   async function notifyReviewers() {
@@ -112,13 +116,18 @@ export default function TaskActions({
     const roleIds = (roles ?? []).map((r: any) => r.role_id)
     if (roleIds.length === 0) return
     const { data: reviewers } = await sb.from('users').select('id').in('custom_role_id', roleIds)
-    await Promise.all((reviewers ?? []).map((r: any) =>
+    await Promise.all((reviewers ?? []).map((r: any) => Promise.all([
       createNotification({
         user_id: r.id, type: 'task_review',
         title: `Tarea esperando revisión: "${task.title ?? ''}"`,
         link: '/tareas/' + task.id,
-      }).catch(() => {})
-    ))
+      }).catch(() => {}),
+      enqueueWhatsapp({
+        user_id: r.id, task_id: task.id, event_type: 'revision_disponible',
+        template_name: 'revision_disponible',
+        template_vars: { tarea: task.title ?? '', link: 'https://dds.deployday.com/tareas/' + task.id },
+      }).catch(() => {}),
+    ])))
   }
 
   async function changeStatus(nextStatus: string, label: string) {
@@ -165,7 +174,10 @@ export default function TaskActions({
     const { error } = await sb.from('tasks').update({ status: 'en_proceso' }).eq('id', task.id)
     if (error) { setErrorMsg('Error al cambiar estado: ' + error.message); setLoading(false); return }
     logActivity({ action: 'cambiar estado', section: 'tareas', entityId: task.id, detail: 'enviado_cliente → en_proceso (cliente solicitó cambios)' })
-    await notifyAssignees(`El cliente solicitó cambios en "${task.title ?? ''}"`, clienteComentario.trim())
+    await notifyAssignees(`El cliente solicitó cambios en "${task.title ?? ''}"`, clienteComentario.trim(), {
+      event_type: 'correcciones_cliente', template_name: 'correcciones_cliente',
+      template_vars: { tarea: task.title ?? '', comentario: clienteComentario.trim(), link: 'https://dds.deployday.com/tareas/' + task.id },
+    })
     setShowClienteForm(false); setClienteComentario('')
     router.refresh()
     setLoading(false)

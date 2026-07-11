@@ -26,6 +26,53 @@ export async function createNotification(n: {
   await admin.from('notifications').insert(n)
 }
 
+// Tipos válidos de evento de WhatsApp — deben coincidir con las opciones que
+// el usuario elige en Mi perfil (whatsapp_notification_types).
+export type WhatsappEventType =
+  | 'revision_disponible'
+  | 'correcciones_internas'
+  | 'correcciones_cliente'
+  | 'vencimiento_proximo'
+  | 'incorporacion_tarea'
+
+// Encola un WhatsApp — no lo envía. El envío real (Twilio) lo hace un proceso
+// aparte que lee esta cola, así un error de WhatsApp nunca bloquea la operación
+// de DDS que lo disparó.
+export async function enqueueWhatsapp(n: {
+  user_id: string
+  task_id?: string | null
+  event_type: WhatsappEventType
+  template_name: string
+  template_vars: Record<string, any>
+  dedup_key?: string
+}) {
+  const admin = getAdmin()
+  const { data: user } = await admin.from('users')
+    .select('whatsapp_phone, whatsapp_country_code, whatsapp_enabled, whatsapp_consent, whatsapp_notification_types, is_active')
+    .eq('id', n.user_id).single()
+
+  if (!user || !user.is_active) return
+  if (!user.whatsapp_enabled || !user.whatsapp_consent) return
+  if (!user.whatsapp_phone || !user.whatsapp_country_code) return
+  if (!(user.whatsapp_notification_types ?? []).includes(n.event_type)) return
+
+  if (n.dedup_key) {
+    const { data: existing } = await admin.from('whatsapp_notifications')
+      .select('id').eq('dedup_key', n.dedup_key).maybeSingle()
+    if (existing) return
+  }
+
+  await admin.from('whatsapp_notifications').insert({
+    user_id: n.user_id,
+    task_id: n.task_id ?? null,
+    phone: user.whatsapp_country_code + user.whatsapp_phone,
+    event_type: n.event_type,
+    template_name: n.template_name,
+    template_vars: n.template_vars,
+    dedup_key: n.dedup_key ?? null,
+  })
+}
+
 // ─── Fetch + mark read ────────────────────────────────────────────────────────
 
 export async function fetchNotifications(): Promise<{ data: any[]; unread: number }> {
@@ -237,6 +284,15 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
       dedup_key: `task_due_soon_${task.id}_${weekKey}`,
       metadata: { client_name: task.project?.client?.name ?? null, project_name: task.project?.name ?? null },
     })
+    await enqueueWhatsapp({
+      user_id: userId, task_id: task.id, event_type: 'vencimiento_proximo',
+      template_name: 'vencimiento_proximo',
+      template_vars: {
+        tarea: task.title, fecha: fechaStr,
+        cliente: task.project?.client?.name ?? '', link: 'https://dds.deployday.com/tareas/' + task.id,
+      },
+      dedup_key: `wa_task_due_soon_${task.id}_${weekKey}`,
+    }).catch(() => {})
   }
 
   const allOverdue = [

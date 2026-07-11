@@ -2,17 +2,28 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Camera, Loader2, Check, User, KeyRound, Eye, EyeOff } from 'lucide-react'
+import { Camera, Loader2, Check, User, KeyRound, Eye, EyeOff, MessageCircle } from 'lucide-react'
 import Image from 'next/image'
 
+interface WhatsappPrefs { phone: string; countryCode: string; enabled: boolean; consent: boolean; types: string[] }
+
+const WHATSAPP_EVENT_LABELS: { value: string; label: string }[] = [
+  { value: 'revision_disponible', label: 'Nuevas tareas disponibles para revisión' },
+  { value: 'correcciones_internas', label: 'Correcciones internas solicitadas' },
+  { value: 'correcciones_cliente', label: 'Modificaciones solicitadas por el cliente' },
+  { value: 'vencimiento_proximo', label: 'Vencimientos próximos' },
+  { value: 'incorporacion_tarea', label: 'Incorporación a una tarea' },
+]
+
 export default function MiPerfilClient({
-  userId, initialName, initialNickname, initialAvatarUrl, email
+  userId, initialName, initialNickname, initialAvatarUrl, email, initialWhatsapp
 }: {
   userId: string
   initialName: string
   initialNickname: string
   initialAvatarUrl: string | null
   email: string
+  initialWhatsapp: WhatsappPrefs
 }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -30,6 +41,11 @@ export default function MiPerfilClient({
   const [savingPass, setSavingPass] = useState(false)
   const [savedPass, setSavedPass] = useState(false)
   const [errorPass, setErrorPass] = useState<string | null>(null)
+
+  const [whatsapp, setWhatsapp] = useState<WhatsappPrefs>(initialWhatsapp)
+  const [savingWa, setSavingWa] = useState(false)
+  const [savedWa, setSavedWa] = useState(false)
+  const [errorWa, setErrorWa] = useState<string | null>(null)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -65,6 +81,32 @@ export default function MiPerfilClient({
     if (error) { setErrorPass('Error: ' + error.message); setSavingPass(false); return }
     setSavedPass(true); setNewPass(''); setConfirmPass('')
     setTimeout(() => setSavedPass(false), 3000); setSavingPass(false)
+  }
+
+  function toggleWhatsappType(type: string) {
+    setWhatsapp(w => ({
+      ...w,
+      types: w.types.includes(type) ? w.types.filter(t => t !== type) : [...w.types, type],
+    }))
+  }
+
+  async function handleSaveWhatsapp() {
+    if (whatsapp.enabled && (!whatsapp.consent || !whatsapp.phone.trim())) {
+      setErrorWa('Para activar WhatsApp necesitás cargar tu número y dar tu consentimiento.')
+      return
+    }
+    setSavingWa(true); setErrorWa(null)
+    const wasConsentGiven = initialWhatsapp.consent
+    const { error: saveErr } = await createClient().from('users').update({
+      whatsapp_phone: whatsapp.phone.trim() || null,
+      whatsapp_country_code: whatsapp.countryCode.trim() || null,
+      whatsapp_enabled: whatsapp.enabled,
+      whatsapp_consent: whatsapp.consent,
+      whatsapp_consent_at: whatsapp.consent && !wasConsentGiven ? new Date().toISOString() : undefined,
+      whatsapp_notification_types: whatsapp.types,
+    }).eq('id', userId)
+    if (saveErr) { setErrorWa('Error al guardar: ' + saveErr.message); setSavingWa(false); return }
+    setSavedWa(true); setTimeout(() => setSavedWa(false), 2500); setSavingWa(false); router.refresh()
   }
 
   const displayAvatar = preview || avatarUrl
@@ -146,6 +188,66 @@ export default function MiPerfilClient({
           {savingPass ? <><Loader2 size={15} className="animate-spin"/> Cambiando...</>
             : savedPass ? <><Check size={15}/> Contraseña actualizada</>
             : 'Cambiar contraseña'}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <MessageCircle size={15} className="text-gray-400"/>
+          <p className="text-sm font-semibold text-gray-800">Notificaciones por WhatsApp</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Código de país</label>
+            <input type="text" value={whatsapp.countryCode} onChange={e => setWhatsapp(w => ({ ...w, countryCode: e.target.value }))}
+              placeholder="+54"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Número de WhatsApp</label>
+            <input type="text" value={whatsapp.phone} onChange={e => setWhatsapp(w => ({ ...w, phone: e.target.value }))}
+              placeholder="9 11 1234 5678"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" checked={whatsapp.enabled}
+            onChange={e => setWhatsapp(w => ({ ...w, enabled: e.target.checked }))}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+          <span className="text-sm text-gray-700">Recibir avisos de DDS por WhatsApp</span>
+        </label>
+
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" checked={whatsapp.consent}
+            onChange={e => setWhatsapp(w => ({ ...w, consent: e.target.checked }))}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+          <span className="text-sm text-gray-700">
+            Doy mi consentimiento para recibir mensajes de WhatsApp de Deployday con avisos sobre mis tareas.
+          </span>
+        </label>
+
+        <div className="border-t border-gray-50 pt-3">
+          <p className="text-xs font-medium text-gray-500 mb-2">¿Qué avisos querés recibir?</p>
+          <div className="space-y-2">
+            {WHATSAPP_EVENT_LABELS.map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={whatsapp.types.includes(value)}
+                  onChange={() => toggleWhatsappType(value)}
+                  className="w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+                <span className="text-xs text-gray-600">{label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {errorWa && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-xl">{errorWa}</p>}
+        <button onClick={handleSaveWhatsapp} disabled={savingWa}
+          className="w-full py-2.5 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+          {savingWa ? <><Loader2 size={15} className="animate-spin"/> Guardando...</>
+            : savedWa ? <><Check size={15}/> Guardado</>
+            : 'Guardar preferencias de WhatsApp'}
         </button>
       </div>
     </div>

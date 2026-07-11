@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createNotification } from '@/app/(app)/novedades/actions'
+import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import { logActivity } from '@/lib/logActivity'
 import { ExternalLink, Plus, Loader2, CheckCircle2, RotateCcw } from 'lucide-react'
 
@@ -78,11 +78,15 @@ export default function TaskVersions({
     setLoading(false)
   }
 
-  async function notifyAssignees(title: string, body?: string) {
+  async function notifyAssignees(
+    title: string, body?: string,
+    whatsapp?: { event_type: 'correcciones_internas'; template_name: string; template_vars: Record<string, any> },
+  ) {
     const ids = [...(responsableId ? [responsableId] : []), ...collaboratorIds].filter(id => id !== currentUserId)
-    await Promise.all(Array.from(new Set(ids)).map(uid =>
-      createNotification({ user_id: uid, type: 'task_review', title, body, link: '/tareas/' + taskId }).catch(() => {})
-    ))
+    await Promise.all(Array.from(new Set(ids)).map(uid => Promise.all([
+      createNotification({ user_id: uid, type: 'task_review', title, body, link: '/tareas/' + taskId }).catch(() => {}),
+      whatsapp ? enqueueWhatsapp({ user_id: uid, task_id: taskId, ...whatsapp }).catch(() => {}) : Promise.resolve(),
+    ])))
   }
 
   async function submitReview(version: VersionRow) {
@@ -108,10 +112,23 @@ export default function TaskVersions({
 
     logActivity({ action: 'revisar versión', section: 'tareas', entityId: taskId, detail: 'V' + String(version.numero_version).padStart(2, '0') + ' → ' + estadoLabels[nextVersionStatus] })
 
-    await notifyAssignees(
-      reviewAction === 'aprobar' ? `Versión aprobada en "${taskTitle}"` : `Se solicitaron correcciones en "${taskTitle}"`,
-      reviewComment.trim() || undefined,
-    )
+    if (reviewAction === 'corregir') {
+      const { data: reviewerProfile } = await sb.from('users').select('full_name').eq('id', currentUserId).single()
+      await notifyAssignees(
+        `Se solicitaron correcciones en "${taskTitle}"`,
+        reviewComment.trim() || undefined,
+        {
+          event_type: 'correcciones_internas', template_name: 'correcciones_internas',
+          template_vars: {
+            tarea: taskTitle, version: version.numero_version,
+            revisado_por: reviewerProfile?.full_name ?? '', comentario: reviewComment.trim(),
+            link: 'https://dds.deployday.com/tareas/' + taskId,
+          },
+        },
+      )
+    } else {
+      await notifyAssignees(`Versión aprobada en "${taskTitle}"`, reviewComment.trim() || undefined)
+    }
 
     setReviewingId(null); setReviewComment(''); setReviewAction(null)
     router.refresh()

@@ -3,7 +3,7 @@ import { logActivity } from '@/lib/logActivity'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createNotification } from '@/app/(app)/novedades/actions'
+import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import Link from 'next/link'
 import { ArrowLeft, X, AlertTriangle, CheckCircle } from 'lucide-react'
 
@@ -195,7 +195,7 @@ export default function NuevaTareaPage() {
         ...(task.direct_responsible_id ? [task.direct_responsible_id] : []),
         ...colaboradores.map(c => c.uid),
       ]
-      await Promise.all(notifyIds.map(uid =>
+      await Promise.all(notifyIds.map(uid => Promise.all([
         createNotification({
           user_id: uid,
           type: 'task_assigned',
@@ -203,8 +203,14 @@ export default function NuevaTareaPage() {
           body: fechaLabel || undefined,
           link: '/mis-tareas',
           dedup_key: `task_assigned_${task.id}_${uid}`,
-        }).catch(() => {})
-      ))
+        }).catch(() => {}),
+        enqueueWhatsapp({
+          user_id: uid, task_id: task.id, event_type: 'incorporacion_tarea',
+          template_name: 'incorporacion_tarea',
+          template_vars: { tarea: task.title, vence: task.due_date ?? '', link: 'https://dds.deployday.com/tareas/' + task.id },
+          dedup_key: `wa_task_assigned_${task.id}_${uid}`,
+        }).catch(() => {}),
+      ])))
     }
     // Subir archivos de brief si los hay
     if (briefFiles.length > 0 && task) {

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { createNotification } from '@/app/(app)/novedades/actions'
+import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import Link from 'next/link'
 import { ArrowLeft, X } from 'lucide-react'
 
@@ -85,7 +85,7 @@ export default function EditarTareaPage() {
       ...(form.direct_responsible_id && form.direct_responsible_id !== prevResponsibleId ? [form.direct_responsible_id] : []),
       ...colaboradores.map(c => c.uid).filter(uid => !prevCollabIds.includes(uid)),
     ]
-    await Promise.all(newlyAssigned.map(uid =>
+    await Promise.all(newlyAssigned.map(uid => Promise.all([
       createNotification({
         user_id: uid,
         type: 'task_assigned',
@@ -93,8 +93,14 @@ export default function EditarTareaPage() {
         body: fechaLabel || undefined,
         link: '/mis-tareas',
         dedup_key: `task_assigned_${id}_${uid}`,
-      }).catch(() => {})
-    ))
+      }).catch(() => {}),
+      enqueueWhatsapp({
+        user_id: uid, task_id: id as string, event_type: 'incorporacion_tarea',
+        template_name: 'incorporacion_tarea',
+        template_vars: { tarea: form.title, vence: form.due_date ?? '', link: 'https://dds.deployday.com/tareas/' + id },
+        dedup_key: `wa_task_assigned_${id}_${uid}`,
+      }).catch(() => {}),
+    ])))
     router.push('/tareas/' + id)
   }
 
