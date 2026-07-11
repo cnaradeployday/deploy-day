@@ -21,16 +21,21 @@ export default async function DashboardPage() {
     .from('tasks')
     .select('id, title, status, due_date, project:projects(name, client:clients(name))')
     .eq('direct_responsible_id', user.id)
-    .in('status', ['estimado', 'en_proceso'])
+    .in('status', ['estimado', 'en_proceso', 'en_revision', 'listo_para_entregar', 'enviado_cliente'])
     .order('due_date', { ascending: true })
     .limit(5)
 
   const statusColors: Record<string, string> = {
     estimado: 'bg-blue-50 text-blue-600',
     en_proceso: 'bg-amber-50 text-amber-600',
+    en_revision: 'bg-indigo-50 text-indigo-600',
+    listo_para_entregar: 'bg-teal-50 text-teal-600',
+    enviado_cliente: 'bg-pink-50 text-pink-600',
   }
   const statusLabels: Record<string, string> = {
     estimado: 'Estimado', en_proceso: 'En proceso',
+    en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
+    enviado_cliente: 'Enviado al cliente',
   }
 
   return (

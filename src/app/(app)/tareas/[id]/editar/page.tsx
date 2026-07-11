@@ -22,6 +22,7 @@ export default function EditarTareaPage() {
     project_id: '', title: '', description: '',
     priority: 'media', due_date: '',
     direct_responsible_id: '', direct_hours: '', status: 'creado',
+    requires_review: false,
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -41,6 +42,7 @@ export default function EditarTareaPage() {
           direct_responsible_id: data.direct_responsible_id ?? '',
           direct_hours: data.direct_hours?.toString() ?? data.estimated_hours?.toString() ?? '',
           status: data.status ?? 'creado',
+          requires_review: data.requires_review ?? false,
         })
         setColaboradores((data.task_collaborators ?? []).map((c: any) => ({ uid: c.user_id, hours: c.assigned_hours?.toString() ?? '' })))
         setPrevResponsibleId(data.direct_responsible_id ?? null)
@@ -69,6 +71,7 @@ export default function EditarTareaPage() {
       estimated_hours: totalHoras || null,
       direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
       status: form.status,
+      requires_review: form.requires_review,
     }).eq('id', id)
     if (err) { setError('Error: ' + err.message); setLoading(false); return }
     await supabase.from('task_collaborators').delete().eq('task_id', id)
@@ -136,6 +139,10 @@ export default function EditarTareaPage() {
               <option value="en_proceso">En proceso</option>
               <option value="terminado">Terminado</option>
               <option value="presentado">Presentado</option>
+              <option value="en_revision">En revisión</option>
+              <option value="listo_para_entregar">Listo para entregar</option>
+              <option value="enviado_cliente">Enviado al cliente</option>
+              <option value="finalizado">Finalizado</option>
             </select>
           </div>
           <div>
@@ -155,6 +162,18 @@ export default function EditarTareaPage() {
           <input type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
         </div>
+
+        <label className="flex items-start gap-2.5 border border-gray-100 rounded-2xl p-4 cursor-pointer hover:bg-gray-50">
+          <input type="checkbox" checked={form.requires_review}
+            onChange={e => setForm(f => ({ ...f, requires_review: e.target.checked }))}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+          <span>
+            <span className="block text-sm font-medium text-gray-700">Requiere control de revisión</span>
+            <span className="block text-xs text-gray-400 mt-0.5">
+              Activa el flujo de versiones, revisión interna y entrega al cliente para esta tarea.
+            </span>
+          </span>
+        </label>
 
         {/* HORAS DESGLOSADAS */}
         <div className="border border-gray-100 rounded-2xl p-4 space-y-3">

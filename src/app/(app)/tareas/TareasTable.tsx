@@ -11,10 +11,14 @@ const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
   en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
   presentado: 'bg-purple-50 text-purple-600',
+  en_revision: 'bg-indigo-50 text-indigo-600', listo_para_entregar: 'bg-teal-50 text-teal-600',
+  enviado_cliente: 'bg-pink-50 text-pink-600', finalizado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
   creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado'
+  terminado: 'Terminado', presentado: 'Presentado',
+  en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
+  enviado_cliente: 'Enviado al cliente', finalizado: 'Finalizado',
 }
 const priorityColors: Record<string, string> = {
   baja: 'bg-gray-100 text-gray-400', media: 'bg-blue-50 text-blue-500',
@@ -34,6 +38,7 @@ interface Colaborador { id: string; assigned_hours: number | null; user: { id: s
 interface Tarea {
   id: string; title: string; status: string; priority: string
   due_date: string; estimated_hours: number | null; hours_logged: number
+  requires_review?: boolean
   project: any; direct_responsible: any; task_collaborators?: Colaborador[]
 }
 
@@ -182,7 +187,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
           <tbody>
             {!sorted.length ? <tr><td colSpan={12} className="text-center py-12 text-sm text-gray-400">Sin tareas</td></tr>
             : sorted.map(t => {
-              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
               const pct = t.estimated_hours ? Math.round((t.hours_logged / t.estimated_hours) * 100) : null
               const mes = mesDeDate(t.due_date); const collabs = t.task_collaborators ?? []
               return (
@@ -200,7 +205,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                   <td className="px-3 py-2.5"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-3 py-2.5"><div className="flex items-center gap-0.5">
                     <Link href={'/tareas/' + t.id} title="Ver" className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all"><Pencil size={12}/></Link>
-                    {nextStatus[t.status] && <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id} title={nextStatusLabel[t.status]} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all"><CheckCircle size={12}/></button>}
+                    {nextStatus[t.status] && !t.requires_review && <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id} title={nextStatusLabel[t.status]} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all"><CheckCircle size={12}/></button>}
                     <button onClick={() => deleteTask(t.id)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
                   </div></td>
                 </tr>
@@ -225,7 +230,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                 </div>
                 <div className="flex items-center gap-1">
                   <Link href={'/tareas/' + t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50"><Pencil size={14}/></Link>
-                  {nextStatus[t.status] && <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50"><CheckCircle size={14}/></button>}
+                  {nextStatus[t.status] && !t.requires_review && <button onClick={() => advanceStatus(t.id, t.status)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50"><CheckCircle size={14}/></button>}
                   <button onClick={() => deleteTask(t.id)} disabled={loading === t.id} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"><Trash2 size={14}/></button>
                 </div>
               </div>

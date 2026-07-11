@@ -9,6 +9,7 @@ const MODULES = [
   { key: 'proyectos_mes',         label: 'Proyectos del mes' },
   { key: 'tareas',                label: 'Tareas' },
   { key: 'crear_tareas',          label: 'Crear tareas' },
+  { key: 'revisar_tareas',        label: 'Puede revisar tareas (control de revisión)' },
   { key: 'mis_tareas',            label: 'Mis tareas' },
   { key: 'ver_horas_estimadas_mis_tareas', label: 'Ver horas estimadas en Mis tareas' },
   { key: 'mis_horas',             label: 'Mis horas' },

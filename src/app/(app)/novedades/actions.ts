@@ -78,7 +78,13 @@ export async function markTaskDone(taskId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'No autorizado' }
-  const { error } = await getAdmin().from('tasks').update({ status: 'terminado' }).eq('id', taskId)
+  const admin = getAdmin()
+  const { data: task } = await admin.from('tasks').select('requires_review').eq('id', taskId).single()
+  if (task?.requires_review) {
+    // Las tareas con control de revisión no tienen un estado "terminado" único — deben avanzar desde el detalle de la tarea.
+    return { error: 'Esta tarea usa control de revisión. Avanzá su estado desde el detalle de la tarea.' }
+  }
+  const { error } = await admin.from('tasks').update({ status: 'terminado' }).eq('id', taskId)
   if (error) return { error: error.message }
   return { ok: true }
 }
@@ -128,10 +134,10 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
     { data: availability },
   ] = await Promise.all([
     admin.from('tasks').select('direct_hours').eq('direct_responsible_id', userId)
-      .gte('due_date', primerDia).lte('due_date', ultimoDia).not('status', 'in', '(presentado)'),
+      .gte('due_date', primerDia).lte('due_date', ultimoDia).not('status', 'in', '(presentado,finalizado)'),
     admin.from('task_collaborators').select('assigned_hours, task:tasks!inner(due_date, status)')
       .eq('user_id', userId).gte('task.due_date', primerDia).lte('task.due_date', ultimoDia)
-      .not('task.status', 'in', '(presentado)'),
+      .not('task.status', 'in', '(presentado,finalizado)'),
     admin.from('time_entries').select('hours_logged').eq('user_id', userId)
       .gte('entry_date', primerDia).lte('entry_date', ultimoDia),
     admin.from('user_availability').select('horas').eq('user_id', userId)
@@ -206,12 +212,12 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
       .gte('task.due_date', todayStr).lte('task.due_date', in7DaysStr),
     admin.from('tasks').select('id, title, due_date, status, project:projects(name, client:clients(name))')
       .eq('direct_responsible_id', userId)
-      .not('status', 'in', '(terminado,presentado)')
+      .not('status', 'in', '(terminado,presentado,finalizado)')
       .lt('due_date', todayStr),
     admin.from('task_collaborators')
       .select('task:tasks!inner(id, title, due_date, status, project:projects(name, client:clients(name)))')
       .eq('user_id', userId)
-      .not('task.status', 'in', '(terminado,presentado)')
+      .not('task.status', 'in', '(terminado,presentado,finalizado)')
       .lt('task.due_date', todayStr),
   ])
 

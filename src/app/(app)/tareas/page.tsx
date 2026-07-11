@@ -19,7 +19,7 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
 
   let query = supabase
     .from('tasks')
-    .select(`id, title, status, priority, due_date, estimated_hours,
+    .select(`id, title, status, priority, due_date, estimated_hours, requires_review,
       project:projects(id, name, client:clients(id, name)),
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name),
       task_collaborators(id, assigned_hours, user:users(id, full_name))`)

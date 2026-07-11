@@ -41,6 +41,7 @@ export default function NuevaTareaPage() {
     title: '', description: '',
     priority: 'media', due_date: '',
     direct_responsible_id: '', direct_hours: '',
+    requires_review: false,
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -77,7 +78,7 @@ export default function NuevaTareaPage() {
         .from('tasks')
         .select('id, direct_hours, task_collaborators(assigned_hours)')
         .eq('project_id', form.project_id)
-        .not('status', 'in', '(presentado)')
+        .not('status', 'in', '(presentado,finalizado)')
         .gte('due_date', primerDiaMes)
         .lte('due_date', ultimoDiaMes)
       const horasAsignadas = (tareasProy ?? []).reduce((s: number, t: any) => {
@@ -116,7 +117,7 @@ export default function NuevaTareaPage() {
       .from('tasks')
       .select('direct_hours')
       .eq('direct_responsible_id', uid)
-      .not('status', 'in', '(presentado)')
+      .not('status', 'in', '(presentado,finalizado)')
       .gte('due_date', primerDiaMes)
       .lte('due_date', ultimoDiaMes)
     const horasResp = (tareasResp ?? []).reduce((s: number, t: any) => s + (t.direct_hours ?? 0), 0)
@@ -128,7 +129,7 @@ export default function NuevaTareaPage() {
     const horasColab = (tareasColab ?? [])
       .filter((c: any) => {
         const dd = c.task?.due_date
-        return dd && dd >= primerDiaMes && dd <= ultimoDiaMes && c.task?.status !== 'presentado'
+        return dd && dd >= primerDiaMes && dd <= ultimoDiaMes && !['presentado','finalizado'].includes(c.task?.status)
       })
       .reduce((s: number, c: any) => s + (c.assigned_hours ?? 0), 0)
 
@@ -180,6 +181,7 @@ export default function NuevaTareaPage() {
       estimated_hours: totalHoras || null,
       direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
       status: 'creado', created_by: user?.id,
+      requires_review: form.requires_review,
     }).select().single()
     if (err) { setError('Error: ' + err.message); setLoading(false); return }
     if (colaboradores.length > 0 && task) {
@@ -285,6 +287,18 @@ export default function NuevaTareaPage() {
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
         </div>
+
+        <label className="flex items-start gap-2.5 border border-gray-100 rounded-2xl p-4 cursor-pointer hover:bg-gray-50">
+          <input type="checkbox" checked={form.requires_review}
+            onChange={e => setForm(f => ({ ...f, requires_review: e.target.checked }))}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+          <span>
+            <span className="block text-sm font-medium text-gray-700">Requiere control de revisión</span>
+            <span className="block text-xs text-gray-400 mt-0.5">
+              Activa el flujo de versiones, revisión interna y entrega al cliente para esta tarea.
+            </span>
+          </span>
+        </label>
 
         {/* HORAS DESGLOSADAS */}
         <div className="border border-gray-100 rounded-2xl p-4 space-y-3">

@@ -11,10 +11,14 @@ const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
   en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
   presentado: 'bg-purple-50 text-purple-600',
+  en_revision: 'bg-indigo-50 text-indigo-600', listo_para_entregar: 'bg-teal-50 text-teal-600',
+  enviado_cliente: 'bg-pink-50 text-pink-600', finalizado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
   creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado'
+  terminado: 'Terminado', presentado: 'Presentado',
+  en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
+  enviado_cliente: 'Enviado al cliente', finalizado: 'Finalizado',
 }
 const priorityColors: Record<string, string> = {
   baja: 'bg-gray-100 text-gray-400', media: 'bg-blue-50 text-blue-500',
@@ -56,9 +60,9 @@ export default function MisTareasClient({
     router.push(pathname + '?' + p.toString())
   }, [params, pathname, router])
 
-  // Status multi-select: null = default (all except terminado)
+  // Status multi-select: null = default (all except terminado/finalizado)
   const ALL_STATUSES = Object.keys(statusLabels)
-  const DEFAULT_STATUSES = ALL_STATUSES.filter(s => s !== 'terminado')
+  const DEFAULT_STATUSES = ALL_STATUSES.filter(s => s !== 'terminado' && s !== 'finalizado')
   const selectedStatuses: string[] = filters.status
     ? filters.status.split(',')
     : DEFAULT_STATUSES
@@ -306,12 +310,12 @@ export default function MisTareasClient({
             {!sorted.length ? (
               <tr><td colSpan={canSeeEstimatedHours ? 11 : 10} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
-              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               const isLoading = loading === t.id
               const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
-              const canAdvance = !!nextStatus[t.status]
+              const canAdvance = !!nextStatus[t.status] && !t.requires_review
               return (
                 <tr key={t.id} className={'border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors' + (esOtroMes ? ' opacity-60' : '')}>
                   <td className="px-3 py-3 text-sm font-medium text-gray-900 truncate" title={t.title}>

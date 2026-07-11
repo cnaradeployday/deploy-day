@@ -8,15 +8,25 @@ import TaskTimer from './TaskTimer'
 import TaskAttachments from './TaskAttachments'
 import TaskComments from './TaskComments'
 import TimeEntriesList from './TimeEntriesList'
+import TaskVersions from './TaskVersions'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
   en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
   presentado: 'bg-purple-50 text-purple-600',
+  en_revision: 'bg-indigo-50 text-indigo-600', listo_para_entregar: 'bg-teal-50 text-teal-600',
+  enviado_cliente: 'bg-pink-50 text-pink-600', finalizado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
   creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado'
+  terminado: 'Terminado', presentado: 'Presentado',
+  en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
+  enviado_cliente: 'Enviado al cliente', finalizado: 'Finalizado',
+}
+const enPoderDeLabels: Record<string, string> = {
+  creado: 'Responsable', estimado: 'Responsable', en_proceso: 'Responsable / Colaboradores',
+  en_revision: 'Revisión', listo_para_entregar: 'Entrega al cliente',
+  enviado_cliente: 'Cliente', finalizado: 'Sin acción pendiente',
 }
 const priorityColors: Record<string, string> = {
   baja: 'bg-gray-100 text-gray-400', media: 'bg-blue-50 text-blue-500',
@@ -48,7 +58,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
 
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
-  const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+  const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
   // Permiso editar tareas
@@ -78,10 +88,32 @@ export default async function TareaDetailPage({ params, searchParams }: { params
     canSeeEstimatedHours = permEst?.can_read ?? false
   }
 
+  // Permiso revisar tareas (control de revisión)
+  let canReview = isAdmin
+  if (!canReview && profile?.custom_role_id) {
+    const { data: permRev } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'revisar_tareas').single()
+    canReview = permRev?.can_read ?? false
+  }
+
   const isDirectResponsible = t.direct_responsible_id === user?.id
   const isCollaborator = (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
   const isAssigned = isDirectResponsible || isCollaborator
   const canUseTimer = ['estimado','en_proceso'].includes(t.status) && isAssigned
+  const collaboratorIds = (t.task_collaborators as any[])?.map((c: any) => c.user?.id).filter(Boolean) ?? []
+
+  const { data: versionsRaw } = t.requires_review
+    ? await supabase
+        .from('task_versions')
+        .select('*, creator:users!task_versions_creado_por_fkey(full_name), reviewer:users!task_versions_revisado_por_fkey(full_name)')
+        .eq('task_id', id)
+    : { data: [] }
+  const versions = versionsRaw ?? []
+  const latestVersion = versions.length
+    ? versions.reduce((a: any, b: any) => (b.numero_version > a.numero_version ? b : a))
+    : null
+  const hasPendingVersion = latestVersion?.estado_revision === 'pendiente'
 
   const { data: commentsRaw } = await supabase
     .from('task_comments')
@@ -111,6 +143,11 @@ export default async function TareaDetailPage({ params, searchParams }: { params
         <div className="flex items-center gap-2 ml-4 shrink-0">
           <span className={'text-xs px-2 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span>
           <span className={'text-xs px-2.5 py-1 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span>
+          {t.requires_review && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+              En poder de: {enPoderDeLabels[t.status] ?? '—'}
+            </span>
+          )}
           {canEditTask && (
             <Link href={'/tareas/' + t.id + '/editar'}
               className="p-1.5 rounded-lg text-gray-400 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
@@ -165,12 +202,16 @@ export default async function TareaDetailPage({ params, searchParams }: { params
             <TaskTimer taskId={t.id} userId={user?.id ?? ''} taskTitle={t.title} taskStatus={t.status}/>
           )}
           <TaskActions
-            task={{ id: t.id, status: t.status, estimated_hours: t.estimated_hours }}
+            task={{ id: t.id, title: t.title, status: t.status, estimated_hours: t.estimated_hours, requires_review: t.requires_review }}
             userId={user?.id ?? ''}
             userRole={profile?.role ?? 'colaborador'}
             canCargarHorasOtros={canCargarHorasOtros}
             timeEntries={(t.time_entries as any[]) ?? []}
             isDirectResponsible={isDirectResponsible}
+            isCollaborator={isCollaborator}
+            hasPendingVersion={hasPendingVersion}
+            responsableId={t.direct_responsible_id}
+            collaboratorIds={collaboratorIds}
           />
         </div>
         <TimeEntriesList
@@ -180,6 +221,20 @@ export default async function TareaDetailPage({ params, searchParams }: { params
           currentUserId={user?.id ?? ''}
         />
       </div>
+
+      {t.requires_review && (
+        <TaskVersions
+          taskId={t.id}
+          taskTitle={t.title}
+          taskStatus={t.status}
+          versions={versions as any[]}
+          currentUserId={user?.id ?? ''}
+          canReview={canReview}
+          canCreateVersion={isAssigned || isAdmin}
+          responsableId={t.direct_responsible_id}
+          collaboratorIds={collaboratorIds}
+        />
+      )}
 
       <TaskAttachments
         taskId={t.id}

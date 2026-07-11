@@ -2,16 +2,24 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, UserCheck, Clock } from 'lucide-react'
+import { createNotification } from '@/app/(app)/novedades/actions'
+import { Loader2, UserCheck, Clock, AlertTriangle } from 'lucide-react'
 import { logActivity } from '@/lib/logActivity'
 
-export default function TaskActions({ task, userId, userRole, timeEntries, isDirectResponsible, canCargarHorasOtros = false }: {
-  task: { id: string; status: string; estimated_hours: number | null }
+export default function TaskActions({
+  task, userId, userRole, timeEntries, isDirectResponsible, isCollaborator, canCargarHorasOtros = false,
+  hasPendingVersion = false, responsableId = null, collaboratorIds = [],
+}: {
+  task: { id: string; title?: string; status: string; estimated_hours: number | null; requires_review?: boolean }
   userId: string
   userRole: string
   timeEntries: any[]
   isDirectResponsible?: boolean
+  isCollaborator?: boolean
   canCargarHorasOtros?: boolean
+  hasPendingVersion?: boolean
+  responsableId?: string | null
+  collaboratorIds?: string[]
 }) {
   const router = useRouter()
   const [hours, setHours] = useState('')
@@ -22,6 +30,8 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
   const [targetUserId, setTargetUserId] = useState(userId)
   const [usuarios, setUsuarios] = useState<{ id: string; full_name: string }[]>([])
   const [timerSecs, setTimerSecs] = useState(0)
+  const [showClienteForm, setShowClienteForm] = useState(false)
+  const [clienteComentario, setClienteComentario] = useState('')
 
   const isAdmin = userRole === 'admin'
   const isGerente = userRole === 'gerente_operaciones'
@@ -57,6 +67,9 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
       .then(({ data }) => setUsuarios(data ?? []))
   }, [showUserSelector])
 
+  const isAssigned = isDirectResponsible || isCollaborator || canManage
+  const requiresReview = !!task.requires_review
+
   const transitions: Record<string, { next: string; label: string; who: 'all' | 'manage' | 'responsible' }> = {
     creado:    { next: 'estimado',   label: 'Iniciar tarea',          who: 'all' },
     estimado:  { next: 'en_proceso', label: 'Marcar en proceso',      who: 'all' },
@@ -64,18 +77,51 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
     terminado: { next: 'presentado', label: 'Marcar como presentado', who: 'responsible' },
   }
 
-  const t = transitions[task.status]
-  const canTransition = t && (
-    t.who === 'all' ||
-    (t.who === 'manage' && canManage) ||
-    (t.who === 'responsible' && (isDirectResponsible || canManage))
-  )
+  const reviewTransitions: Record<string, { next: string; label: string } | undefined> = {
+    creado: { next: 'estimado', label: 'Iniciar tarea' },
+    estimado: { next: 'en_proceso', label: 'Marcar en proceso' },
+    en_proceso: { next: 'en_revision', label: 'Enviar a revisión' },
+    listo_para_entregar: { next: 'enviado_cliente', label: 'Enviar al cliente' },
+  }
+
+  const t = requiresReview ? undefined : transitions[task.status]
+  const rt = requiresReview ? reviewTransitions[task.status] : undefined
+  const blockedByVersion = requiresReview && task.status === 'en_proceso' && !hasPendingVersion
+
+  const canTransition = requiresReview
+    ? (!!rt && isAssigned && !blockedByVersion)
+    : (t && (
+        t.who === 'all' ||
+        (t.who === 'manage' && canManage) ||
+        (t.who === 'responsible' && (isDirectResponsible || canManage))
+      ))
 
   const timerHours = Math.round((timerSecs / 3600) * 100) / 100
   const hasActiveTimer = timerSecs > 0
 
-  async function changeStatus() {
-    if (!t) return
+  async function notifyAssignees(title: string, body?: string) {
+    const ids = [...(responsableId ? [responsableId] : []), ...collaboratorIds].filter(id => id !== userId)
+    await Promise.all(Array.from(new Set(ids)).map(uid =>
+      createNotification({ user_id: uid, type: 'task_review', title, body, link: '/tareas/' + task.id }).catch(() => {})
+    ))
+  }
+
+  async function notifyReviewers() {
+    const sb = createClient()
+    const { data: roles } = await sb.from('role_permissions').select('role_id').eq('module', 'revisar_tareas').eq('can_read', true)
+    const roleIds = (roles ?? []).map((r: any) => r.role_id)
+    if (roleIds.length === 0) return
+    const { data: reviewers } = await sb.from('users').select('id').in('custom_role_id', roleIds)
+    await Promise.all((reviewers ?? []).map((r: any) =>
+      createNotification({
+        user_id: r.id, type: 'task_review',
+        title: `Tarea esperando revisión: "${task.title ?? ''}"`,
+        link: '/tareas/' + task.id,
+      }).catch(() => {})
+    ))
+  }
+
+  async function changeStatus(nextStatus: string, label: string) {
     setLoading(true)
     setErrorMsg(null)
 
@@ -94,9 +140,33 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
       }
     }
 
-    const { error } = await createClient().from('tasks').update({ status: t.next }).eq('id', task.id)
+    const { error } = await createClient().from('tasks').update({ status: nextStatus }).eq('id', task.id)
     if (error) { setErrorMsg('Error al cambiar estado: ' + error.message); setLoading(false); return }
-    logActivity({ action: 'cambiar estado', section: 'tareas', entityId: task.id, detail: task.status + ' → ' + t.next })
+    logActivity({ action: 'cambiar estado', section: 'tareas', entityId: task.id, detail: task.status + ' → ' + nextStatus })
+
+    if (nextStatus === 'en_revision') await notifyReviewers()
+    if (nextStatus === 'enviado_cliente') await notifyAssignees(`Tarea enviada al cliente: "${task.title ?? ''}"`)
+    if (nextStatus === 'finalizado') await notifyAssignees(`Tarea finalizada: "${task.title ?? ''}"`)
+
+    router.refresh()
+    setLoading(false)
+  }
+
+  async function clienteSolicitaCambios() {
+    if (!clienteComentario.trim()) { setErrorMsg('El comentario es obligatorio.'); return }
+    setLoading(true)
+    setErrorMsg(null)
+    const sb = createClient()
+    const { error: cErr } = await sb.from('task_comments').insert({
+      task_id: task.id, user_id: userId,
+      content: 'Cliente solicitó cambios: ' + clienteComentario.trim(),
+    })
+    if (cErr) { setErrorMsg('Error al registrar comentario: ' + cErr.message); setLoading(false); return }
+    const { error } = await sb.from('tasks').update({ status: 'en_proceso' }).eq('id', task.id)
+    if (error) { setErrorMsg('Error al cambiar estado: ' + error.message); setLoading(false); return }
+    logActivity({ action: 'cambiar estado', section: 'tareas', entityId: task.id, detail: 'enviado_cliente → en_proceso (cliente solicitó cambios)' })
+    await notifyAssignees(`El cliente solicitó cambios en "${task.title ?? ''}"`, clienteComentario.trim())
+    setShowClienteForm(false); setClienteComentario('')
     router.refresh()
     setLoading(false)
   }
@@ -139,7 +209,7 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
         </div>
       )}
 
-      {canTransition && (
+      {!requiresReview && canTransition && t && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-medium text-gray-700 mb-3">Cambiar estado</p>
           {task.status === 'terminado' && !isDirectResponsible && !canManage && (
@@ -155,7 +225,7 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
               </p>
             </div>
           )}
-          <button onClick={changeStatus} disabled={loading}
+          <button onClick={() => changeStatus(t.next, t.label)} disabled={loading}
             className="w-full bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
             {loading
               ? <><Loader2 size={15} className="animate-spin"/> Guardando...</>
@@ -164,6 +234,79 @@ export default function TaskActions({ task, userId, userRole, timeEntries, isDir
                 : t.label
             }
           </button>
+        </div>
+      )}
+
+      {requiresReview && rt && isAssigned && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <p className="text-sm font-medium text-gray-700 mb-3">Cambiar estado</p>
+          {blockedByVersion && (
+            <p className="text-xs text-amber-600 mb-3 bg-amber-50 px-3 py-2 rounded-xl flex items-start gap-1.5">
+              <AlertTriangle size={13} className="shrink-0 mt-0.5"/>
+              Debe guardar una nueva versión antes de enviar la tarea a revisión.
+            </p>
+          )}
+          {hasActiveTimer && (
+            <div className="flex items-center gap-2 mb-3 bg-green-50 px-3 py-2 rounded-xl">
+              <Clock size={11} className="text-green-600 shrink-0"/>
+              <p className="text-xs text-green-700">
+                Al avanzar se guardarán <strong>{timerHours}h</strong> del cronómetro activo
+              </p>
+            </div>
+          )}
+          <button onClick={() => changeStatus(rt.next, rt.label)} disabled={loading || blockedByVersion}
+            className="w-full bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+            {loading
+              ? <><Loader2 size={15} className="animate-spin"/> Guardando...</>
+              : hasActiveTimer
+                ? `${rt.label} + guardar ${timerHours}h`
+                : rt.label
+            }
+          </button>
+        </div>
+      )}
+
+      {requiresReview && task.status === 'en_revision' && (
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 px-4 py-3 text-xs text-blue-700">
+          Tarea en revisión. Cualquier usuario con permiso de revisión puede aprobarla o solicitar correcciones desde la sección Versiones.
+        </div>
+      )}
+
+      {requiresReview && task.status === 'enviado_cliente' && isAssigned && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2">
+          <p className="text-sm font-medium text-gray-700 mb-1">Entrega al cliente</p>
+          {!showClienteForm ? (
+            <>
+              <button onClick={() => changeStatus('finalizado', 'Marcar como Finalizado')} disabled={loading}
+                className="w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+                {loading ? 'Guardando...' : 'Marcar como Finalizado'}
+              </button>
+              <button onClick={() => setShowClienteForm(true)} disabled={loading}
+                className="w-full border border-amber-200 text-amber-600 hover:bg-amber-50 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+                Cliente solicitó cambios
+              </button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <textarea value={clienteComentario} onChange={e => setClienteComentario(e.target.value)} rows={2}
+                placeholder="Comentario obligatorio: ¿qué pidió cambiar el cliente?"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] resize-none"/>
+              <div className="flex gap-2">
+                <button onClick={() => { setShowClienteForm(false); setClienteComentario('') }}
+                  className="flex-1 py-2 border border-gray-200 rounded-xl text-xs text-gray-600">Cancelar</button>
+                <button onClick={clienteSolicitaCambios} disabled={loading}
+                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold disabled:opacity-50">
+                  {loading ? 'Guardando...' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {requiresReview && task.status === 'finalizado' && (
+        <div className="bg-green-50 rounded-2xl border border-green-100 px-4 py-3 text-xs text-green-700">
+          Tarea finalizada. Sin acción pendiente.
         </div>
       )}
 

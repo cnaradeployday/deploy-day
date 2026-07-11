@@ -59,7 +59,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
         .from('tasks')
         .select('id, estimated_hours, project_id, due_date')
         .in('project_id', proyectoIds)
-        .not('status', 'in', '(presentado)')
+        .not('status', 'in', '(presentado,finalizado)')
     : { data: [] }
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
