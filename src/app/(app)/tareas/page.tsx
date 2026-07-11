@@ -54,24 +54,18 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     .gte('hasta', hDesde)
   const totalVendidas = (segmentosMes ?? []).reduce((s, seg) => s + seg.horas, 0)
 
-  // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS
+  // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS.
+  // Se suman agrupadas por tarea del lado de Postgres (RPC) en vez de traer cada fila cruda,
+  // porque `time_entries` ya supera las 1000 filas por defecto que PostgREST devuelve por consulta.
   const taskIds = tareas?.map(t => t.id) ?? []
   const adminSupabase = createAdminClient()
-  const { data: timeEntries, error: timeEntriesError } = taskIds.length
-    ? await adminSupabase.from('time_entries').select('task_id, hours_logged').in('task_id', taskIds)
-    : { data: [], error: null }
-
-  console.log('[DEBUG tareas]', {
-    viewerId: user?.id,
-    taskCount: taskIds.length,
-    timeEntriesError: timeEntriesError?.message ?? null,
-    timeEntriesRows: timeEntries?.length ?? 0,
-    totalHoras: (timeEntries ?? []).reduce((s, e) => s + e.hours_logged, 0),
-  })
+  const { data: horasPorTareaRows } = taskIds.length
+    ? await adminSupabase.rpc('sum_hours_by_task', { p_task_ids: taskIds })
+    : { data: [] }
 
   const horasPorTarea: Record<string, number> = {}
-  timeEntries?.forEach(e => {
-    horasPorTarea[e.task_id] = (horasPorTarea[e.task_id] ?? 0) + e.hours_logged
+  horasPorTareaRows?.forEach((r: { task_id: string; total_hours: number }) => {
+    horasPorTarea[r.task_id] = r.total_hours
   })
 
   const tareasConHoras = applyNickname(

@@ -64,15 +64,11 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
 
-  // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS
+  // Horas de todo el equipo, no solo las del usuario actual — usar admin client para saltar RLS.
+  // Sumado agrupado por tarea en Postgres (RPC), evitando el límite de 1000 filas por consulta.
   const adminSupabase = createAdminClient()
   const { data: entries } = taskIds.length
-    ? await adminSupabase
-        .from('time_entries')
-        .select('task_id, hours_logged')
-        .in('task_id', taskIds)
-        .gte('entry_date', primerDia)
-        .lte('entry_date', ultimoDia)
+    ? await adminSupabase.rpc('sum_hours_by_task', { p_task_ids: taskIds, p_from: primerDia, p_to: ultimoDia })
     : { data: [] }
 
   const clientes = [...new Map(
@@ -97,10 +93,10 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   ;(todasTareas ?? []).forEach(t => { taskToProject[t.id] = t.project_id })
 
   const consumidoPorProyecto: Record<string, number> = {}
-  ;(entries ?? []).forEach((e: any) => {
+  ;(entries ?? []).forEach((e: { task_id: string; total_hours: number }) => {
     const proyId = taskToProject[e.task_id]
     if (!proyId) return
-    consumidoPorProyecto[proyId] = (consumidoPorProyecto[proyId] ?? 0) + e.hours_logged
+    consumidoPorProyecto[proyId] = (consumidoPorProyecto[proyId] ?? 0) + e.total_hours
   })
 
   const proyectosConActividad = proyectosDelMes.filter(p =>

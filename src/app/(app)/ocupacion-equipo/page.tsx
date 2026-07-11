@@ -54,9 +54,10 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
     .gte('task.due_date', primerDia)
     .lte('task.due_date', ultimoDia)
 
-  const { data: timeEntries } = userIds.length ? await adminSupabase
-    .from('time_entries').select('user_id, task_id, hours_logged')
-    .in('user_id', userIds).gte('entry_date', primerDia).lte('entry_date', ultimoDia)
+  // Sumado agrupado por usuario+tarea en Postgres (RPC) — evita el límite de 1000 filas
+  // por consulta que PostgREST aplica al traer cada time_entry crudo.
+  const { data: horasRows } = userIds.length
+    ? await adminSupabase.rpc('sum_hours_by_user_task', { p_user_ids: userIds, p_from: primerDia, p_to: ultimoDia })
     : { data: [] }
 
   const disponibilidadPorUser: Record<string, number> = {}
@@ -66,9 +67,9 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
 
   // Horas realizadas por usuario y tarea
   const realizadasPorUserTask: Record<string, Record<string, number>> = {}
-  ;(timeEntries ?? []).forEach((e: any) => {
-    if (!realizadasPorUserTask[e.user_id]) realizadasPorUserTask[e.user_id] = {}
-    realizadasPorUserTask[e.user_id][e.task_id] = (realizadasPorUserTask[e.user_id][e.task_id] ?? 0) + e.hours_logged
+  ;(horasRows ?? []).forEach((r: { user_id: string; task_id: string; total_hours: number }) => {
+    if (!realizadasPorUserTask[r.user_id]) realizadasPorUserTask[r.user_id] = {}
+    realizadasPorUserTask[r.user_id][r.task_id] = r.total_hours
   })
 
   const realizadasPorUser: Record<string, number> = {}
