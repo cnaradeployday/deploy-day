@@ -52,7 +52,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
       Proyecto: f.nombre,
       'Horas vendidas': f.horasVendidas,
       'Horas estimadas': f.horasEstimadas,
-      'Horas consumidas': f.horasConsumidas,
+      'Horas usadas': f.horasConsumidas,
       'Diferencia': f.horasVendidas - f.horasEstimadas,
       '% consumido': f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) + '%' : '—',
     }))
@@ -99,7 +99,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
         {[
           { label: 'Horas vendidas', value: totalVendidas, color: 'text-gray-900' },
           { label: 'Horas estimadas', value: totalEstimadas, color: totalEstimadas > totalVendidas ? 'text-red-500' : 'text-gray-900' },
-          { label: 'Horas consumidas', value: totalConsumidas, color: 'text-[#1B9BF0]' },
+          { label: 'Horas usadas', value: totalConsumidas, color: 'text-[#1B9BF0]' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
             <p className="text-xs text-gray-400 mb-1">{label}</p>
@@ -135,7 +135,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
             <span className="col-span-3">Proyecto</span>
             <span className="text-right col-span-2">Vendidas</span>
             <span className="text-right col-span-1">Estimadas</span>
-            <span className="text-right col-span-1">Consumidas</span>
+            <span className="text-right col-span-1">Usadas</span>
             <span className="text-right col-span-1">%</span>
           </div>
           {filtered.map(f => {
