@@ -1,10 +1,48 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { Download, BarChart3, TrendingUp, TrendingDown, Minus , RefreshCw } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Download, BarChart3, TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, ChevronDown, Check, AlertTriangle, CornerDownRight, type LucideIcon } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 function nombreMes(m: string) {
   return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
+}
+function nombreMesCorto(m: string) {
+  return new Date(m + '-15').toLocaleString('es-AR', { month: 'short', year: '2-digit' })
+}
+
+// Tolerancia: +/-20 puntos porcentuales entre % de horas usadas (vs. vendidas) y % del mes transcurrido.
+// Tolerancia: +/-20% relativo entre horas estimadas (programadas) y horas vendidas.
+function estadoBadges(vendidas: number, estimadas: number, usadas: number, pctTiempo: number) {
+  const badges: { label: string; Icon: LucideIcon; cls: string }[] = []
+  if (vendidas <= 0) {
+    badges.push({ label: 'Sin horas vendidas', Icon: Minus, cls: 'bg-gray-100 text-gray-400' })
+    return badges
+  }
+  const pctEjecucion = usadas / vendidas
+  const diffPuntos = (pctEjecucion - pctTiempo) * 100
+  if (diffPuntos < -20) badges.push({ label: 'Subejecutando', Icon: TrendingDown, cls: 'bg-amber-50 text-amber-600' })
+  else if (diffPuntos > 20) badges.push({ label: 'Sobreejecutando', Icon: TrendingUp, cls: 'bg-red-50 text-red-600' })
+  else badges.push({ label: 'En ritmo', Icon: Check, cls: 'bg-green-50 text-green-600' })
+
+  const ratioProgramacion = estimadas / vendidas
+  if (ratioProgramacion < 0.8) badges.push({ label: 'Pocas hs. programadas', Icon: AlertTriangle, cls: 'bg-orange-50 text-orange-600' })
+  else if (ratioProgramacion > 1.2) badges.push({ label: 'Muchas hs. programadas', Icon: AlertTriangle, cls: 'bg-red-50 text-red-600' })
+
+  return badges
+}
+
+function EstadoCell({ vendidas, estimadas, usadas, pctTiempo }: { vendidas: number; estimadas: number; usadas: number; pctTiempo: number }) {
+  const badges = estadoBadges(vendidas, estimadas, usadas, pctTiempo)
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {badges.map((b, i) => (
+        <span key={i} className={'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap ' + b.cls}>
+          <b.Icon size={10}/>{b.label}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export default function ResumenMesClient({ filas, mes, mesActual, clientes, filterCliente, mesesDisponibles = [] }: {
@@ -44,6 +82,39 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
   const totalVendidas = filtered.reduce((s, f) => s + f.horasVendidas, 0)
   const totalEstimadas = filtered.reduce((s, f) => s + f.horasEstimadas, 0)
   const totalConsumidas = filtered.reduce((s, f) => s + f.horasConsumidas, 0)
+
+  // % del mes ya transcurrido: mes pasado = 100%, mes futuro = 0%, mes actual = dia de hoy / dias del mes
+  const pctTiempo = useMemo(() => {
+    const [y, mm] = mes.split('-').map(Number)
+    const totalDias = new Date(y, mm, 0).getDate()
+    const diaRef = mes === mesActual ? new Date().getDate() : mes < mesActual ? totalDias : 0
+    return diaRef / totalDias
+  }, [mes, mesActual])
+
+  const grupos = useMemo(() => {
+    const map = new Map<string, { clienteId: string; cliente: string; proyectos: typeof filtered; vendidas: number; estimadas: number; usadas: number }>()
+    filtered.forEach(f => {
+      const key = f.clienteId || f.cliente
+      let g = map.get(key)
+      if (!g) { g = { clienteId: f.clienteId, cliente: f.cliente, proyectos: [], vendidas: 0, estimadas: 0, usadas: 0 }; map.set(key, g) }
+      g.proyectos.push(f)
+      g.vendidas += f.horasVendidas
+      g.estimadas += f.horasEstimadas
+      g.usadas += f.horasConsumidas
+    })
+    const arr = [...map.values()]
+    arr.forEach(g => g.proyectos.sort((a, b) => a.nombre.localeCompare(b.nombre)))
+    return arr.sort((a, b) => a.cliente.localeCompare(b.cliente))
+  }, [filtered])
+
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  function toggleExpand(clienteId: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(clienteId)) next.delete(clienteId); else next.add(clienteId)
+      return next
+    })
+  }
 
   function exportar() {
     const data = filtered.map(f => ({
@@ -130,49 +201,81 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
-            <span className="col-span-2">Mes</span>
-            <span className="col-span-2">Cliente</span>
-            <span className="col-span-3">Proyecto</span>
+            <span className="col-span-1">Mes</span>
+            <span className="col-span-3">Cliente</span>
             <span className="text-right col-span-2">Vendidas</span>
             <span className="text-right col-span-1">Estimadas</span>
             <span className="text-right col-span-1">Usadas</span>
             <span className="text-right col-span-1">%</span>
+            <span className="text-right col-span-3">Estado</span>
           </div>
-          {filtered.map(f => {
-            const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
-            const overEstimado = f.horasEstimadas > f.horasVendidas
-            const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
+          {grupos.map(g => {
+            const isOpen = expanded.has(g.clienteId)
+            const pctG = g.estimadas > 0 ? Math.round((g.usadas / g.estimadas) * 100) : null
+            const overEstimadoG = g.estimadas > g.vendidas
+            const pctColorG = pctG === null ? 'text-gray-300' : pctG >= 100 ? 'text-red-500 font-bold' : pctG >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
             return (
-              <div key={f.id} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
-                <span className="col-span-2 text-xs text-gray-400 capitalize">{nombreMes(mes)}</span>
-                <span className="col-span-2 text-xs text-gray-500 truncate">{f.cliente}</span>
-                <span className="col-span-3 text-sm text-gray-900 truncate font-medium">{f.nombre}</span>
-                <span className="col-span-2 text-sm font-semibold text-gray-900 text-right">{f.horasVendidas}h</span>
-                <div className="col-span-1 text-right flex items-center justify-end gap-1">
-                  <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>
-                  <span className={'text-sm ' + (overEstimado ? 'text-red-500 font-semibold' : 'text-gray-700')}>{f.horasEstimadas}h</span>
+              <div key={g.clienteId || g.cliente}>
+                <div onClick={() => toggleExpand(g.clienteId)} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center cursor-pointer">
+                  <span className="col-span-1 text-xs text-gray-400 capitalize">{nombreMesCorto(mes)}</span>
+                  <span className="col-span-3 text-sm text-gray-900 font-semibold flex items-center gap-1.5 min-w-0">
+                    {isOpen ? <ChevronDown size={14} className="text-gray-400 shrink-0"/> : <ChevronRight size={14} className="text-gray-400 shrink-0"/>}
+                    <span className="truncate">{g.cliente}</span>
+                    <span className="text-[10px] text-gray-300 font-normal shrink-0">({g.proyectos.length})</span>
+                  </span>
+                  <span className="col-span-2 text-sm font-semibold text-gray-900 text-right">{Math.round(g.vendidas * 10) / 10}h</span>
+                  <div className="col-span-1 text-right flex items-center justify-end gap-1">
+                    <span className={'text-sm ' + (overEstimadoG ? 'text-red-500 font-semibold' : 'text-gray-700')}>{Math.round(g.estimadas * 10) / 10}h</span>
+                  </div>
+                  <span className="col-span-1 text-sm text-[#1B9BF0] font-semibold text-right">{Math.round(g.usadas * 10) / 10}h</span>
+                  <span className={'col-span-1 text-xs text-right ' + pctColorG}>{pctG !== null ? pctG + '%' : '—'}</span>
+                  <div className="col-span-3" onClick={e => e.stopPropagation()}>
+                    <EstadoCell vendidas={g.vendidas} estimadas={g.estimadas} usadas={g.usadas} pctTiempo={pctTiempo}/>
+                  </div>
                 </div>
-                <span className="col-span-1 text-sm text-[#1B9BF0] font-semibold text-right">{f.horasConsumidas}h</span>
-                <span className={'col-span-1 text-xs text-right ' + pctColor}>{pct !== null ? pct + '%' : '—'}</span>
+                {isOpen && g.proyectos.map(f => {
+                  const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
+                  const overEstimado = f.horasEstimadas > f.horasVendidas
+                  const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
+                  return (
+                    <div key={f.id} className="grid grid-cols-12 px-5 py-2.5 border-b border-gray-50 last:border-0 bg-gray-50/60 hover:bg-gray-50 items-center">
+                      <span className="col-span-1"/>
+                      <span className="col-span-3 text-xs text-gray-500 truncate pl-5 flex items-center gap-1.5 min-w-0"><CornerDownRight size={11} className="text-gray-300 shrink-0"/><span className="truncate">{f.nombre}</span></span>
+                      <span className="col-span-2 text-sm text-gray-700 text-right">{f.horasVendidas}h</span>
+                      <div className="col-span-1 text-right flex items-center justify-end gap-1">
+                        <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>
+                        <span className={'text-xs ' + (overEstimado ? 'text-red-500 font-semibold' : 'text-gray-600')}>{f.horasEstimadas}h</span>
+                      </div>
+                      <span className="col-span-1 text-sm text-[#1B9BF0] text-right">{f.horasConsumidas}h</span>
+                      <span className={'col-span-1 text-xs text-right ' + pctColor}>{pct !== null ? pct + '%' : '—'}</span>
+                      <div className="col-span-3">
+                        <EstadoCell vendidas={f.horasVendidas} estimadas={f.horasEstimadas} usadas={f.horasConsumidas} pctTiempo={pctTiempo}/>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
           <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-t border-gray-100 items-center">
-            <span className="col-span-7 text-sm font-semibold text-gray-700">Total</span>
+            <span className="col-span-4 text-sm font-semibold text-gray-700">Total</span>
             <span className="col-span-2 text-sm font-bold text-gray-900 text-right">{Math.round(totalVendidas * 10) / 10}h</span>
             <span className={'col-span-1 text-sm font-bold text-right ' + (totalEstimadas > totalVendidas ? 'text-red-500' : 'text-gray-900')}>{Math.round(totalEstimadas * 10) / 10}h</span>
             <span className="col-span-1 text-sm font-bold text-[#1B9BF0] text-right">{Math.round(totalConsumidas * 10) / 10}h</span>
             <span className="col-span-1 text-xs text-gray-400 text-right">
               {totalEstimadas > 0 ? Math.round((totalConsumidas / totalEstimadas) * 100) + '%' : '—'}
             </span>
+            <span className="col-span-3"/>
           </div>
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-6 text-xs text-gray-400">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs text-gray-400">
         <span className="flex items-center gap-1.5"><TrendingUp size={12} className="text-red-400"/> Estimadas superan las vendidas</span>
         <span className="flex items-center gap-1.5"><Minus size={12} className="text-amber-400"/> Dentro del rango (80-100%)</span>
         <span className="flex items-center gap-1.5"><TrendingDown size={12} className="text-green-500"/> Uso eficiente (&lt;80%)</span>
+        <span className="flex items-center gap-1.5"><Check size={12} className="text-green-600"/> Ritmo de uso vs. % del mes transcurrido (tolerancia ±20 puntos)</span>
+        <span className="flex items-center gap-1.5"><AlertTriangle size={12} className="text-orange-500"/> Horas programadas vs. vendidas (tolerancia ±20%)</span>
       </div>
     </div>
   )
