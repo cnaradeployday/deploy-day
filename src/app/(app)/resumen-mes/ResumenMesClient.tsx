@@ -79,17 +79,19 @@ function EstadoFilterDropdown({ selected, onChange }: { selected: Set<string>; o
     onChange(next)
   }
 
+  const isFiltering = selected.size < ESTADO_LABELS.length
+
   return (
     <div ref={ref} className="relative inline-block">
       <button onClick={() => setOpen(v => !v)}
-        className={`flex items-center gap-1 hover:text-gray-600 transition-colors ${selected.size > 0 ? 'text-[#1B9BF0] font-semibold' : ''}`}>
-        Estado <Filter size={11}/>{selected.size > 0 && <span className="text-[10px]">({selected.size})</span>}
+        className={`flex items-center gap-1 hover:text-gray-600 transition-colors ${isFiltering ? 'text-[#1B9BF0] font-semibold' : ''}`}>
+        Estado <Filter size={11}/>{isFiltering && <span className="text-[10px]">({selected.size})</span>}
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 min-w-[210px] p-2">
           <div className="flex items-center justify-between px-2 pb-1 mb-1 border-b border-gray-50">
             <span className="text-[11px] font-medium text-gray-400">Filtrar por estado</span>
-            {selected.size > 0 && <button onClick={() => onChange(new Set())} className="text-[10px] text-[#1B9BF0] hover:underline">Limpiar</button>}
+            {isFiltering && <button onClick={() => onChange(new Set(ESTADO_LABELS))} className="text-[10px] text-[#1B9BF0] hover:underline">Mostrar todos</button>}
           </div>
           {ESTADO_LABELS.map(label => (
             <label key={label} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-left">
@@ -143,12 +145,12 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
     return diaRef / totalDias
   }, [mes, mesActual])
 
-  const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set())
+  const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set(ESTADO_LABELS))
 
   const filteredByCliente = filterCliente ? filas.filter(f => f.clienteId === filterCliente) : filas
 
   const filtered = useMemo(() => {
-    if (estadoFilter.size === 0) return filteredByCliente
+    if (estadoFilter.size === ESTADO_LABELS.length) return filteredByCliente
     return filteredByCliente.filter(f => {
       const labels = estadoBadges(f.horasVendidas, f.horasEstimadas, f.horasConsumidas, pctTiempo).map(b => b.label)
       return labels.some(l => estadoFilter.has(l))
