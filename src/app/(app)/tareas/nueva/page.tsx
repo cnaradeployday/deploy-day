@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import Link from 'next/link'
 import { ArrowLeft, X, AlertTriangle, CheckCircle } from 'lucide-react'
+import SearchableSelect from '@/components/shared/SearchableSelect'
 
 interface Colab { uid: string; hours: string }
 
@@ -36,6 +37,7 @@ export default function NuevaTareaPage() {
   const briefInputRef = useRef<HTMLInputElement>(null)
   const [proyectoInfo, setProyectoInfo] = useState<ProyectoInfo | null>(null)
   const [usuariosInfo, setUsuariosInfo] = useState<Record<string, UsuarioInfo>>({})
+  const [clientId, setClientId] = useState('')
   const [form, setForm] = useState({
     project_id: params.get('proyecto') ?? '',
     title: '', description: '',
@@ -55,9 +57,24 @@ export default function NuevaTareaPage() {
 
   useEffect(() => {
     const sb = createClient()
-    sb.from('projects').select('id, name, client:clients(name)').order('name').then(({ data }) => setProyectos(data ?? []))
+    sb.from('projects').select('id, name, client:clients(id, name)').order('name').then(({ data }) => setProyectos(data ?? []))
     sb.from('users').select('id, full_name').eq('is_active', true).order('full_name').then(({ data }) => setUsuarios(data ?? []))
   }, [])
+
+  // Si el proyecto vino precargado por query param, el cliente se infiere del proyecto
+  // hasta que el usuario elija uno explícitamente (sin usar un efecto para sincronizar estado)
+  const effectiveClientId = clientId || (proyectos.find(p => p.id === form.project_id)?.client?.id ?? '')
+
+  const clientes = Array.from(
+    new Map(proyectos.filter(p => p.client?.id).map(p => [p.client.id, { id: p.client.id, label: p.client.name }])).values()
+  ).sort((a, b) => a.label.localeCompare(b.label))
+
+  const proyectosDelCliente = effectiveClientId ? proyectos.filter(p => p.client?.id === effectiveClientId) : []
+
+  function setClient(id: string) {
+    setClientId(id)
+    setForm(f => ({ ...f, project_id: '' }))
+  }
 
   // Cargar info del proyecto cuando cambia proyecto o mes
   useEffect(() => {
@@ -170,6 +187,8 @@ export default function NuevaTareaPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!effectiveClientId) { setError('Seleccioná un cliente'); return }
+    if (!form.project_id) { setError('Seleccioná un proyecto'); return }
     setLoading(true); setError('')
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -244,12 +263,26 @@ export default function NuevaTareaPage() {
       <h1 className="text-xl font-semibold text-gray-900 mb-6">Nueva tarea</h1>
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Cliente *</label>
+          <SearchableSelect
+            options={clientes}
+            value={effectiveClientId}
+            onChange={setClient}
+            placeholder="Seleccionar cliente"
+            searchPlaceholder="Buscar cliente..."
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Proyecto *</label>
-          <select value={form.project_id} onChange={e => set('project_id', e.target.value)} required
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-            <option value="">Seleccionar proyecto</option>
-            {proyectos.map(p => <option key={p.id} value={p.id}>{(p.client as any)?.name} — {p.name}</option>)}
-          </select>
+          <SearchableSelect
+            options={proyectosDelCliente.map(p => ({ id: p.id, label: p.name }))}
+            value={form.project_id}
+            onChange={id => set('project_id', id)}
+            placeholder={effectiveClientId ? 'Seleccionar proyecto' : 'Elegí primero un cliente'}
+            searchPlaceholder="Buscar proyecto..."
+            disabled={!effectiveClientId}
+          />
           {/* Info del proyecto */}
           {proyectoInfo && proyectoInfo.horasMes > 0 && (
             <div className={`mt-2 px-3 py-2 rounded-xl text-xs flex items-center gap-2 ${proyectoExcedido ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
