@@ -129,47 +129,108 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
-            <span className="col-span-2">Mes</span>
-            <span className="col-span-2">Cliente</span>
-            <span className="col-span-3">Proyecto</span>
-            <span className="text-right col-span-2">Vendidas</span>
-            <span className="text-right col-span-1">Estimadas</span>
-            <span className="text-right col-span-1">Consumidas</span>
-            <span className="text-right col-span-1">%</span>
-          </div>
-          {filtered.map(f => {
-            const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
-            const overEstimado = f.horasEstimadas > f.horasVendidas
-            const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
-            return (
-              <div key={f.id} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
-                <span className="col-span-2 text-xs text-gray-400 capitalize">{nombreMes(mes)}</span>
-                <span className="col-span-2 text-xs text-gray-500 truncate">{f.cliente}</span>
-                <span className="col-span-3 text-sm text-gray-900 truncate font-medium">{f.nombre}</span>
-                <span className="col-span-2 text-sm font-semibold text-gray-900 text-right">{f.horasVendidas}h</span>
-                <div className="col-span-1 text-right flex items-center justify-end gap-1">
-                  <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>
-                  <span className={'text-sm ' + (overEstimado ? 'text-red-500 font-semibold' : 'text-gray-700')}>{f.horasEstimadas}h</span>
+          {/* Desktop / tablet: tabla en grid */}
+          <div className="hidden md:block">
+            <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
+              <span className="col-span-2">Mes</span>
+              <span className="col-span-2">Cliente</span>
+              <span className="col-span-3">Proyecto</span>
+              <span className="text-right col-span-2">Vendidas</span>
+              <span className="text-right col-span-1">Estimadas</span>
+              <span className="text-right col-span-1">Consumidas</span>
+              <span className="text-right col-span-1">%</span>
+            </div>
+            {filtered.map(f => {
+              const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
+              const overEstimado = f.horasEstimadas > f.horasVendidas
+              const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
+              return (
+                <div key={f.id} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
+                  <span className="col-span-2 text-xs text-gray-400 capitalize">{nombreMes(mes)}</span>
+                  <span className="col-span-2 text-xs text-gray-500 truncate">{f.cliente}</span>
+                  <span className="col-span-3 text-sm text-gray-900 truncate font-medium">{f.nombre}</span>
+                  <span className="col-span-2 text-sm font-semibold text-gray-900 text-right">{f.horasVendidas}h</span>
+                  <div className="col-span-1 text-right flex items-center justify-end gap-1">
+                    <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>
+                    <span className={'text-sm ' + (overEstimado ? 'text-red-500 font-semibold' : 'text-gray-700')}>{f.horasEstimadas}h</span>
+                  </div>
+                  <span className="col-span-1 text-sm text-[#1B9BF0] font-semibold text-right">{f.horasConsumidas}h</span>
+                  <span className={'col-span-1 text-xs text-right ' + pctColor}>{pct !== null ? pct + '%' : '—'}</span>
                 </div>
-                <span className="col-span-1 text-sm text-[#1B9BF0] font-semibold text-right">{f.horasConsumidas}h</span>
-                <span className={'col-span-1 text-xs text-right ' + pctColor}>{pct !== null ? pct + '%' : '—'}</span>
+              )
+            })}
+            <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-t border-gray-100 items-center">
+              <span className="col-span-7 text-sm font-semibold text-gray-700">Total</span>
+              <span className="col-span-2 text-sm font-bold text-gray-900 text-right">{Math.round(totalVendidas * 10) / 10}h</span>
+              <span className={'col-span-1 text-sm font-bold text-right ' + (totalEstimadas > totalVendidas ? 'text-red-500' : 'text-gray-900')}>{Math.round(totalEstimadas * 10) / 10}h</span>
+              <span className="col-span-1 text-sm font-bold text-[#1B9BF0] text-right">{Math.round(totalConsumidas * 10) / 10}h</span>
+              <span className="col-span-1 text-xs text-gray-400 text-right">
+                {totalEstimadas > 0 ? Math.round((totalConsumidas / totalEstimadas) * 100) + '%' : '—'}
+              </span>
+            </div>
+          </div>
+
+          {/* Mobile: tarjetas apiladas */}
+          <div className="md:hidden divide-y divide-gray-50">
+            {filtered.map(f => {
+              const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
+              const overEstimado = f.horasEstimadas > f.horasVendidas
+              const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
+              return (
+                <div key={f.id} className="px-4 py-3.5">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{f.nombre}</p>
+                      <p className="text-xs text-gray-400 truncate">{f.cliente} · <span className="capitalize">{nombreMes(mes)}</span></p>
+                    </div>
+                    <span className={'text-xs shrink-0 ' + pctColor}>{pct !== null ? pct + '%' : '—'}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-[10px] text-gray-400">Vendidas</p>
+                      <p className="text-sm font-semibold text-gray-900">{f.horasVendidas}h</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Estimadas</p>
+                      <p className={'text-sm font-semibold flex items-center justify-center gap-1 ' + (overEstimado ? 'text-red-500' : 'text-gray-700')}>
+                        <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>{f.horasEstimadas}h
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-400">Consumidas</p>
+                      <p className="text-sm font-semibold text-[#1B9BF0]">{f.horasConsumidas}h</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            <div className="px-4 py-3 bg-gray-50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-gray-700">Total</span>
+                <span className="text-xs text-gray-400">
+                  {totalEstimadas > 0 ? Math.round((totalConsumidas / totalEstimadas) * 100) + '%' : '—'}
+                </span>
               </div>
-            )
-          })}
-          <div className="grid grid-cols-12 px-5 py-3 bg-gray-50 border-t border-gray-100 items-center">
-            <span className="col-span-7 text-sm font-semibold text-gray-700">Total</span>
-            <span className="col-span-2 text-sm font-bold text-gray-900 text-right">{Math.round(totalVendidas * 10) / 10}h</span>
-            <span className={'col-span-1 text-sm font-bold text-right ' + (totalEstimadas > totalVendidas ? 'text-red-500' : 'text-gray-900')}>{Math.round(totalEstimadas * 10) / 10}h</span>
-            <span className="col-span-1 text-sm font-bold text-[#1B9BF0] text-right">{Math.round(totalConsumidas * 10) / 10}h</span>
-            <span className="col-span-1 text-xs text-gray-400 text-right">
-              {totalEstimadas > 0 ? Math.round((totalConsumidas / totalEstimadas) * 100) + '%' : '—'}
-            </span>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-[10px] text-gray-400">Vendidas</p>
+                  <p className="text-sm font-bold text-gray-900">{Math.round(totalVendidas * 10) / 10}h</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400">Estimadas</p>
+                  <p className={'text-sm font-bold ' + (totalEstimadas > totalVendidas ? 'text-red-500' : 'text-gray-900')}>{Math.round(totalEstimadas * 10) / 10}h</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400">Consumidas</p>
+                  <p className="text-sm font-bold text-[#1B9BF0]">{Math.round(totalConsumidas * 10) / 10}h</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-6 text-xs text-gray-400">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-gray-400">
         <span className="flex items-center gap-1.5"><TrendingUp size={12} className="text-red-400"/> Estimadas superan las vendidas</span>
         <span className="flex items-center gap-1.5"><Minus size={12} className="text-amber-400"/> Dentro del rango (80-100%)</span>
         <span className="flex items-center gap-1.5"><TrendingDown size={12} className="text-green-500"/> Uso eficiente (&lt;80%)</span>
