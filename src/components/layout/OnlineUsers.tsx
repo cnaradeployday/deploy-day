@@ -68,6 +68,7 @@ export default function OnlineUsers({ collapsed = false, trackOnly = false }: { 
   const [myId, setMyId] = useState<string | null>(_state.myId)
   const [showTooltip, setShowTooltip] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const listener = (u: OnlineUser[]) => {
@@ -87,8 +88,20 @@ export default function OnlineUsers({ collapsed = false, trackOnly = false }: { 
       if (ref.current && !ref.current.contains(e.target as Node)) setShowTooltip(false)
     }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    return () => { document.removeEventListener('mousedown', handler); if (closeTimer.current) clearTimeout(closeTimer.current) }
   }, [])
+
+  // Hover con margen de gracia: al pasar el mouse del botón al tooltip hay un
+  // pequeño espacio entre ambos — sin este delay, cruzarlo lo cerraba antes
+  // de llegar (el tooltip "no funcionaba" al pasar el mouse por encima).
+  function openOnHover() {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
+    setShowTooltip(true)
+  }
+  function closeOnHover() {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setShowTooltip(false), 250)
+  }
 
   if (trackOnly) return null
 
@@ -113,7 +126,7 @@ export default function OnlineUsers({ collapsed = false, trackOnly = false }: { 
 
   if (collapsed) {
     return (
-      <div ref={ref} className="relative">
+      <div ref={ref} className="relative" onMouseEnter={openOnHover} onMouseLeave={closeOnHover}>
         <button onClick={() => setShowTooltip(v => !v)}
           className="w-8 h-8 flex items-center justify-center rounded-xl bg-green-50 hover:bg-green-100 transition-all relative">
           <Users size={14} className="text-green-600"/>
@@ -127,22 +140,16 @@ export default function OnlineUsers({ collapsed = false, trackOnly = false }: { 
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative" onMouseEnter={openOnHover} onMouseLeave={closeOnHover}>
       <button
         onClick={() => setShowTooltip(v => !v)}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
         className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-green-50 hover:bg-green-100 transition-all"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
         <span className="text-xs font-semibold text-green-700">{count}</span>
         <Users size={11} className="text-green-600"/>
       </button>
-      {showTooltip && (
-        <div onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
-          <Tooltip/>
-        </div>
-      )}
+      {showTooltip && <Tooltip/>}
     </div>
   )
 }
