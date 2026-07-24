@@ -126,7 +126,7 @@ export default function OnlineUsers({ collapsed = false, trackOnly = false }: { 
 
   if (collapsed) {
     return (
-      <div ref={ref} className="relative" onMouseEnter={openOnHover} onMouseLeave={closeOnHover}>
+      <div ref={ref} className="relative -m-1.5 p-1.5" onMouseEnter={openOnHover} onMouseLeave={closeOnHover}>
         <button onClick={() => setShowTooltip(v => !v)}
           className="w-8 h-8 flex items-center justify-center rounded-xl bg-green-50 hover:bg-green-100 transition-all relative">
           <Users size={14} className="text-green-600"/>
@@ -140,7 +140,7 @@ export default function OnlineUsers({ collapsed = false, trackOnly = false }: { 
   }
 
   return (
-    <div ref={ref} className="relative" onMouseEnter={openOnHover} onMouseLeave={closeOnHover}>
+    <div ref={ref} className="relative -m-1.5 p-1.5" onMouseEnter={openOnHover} onMouseLeave={closeOnHover}>
       <button
         onClick={() => setShowTooltip(v => !v)}
         className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-green-50 hover:bg-green-100 transition-all"
