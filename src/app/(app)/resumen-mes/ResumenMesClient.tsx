@@ -5,6 +5,8 @@ import { Download, BarChart3, TrendingUp, TrendingDown, Minus, RefreshCw, Chevro
 import * as XLSX from 'xlsx'
 
 const ESTADO_LABELS = ['Sin horas vendidas', 'Subejecutando', 'Sobreejecutando', 'En ritmo', 'Pocas hs. programadas', 'Muchas hs. programadas'] as const
+// Por defecto se ocultan los estados "sin problema" (Sin horas vendidas, En ritmo)
+const DEFAULT_ESTADO_FILTER = ['Subejecutando', 'Sobreejecutando', 'Pocas hs. programadas', 'Muchas hs. programadas']
 type SortKey = 'cliente' | 'vendidas' | 'estimadas' | 'usadas' | 'pct'
 
 function nombreMes(m: string) {
@@ -145,7 +147,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
     return diaRef / totalDias
   }, [mes, mesActual])
 
-  const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set(ESTADO_LABELS))
+  const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set(DEFAULT_ESTADO_FILTER))
 
   const filteredByCliente = filterCliente ? filas.filter(f => f.clienteId === filterCliente) : filas
 
