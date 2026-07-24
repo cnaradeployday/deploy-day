@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
 import { Clock, User } from 'lucide-react'
@@ -17,7 +17,6 @@ interface UserState {
   userId: string
   userName: string
   timers: TimerState[]
-  lastSeen: number
 }
 
 interface TaskInfo {
@@ -41,54 +40,35 @@ export default function CronometrosClient() {
   const [userMap, setUserMap] = useState<Record<string, UserState>>({})
   const [taskInfo, setTaskInfo] = useState<Record<string, TaskInfo>>({})
   const [, setTick] = useState(0)
-  const userMapRef = useRef<Record<string, UserState>>({})
 
   useEffect(() => {
     // Fresh Supabase client (separate WebSocket from the FloatingTimer singleton)
-    // so broadcast messages from FloatingTimer are delivered here by the server.
+    // so presence updates from FloatingTimer are delivered here by el server.
     const sb = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
+    // Presence en vez de broadcast+expiración por timeout: el estado de cada
+    // usuario lo retiene el server mientras su socket siga conectado, asi que
+    // no depende de que su pestaña siga mandando heartbeats sin cortes (eso
+    // causaba que los cronómetros de otros "aparecieran y desaparecieran"
+    // cuando su pestaña quedaba en segundo plano y el navegador le bajaba la
+    // frecuencia de los timers).
     const ch = sb.channel('timers-live')
-    ch.on('broadcast', { event: 'timer-state' }, ({ payload }: any) => {
-      if (!payload?.userId) return
-      const updated = {
-        ...userMapRef.current,
-        [payload.userId]: {
-          userId: payload.userId,
-          userName: payload.userName ?? payload.userId,
-          timers: payload.timers ?? [],
-          lastSeen: Date.now(),
-        },
-      }
-      userMapRef.current = updated
-      setUserMap({ ...updated })
+    ch.on('presence', { event: 'sync' }, () => {
+      const state = ch.presenceState()
+      const updated: Record<string, UserState> = {}
+      Object.values(state).forEach((presences: any) => {
+        const p = presences[0]
+        if (!p?.userId) return
+        updated[p.userId] = { userId: p.userId, userName: p.userName ?? p.userId, timers: p.timers ?? [] }
+      })
+      setUserMap(updated)
     })
     ch.subscribe()
 
-    // Expire stale entries (no broadcast in 8s = timer stopped or user left)
-    const expiry = setInterval(() => {
-      const now = Date.now()
-      const current = userMapRef.current
-      const cleaned: Record<string, UserState> = {}
-      let changed = false
-      for (const [uid, state] of Object.entries(current)) {
-        if (now - state.lastSeen < 8000) {
-          cleaned[uid] = state
-        } else {
-          changed = true
-        }
-      }
-      if (changed) {
-        userMapRef.current = cleaned
-        setUserMap({ ...cleaned })
-      }
-    }, 3000)
-
     return () => {
-      clearInterval(expiry)
       sb.removeChannel(ch)
     }
   }, [])

@@ -54,23 +54,29 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     return results
   }
 
-  function sendBroadcast(ch: any, currentTimers: TimerEntry[]) {
+  // Presence en vez de broadcast+heartbeat: el estado queda asociado al socket
+  // (lo mantiene el server de Realtime), asi que no depende de que este cliente
+  // seguir mandando mensajes cada N segundos sin cortes — evita que timers de
+  // otros usuarios "aparezcan y desaparezcan" en /cronometros por throttling
+  // del navegador en pestañas en segundo plano.
+  const lastTrackedRef = useRef<string>('')
+  function trackTimers(ch: any, currentTimers: TimerEntry[]) {
     if (!ch) return
-    ch.send({
-      type: 'broadcast',
-      event: 'timer-state',
-      payload: {
-        userId,
-        userName: userName ?? userId,
-        timers: currentTimers.map(t => ({
-          taskId: t.taskId,
-          taskTitle: t.taskTitle,
-          start: t.start,
-          accumulatedSeconds: t.accumulatedSeconds,
-          isPaused: t.isPaused,
-        })),
-      },
-    })
+    const payload = {
+      userId,
+      userName: userName ?? userId,
+      timers: currentTimers.map(t => ({
+        taskId: t.taskId,
+        taskTitle: t.taskTitle,
+        start: t.start,
+        accumulatedSeconds: t.accumulatedSeconds,
+        isPaused: t.isPaused,
+      })),
+    }
+    const serialized = JSON.stringify(payload.timers)
+    if (serialized === lastTrackedRef.current) return
+    lastTrackedRef.current = serialized
+    ch.track(payload)
   }
 
   useEffect(() => {
@@ -79,17 +85,17 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
 
     const sb = createClient()
     const ch = sb.channel('timers-live', {
-      config: { broadcast: { self: false } },
+      config: { presence: { key: userId } },
     })
     presenceChannelRef.current = ch
     ch.subscribe((status: string) => {
-      if (status === 'SUBSCRIBED') sendBroadcast(ch, initial)
+      if (status === 'SUBSCRIBED') trackTimers(ch, initial)
     })
 
     const iv = setInterval(() => {
       const current = readTimers()
       setTimers(current)
-      sendBroadcast(presenceChannelRef.current, current)
+      trackTimers(presenceChannelRef.current, current)
     }, 2000)
 
     return () => {
@@ -163,7 +169,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     localStorage.removeItem(`timer_${taskId}_${userId}`)
     const updated = timers.filter(t => t.taskId !== taskId)
     setTimers(updated)
-    sendBroadcast(presenceChannelRef.current, updated)
+    trackTimers(presenceChannelRef.current, updated)
     if (hours > 0) {
       await createClient().from('time_entries').insert({
         task_id: taskId, user_id: userId,
