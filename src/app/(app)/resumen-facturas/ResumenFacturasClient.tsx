@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
+import { ChevronDown } from 'lucide-react'
 
 function formatMesLabel(yyyymm: string): string {
   const [y, m] = yyyymm.split('-').map(Number)
@@ -30,13 +31,27 @@ const estadoLabel = {
   vencida: 'Vencida',
 }
 
+function monthsOfYear(year: string): string[] {
+  return Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
+}
+
 export default function ResumenFacturasClient({
-  facturas, months,
+  facturas, years, currentYear,
 }: {
   facturas: any[]
-  months: string[]
+  years: string[]
+  currentYear: string
 }) {
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [showPastYears, setShowPastYears] = useState(false)
+
+  const months = useMemo(() => monthsOfYear(selectedYear), [selectedYear])
   const [visibleMonths, setVisibleMonths] = useState<Set<string>>(new Set(months))
+
+  function selectYear(y: string) {
+    setSelectedYear(y)
+    setVisibleMonths(new Set(monthsOfYear(y)))
+  }
 
   function toggleMonth(m: string) {
     setVisibleMonths(prev => {
@@ -48,6 +63,7 @@ export default function ResumenFacturasClient({
   }
 
   const shownMonths = months.filter(m => visibleMonths.has(m))
+  const pastYears = years.filter(y => y !== currentYear)
 
   const { clientList, facturaMap } = useMemo(() => {
     const clientMap: Record<string, string> = {}
@@ -70,6 +86,30 @@ export default function ResumenFacturasClient({
       <div className="mb-5">
         <h1 className="text-xl font-semibold text-gray-900">Resumen de facturación</h1>
         <p className="text-sm text-gray-400 mt-0.5">Estado de facturas por cliente — últimos 12 meses</p>
+      </div>
+
+      {/* Year selector */}
+      <div className="flex flex-wrap gap-2 mb-3 items-center">
+        <span className="text-xs text-gray-400 mr-1">Año:</span>
+        <button onClick={() => selectYear(currentYear)}
+          className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+            selectedYear === currentYear ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+          }`}>
+          {currentYear}
+        </button>
+        {!showPastYears ? (
+          <button onClick={() => setShowPastYears(true)}
+            className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gray-50 text-gray-400 hover:bg-gray-100 transition-all">
+            Años anteriores <ChevronDown size={12}/>
+          </button>
+        ) : pastYears.map(y => (
+          <button key={y} onClick={() => selectYear(y)}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              selectedYear === y ? 'bg-[#1B9BF0] text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+            }`}>
+            {y}
+          </button>
+        ))}
       </div>
 
       {/* Month chips */}
