@@ -63,7 +63,7 @@ export default function EditarTareaPage() {
     e.preventDefault()
     setLoading(true); setError('')
     const supabase = createClient()
-    const { error: err } = await supabase.from('tasks').update({
+    const { data: updated, error: err } = await supabase.from('tasks').update({
       project_id: form.project_id, title: form.title,
       description: form.description || null, priority: form.priority,
       due_date: form.due_date || null,
@@ -72,8 +72,16 @@ export default function EditarTareaPage() {
       direct_hours: form.direct_hours ? parseFloat(form.direct_hours) : null,
       status: form.status,
       requires_review: form.requires_review,
-    }).eq('id', id)
+    }).eq('id', id).select('id')
     if (err) { setError('Error: ' + err.message); setLoading(false); return }
+    // RLS puede descartar el UPDATE en silencio (0 filas, sin error) si el
+    // usuario no tiene permiso sobre esta tarea puntual — sin este chequeo
+    // el formulario avanzaba como si hubiera guardado.
+    if (!updated || updated.length === 0) {
+      setError('No se pudo guardar: no tenés permiso para editar esta tarea.')
+      setLoading(false)
+      return
+    }
     await supabase.from('task_collaborators').delete().eq('task_id', id)
     if (colaboradores.length > 0) {
       await supabase.from('task_collaborators').insert(
