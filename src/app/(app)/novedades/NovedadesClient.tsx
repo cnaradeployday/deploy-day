@@ -73,7 +73,7 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
   const groups = groupByDate(notifications)
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Novedades</h1>
@@ -116,38 +116,39 @@ export default function NovedadesClient({ initialNotifications }: { initialNotif
                       <Icon size={16} className={meta.color} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2 justify-between">
-                        <p className={`text-sm font-semibold leading-snug ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
+                      <div className="flex items-center gap-3">
+                        <p className={`flex-1 min-w-0 truncate text-sm font-semibold leading-snug ${isUnread ? 'text-gray-900' : 'text-gray-600'}`}>
                           {n.title}
                         </p>
+                        <span className="shrink-0 text-[11px] text-gray-300 whitespace-nowrap">{timeAgo(n.created_at)}</span>
                         <button onClick={() => handleMarkRead(n.id)}
                           className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
                           title="Marcar como leído">
                           <Check size={10} /> Leído
                         </button>
                       </div>
-                      {n.body && <p className="text-sm text-gray-400 mt-0.5 leading-relaxed">{n.body}</p>}
-                      {(n.metadata?.client_name || n.metadata?.project_name) && (
-                        <p className="text-[11px] text-[#1B9BF0] mt-1 font-medium">
-                          {[n.metadata.client_name, n.metadata.project_name].filter(Boolean).join(' · ')}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                        <span className="text-[11px] text-gray-300">{timeAgo(n.created_at)}</span>
-                        {meta.label && <span className="text-[11px] text-gray-300">·</span>}
-                        <span className="text-[11px] text-gray-300">{meta.label}</span>
-                        {taskId && (
-                          <button onClick={() => handleMarkTaskDone(n.id, taskId)}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-all">
-                            <Check size={10} /> Marcar como terminada
-                          </button>
+                      <div className="flex items-center gap-3 mt-1">
+                        {n.body && <p className="flex-1 min-w-0 truncate text-sm text-gray-400 leading-relaxed">{n.body}</p>}
+                        {(n.metadata?.client_name || n.metadata?.project_name) && (
+                          <span className="shrink-0 text-[11px] text-[#1B9BF0] font-medium whitespace-nowrap">
+                            {[n.metadata.client_name, n.metadata.project_name].filter(Boolean).join(' · ')}
+                          </span>
                         )}
-                        {n.link && (
-                          <Link href={n.link}
-                            className="text-[11px] text-[#1B9BF0] hover:underline font-medium ml-auto">
-                            Ver →
-                          </Link>
-                        )}
+                        <div className="flex items-center gap-2.5 ml-auto shrink-0">
+                          {meta.label && <span className="text-[11px] text-gray-300 whitespace-nowrap">{meta.label}</span>}
+                          {taskId && (
+                            <button onClick={() => handleMarkTaskDone(n.id, taskId)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-all whitespace-nowrap">
+                              <Check size={10} /> Terminada
+                            </button>
+                          )}
+                          {n.link && (
+                            <Link href={n.link}
+                              className="text-[11px] text-[#1B9BF0] hover:underline font-medium whitespace-nowrap">
+                              Ver →
+                            </Link>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {isUnread && <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-2" />}
