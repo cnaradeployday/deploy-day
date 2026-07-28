@@ -54,12 +54,13 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
         .gte('hasta', primerDia)
     : { data: [] }
 
+  // Sin filtro de status: las horas usadas (consumidoPorProyecto) tienen que contar
+  // el trabajo real logueado, incluidas tareas ya presentadas/finalizadas.
   const { data: todasTareas } = proyectoIds.length
     ? await supabase
         .from('tasks')
-        .select('id, estimated_hours, project_id, due_date')
+        .select('id, estimated_hours, project_id, due_date, status')
         .in('project_id', proyectoIds)
-        .not('status', 'in', '(presentado,finalizado)')
     : { data: [] }
 
   const taskIds = (todasTareas ?? []).map(t => t.id)
@@ -82,12 +83,14 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const horasEstimadasPorProyecto: Record<string, number> = {}
   const tareasConDueEnMes = (todasTareas ?? []).filter(t =>
-    t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
+    t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia &&
+    !['presentado', 'finalizado'].includes(t.status)
   )
   tareasConDueEnMes.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)
   })
-  // Sin fallback a segmentos - estimadas vienen SOLO de tareas con due_date en el mes
+  // Sin fallback a segmentos - estimadas vienen SOLO de tareas con due_date en el mes,
+  // y se excluyen las ya presentadas/finalizadas (no tiene sentido "estimar" trabajo ya cerrado)
 
   const taskToProject: Record<string, string> = {}
   ;(todasTareas ?? []).forEach(t => { taskToProject[t.id] = t.project_id })
