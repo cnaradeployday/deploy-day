@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, ChevronDown, X, Check } from 'lucide-react'
 import { convertToUSD, type Currency } from '@/lib/utils/currency'
 
-const FILTER_STORAGE_KEY = 'resumenFacturas.clientesFiltro'
+const FILTER_STORAGE_KEY = 'resumenFacturas.clientesExcluidos'
 
 function formatMesLabel(yyyymm: string): string {
   const [y, m] = yyyymm.split('-').map(Number)
@@ -64,11 +64,10 @@ function ClientesFiltroDropdown({
     onChange(next)
   }
 
-  const label = selected.size === 0
+  const allSelected = selected.size === clientes.length
+  const label = allSelected
     ? 'Todos los clientes'
-    : selected.size === 1
-      ? clientes.find(c => selected.has(c.id))?.name ?? '1 cliente'
-      : `${selected.size} clientes seleccionados`
+    : `${selected.size} de ${clientes.length} clientes`
 
   return (
     <div ref={ref} className="relative">
@@ -78,12 +77,13 @@ function ClientesFiltroDropdown({
           open ? 'border-[#1B9BF0] ring-2 ring-[#1B9BF0]' : 'border-gray-200'
         }`}
       >
-        <span className={selected.size ? 'text-gray-900' : 'text-gray-400'}>{label}</span>
-        {selected.size > 0 && (
+        <span className={allSelected ? 'text-gray-400' : 'text-gray-900'}>{label}</span>
+        {!allSelected && (
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); onChange(new Set()) }}
+            onClick={e => { e.stopPropagation(); onChange(new Set(clientes.map(c => c.id))) }}
             className="text-gray-300 hover:text-red-400"
+            title="Mostrar todos"
           >
             <X size={13} />
           </button>
@@ -126,23 +126,29 @@ export default function ResumenFacturasClient({
 }) {
   const router = useRouter()
   const [visibleMonths, setVisibleMonths] = useState<Set<string>>(new Set(months))
-  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set())
+  // Clientes tildados en el filtro (todos por default)
+  const [checkedClients, setCheckedClients] = useState<Set<string>>(
+    () => new Set(clientesAll.map(c => c.id))
+  )
   const [loadedFilter, setLoadedFilter] = useState(false)
 
-  // Cargar filtro de clientes recordado
+  // Cargar clientes destildados recordados de una visita anterior
   useEffect(() => {
     try {
       const raw = localStorage.getItem(FILTER_STORAGE_KEY)
-      if (raw) setSelectedClients(new Set(JSON.parse(raw)))
+      const excluded = new Set(raw ? JSON.parse(raw) : [])
+      setCheckedClients(new Set(clientesAll.map(c => c.id).filter(id => !excluded.has(id))))
     } catch {}
     setLoadedFilter(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Recordar el filtro de clientes para la próxima visita
+  // Recordar los clientes destildados para la próxima visita
   useEffect(() => {
     if (!loadedFilter) return
-    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...selectedClients]))
-  }, [selectedClients, loadedFilter])
+    const excluded = clientesAll.map(c => c.id).filter(id => !checkedClients.has(id))
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(excluded))
+  }, [checkedClients, loadedFilter, clientesAll])
 
   useEffect(() => {
     setVisibleMonths(new Set(months))
@@ -179,9 +185,7 @@ export default function ResumenFacturasClient({
     return { clientList, facturaMap: fMap }
   }, [facturas])
 
-  const shownClientList = selectedClients.size === 0
-    ? clientList
-    : clientList.filter(c => selectedClients.has(c.id))
+  const shownClientList = clientList.filter(c => checkedClients.has(c.id))
 
   // Ranking de facturación del año, en USD, sobre todos los clientes (independiente del filtro)
   const ranking = useMemo(() => {
@@ -232,7 +236,7 @@ export default function ResumenFacturasClient({
       {/* Filtro de clientes */}
       <div className="flex flex-wrap gap-3 items-center mb-4">
         <span className="text-xs text-gray-400">Clientes:</span>
-        <ClientesFiltroDropdown clientes={clientesAll} selected={selectedClients} onChange={setSelectedClients} />
+        <ClientesFiltroDropdown clientes={clientesAll} selected={checkedClients} onChange={setCheckedClients} />
       </div>
 
       {/* Month chips */}
@@ -266,8 +270,9 @@ export default function ResumenFacturasClient({
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto mb-6">
+      {/* Table + Ranking */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-gray-100">
@@ -320,8 +325,8 @@ export default function ResumenFacturasClient({
         </table>
       </div>
 
-      {/* Ranking de facturación */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      {/* Ranking de facturación (subsección) */}
+      <div className="border-t border-gray-100 bg-gray-50/40">
         <div className="px-4 py-3 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-800">Ranking de facturación — {year}</h2>
           <p className="text-xs text-gray-400 mt-0.5">
@@ -331,6 +336,7 @@ export default function ResumenFacturasClient({
         {ranking.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-gray-400">Sin datos de facturación en el período</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-gray-100">
@@ -366,7 +372,9 @@ export default function ResumenFacturasClient({
               </tr>
             </tfoot>
           </table>
+          </div>
         )}
+      </div>
       </div>
     </div>
   )
