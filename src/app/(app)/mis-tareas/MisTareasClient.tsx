@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
-import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil } from 'lucide-react'
+import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const statusColors: Record<string, string> = {
@@ -51,6 +51,7 @@ export default function MisTareasClient({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [loading, setLoading] = useState<string | null>(null)
   const [tareasLocal, setTareasLocal] = useState<any[]>(tareas)
+  const [search, setSearch] = useState('')
 
   useEffect(() => { setTareasLocal(tareas) }, [tareas])
 
@@ -101,7 +102,7 @@ export default function MisTareasClient({
   const mostrarTodas = filters.todas === '1'
   function toggleTodas() { update('todas', mostrarTodas ? '' : '1') }
 
-  const clear = () => router.push(pathname)
+  const clear = () => { setSearch(''); router.push(pathname) }
   const hasFilters = !!(filters.priority || filters.proyecto || filters.cliente || filters.status || filters.todas)
 
   const meses: string[] = []
@@ -132,7 +133,17 @@ export default function MisTareasClient({
     return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
   }
 
-  const sorted = [...tareasLocal].sort((a, b) => {
+  const buscadas = search.trim()
+    ? tareasLocal.filter(t => {
+        const q = search.trim().toLowerCase()
+        return t.title.toLowerCase().includes(q)
+          || (t.project?.client?.name ?? '').toLowerCase().includes(q)
+          || (t.project?.name ?? '').toLowerCase().includes(q)
+          || (t.direct_responsible?.full_name ?? '').toLowerCase().includes(q)
+      })
+    : tareasLocal
+
+  const sorted = [...buscadas].sort((a, b) => {
     if (sortKey === 'my_assigned_hours' || sortKey === 'hours_logged') {
       const na = Number(a[sortKey] ?? 0); const nb = Number(b[sortKey] ?? 0)
       return sortDir === 'asc' ? na - nb : nb - na
@@ -200,6 +211,14 @@ export default function MisTareasClient({
             </Link>
           )}
         </div>
+      </div>
+
+      <div className="relative max-w-sm mb-4">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"/>
+        <input type="text" value={search} onChange={ev => setSearch(ev.target.value)}
+          placeholder="Buscar por tarea, cliente o responsable..."
+          className="w-full pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={13}/></button>}
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -271,11 +290,14 @@ export default function MisTareasClient({
             </div>
             <span className="text-xs text-gray-500">Todas las tareas pendientes</span>
           </label>
-          {hasFilters && (
-            <button onClick={clear} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
-              <X size={12}/> Limpiar
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">{sorted.length} de {tareasLocal.length} tareas{search ? ' · "' + search + '"' : ''}</span>
+            {(hasFilters || search) && (
+              <button onClick={clear} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
+                <X size={12}/> Limpiar
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
