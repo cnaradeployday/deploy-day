@@ -1,8 +1,62 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, BarChart3, TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, ChevronDown, Check, AlertTriangle, CornerDownRight, type LucideIcon } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { createClient } from '@/lib/supabase/client'
+
+type Mood = 'muy_feliz' | 'feliz' | 'neutral' | 'enojado' | 'muy_enojado'
+
+const MOOD_EMOJI: Record<Mood, string> = {
+  muy_feliz: '😄', feliz: '🙂', neutral: '😐', enojado: '🙁', muy_enojado: '😡',
+}
+const MOOD_LABEL: Record<Mood, string> = {
+  muy_feliz: 'Muy feliz', feliz: 'Feliz', neutral: 'Neutral', enojado: 'Enojado', muy_enojado: 'Muy enojado',
+}
+const MOOD_ORDER: Mood[] = ['muy_feliz', 'feliz', 'neutral', 'enojado', 'muy_enojado']
+
+function MoodPicker({ clienteId, mood, onChange }: { clienteId: string; mood: Mood | null; onChange: (m: Mood) => void }) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  async function pick(m: Mood) {
+    setOpen(false)
+    setSaving(true)
+    const { error } = await createClient().from('clients').update({ mood: m }).eq('id', clienteId)
+    setSaving(false)
+    if (error) { alert('Error al guardar el humor: ' + error.message); return }
+    onChange(m)
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block" onClick={e => e.stopPropagation()}>
+      <button type="button" onClick={() => setOpen(o => !o)} disabled={saving}
+        title={mood ? MOOD_LABEL[mood] : 'Sin definir — click para cargar'}
+        className={`w-7 h-7 rounded-lg flex items-center justify-center text-base transition-all hover:bg-gray-100 ${saving ? 'opacity-40' : ''}`}>
+        {mood ? MOOD_EMOJI[mood] : <span className="text-gray-300 text-xs">—</span>}
+      </button>
+      {open && (
+        <div className="absolute z-20 top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 flex items-center gap-1">
+          {MOOD_ORDER.map(m => (
+            <button key={m} type="button" onClick={() => pick(m)} title={MOOD_LABEL[m]}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg hover:bg-gray-100 transition-all ${m === mood ? 'bg-blue-50 ring-1 ring-[#1B9BF0]' : ''}`}>
+              {MOOD_EMOJI[m]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function nombreMes(m: string) {
   return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
@@ -47,7 +101,7 @@ function EstadoCell({ vendidas, estimadas, usadas, pctTiempo }: { vendidas: numb
 
 export default function ResumenMesClient({ filas, mes, mesActual, clientes, filterCliente, mesesDisponibles = [] }: {
   filas: {
-    id: string; nombre: string; cliente: string; clienteId: string
+    id: string; nombre: string; cliente: string; clienteId: string; clienteMood: Mood | null
     horasVendidas: number; horasEstimadas: number; horasConsumidas: number
   }[]
   mes: string
@@ -57,6 +111,13 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
   mesesDisponibles?: string[]
 }) {
   const router = useRouter()
+
+  // Humor por cliente: estado local para reflejar cambios al instante al elegir un emoji
+  const [moods, setMoods] = useState<Record<string, Mood | null>>(() => {
+    const m: Record<string, Mood | null> = {}
+    filas.forEach(f => { if (f.clienteId) m[f.clienteId] = f.clienteMood })
+    return m
+  })
 
   // Usar meses del server (basados en segmentos reales) o fallback a 6 meses
   const meses: string[] = mesesDisponibles.length > 0 ? mesesDisponibles : (() => {
@@ -125,7 +186,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
       'Horas estimadas': f.horasEstimadas,
       'Horas usadas': f.horasConsumidas,
       'Diferencia': f.horasVendidas - f.horasEstimadas,
-      '% consumido': f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) + '%' : '—',
+      '% Usado/Vendido': f.horasVendidas > 0 ? Math.round((f.horasConsumidas / f.horasVendidas) * 100) + '%' : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
@@ -202,27 +263,34 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
             <span className="col-span-1">Mes</span>
-            <span className="col-span-3">Cliente</span>
+            <span className="col-span-2">Cliente</span>
+            <span className="col-span-1" title="Humor del cliente — se carga y actualiza a mano">Humor</span>
             <span className="text-right col-span-2">Vendidas</span>
             <span className="text-right col-span-1">Estimadas</span>
             <span className="text-right col-span-1">Usadas</span>
-            <span className="text-right col-span-1">%</span>
+            <span className="text-right col-span-1" title="% de horas usadas sobre las horas vendidas">% Usado/Vendido</span>
             <span className="text-right col-span-3">Estado</span>
           </div>
           {grupos.map(g => {
             const isOpen = expanded.has(g.clienteId)
-            const pctG = g.estimadas > 0 ? Math.round((g.usadas / g.estimadas) * 100) : null
+            const pctG = g.vendidas > 0 ? Math.round((g.usadas / g.vendidas) * 100) : null
             const overEstimadoG = g.estimadas > g.vendidas
             const pctColorG = pctG === null ? 'text-gray-300' : pctG >= 100 ? 'text-red-500 font-bold' : pctG >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
             return (
               <div key={g.clienteId || g.cliente}>
                 <div onClick={() => toggleExpand(g.clienteId)} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center cursor-pointer">
                   <span className="col-span-1 text-xs text-gray-400 capitalize">{nombreMesCorto(mes)}</span>
-                  <span className="col-span-3 text-sm text-gray-900 font-semibold flex items-center gap-1.5 min-w-0">
+                  <span className="col-span-2 text-sm text-gray-900 font-semibold flex items-center gap-1.5 min-w-0">
                     {isOpen ? <ChevronDown size={14} className="text-gray-400 shrink-0"/> : <ChevronRight size={14} className="text-gray-400 shrink-0"/>}
                     <span className="truncate">{g.cliente}</span>
                     <span className="text-[10px] text-gray-300 font-normal shrink-0">({g.proyectos.length})</span>
                   </span>
+                  <div className="col-span-1">
+                    {g.clienteId && (
+                      <MoodPicker clienteId={g.clienteId} mood={moods[g.clienteId] ?? null}
+                        onChange={m => setMoods(prev => ({ ...prev, [g.clienteId]: m }))}/>
+                    )}
+                  </div>
                   <span className="col-span-2 text-sm font-semibold text-gray-900 text-right">{Math.round(g.vendidas * 10) / 10}h</span>
                   <div className="col-span-1 text-right flex items-center justify-end gap-1">
                     <span className={'text-sm ' + (overEstimadoG ? 'text-red-500 font-semibold' : 'text-gray-700')}>{Math.round(g.estimadas * 10) / 10}h</span>
@@ -234,13 +302,14 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
                   </div>
                 </div>
                 {isOpen && g.proyectos.map(f => {
-                  const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
+                  const pct = f.horasVendidas > 0 ? Math.round((f.horasConsumidas / f.horasVendidas) * 100) : null
                   const overEstimado = f.horasEstimadas > f.horasVendidas
                   const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
                   return (
                     <div key={f.id} className="grid grid-cols-12 px-5 py-2.5 border-b border-gray-50 last:border-0 bg-gray-50/60 hover:bg-gray-50 items-center">
                       <span className="col-span-1"/>
-                      <span className="col-span-3 text-xs text-gray-500 truncate pl-5 flex items-center gap-1.5 min-w-0"><CornerDownRight size={11} className="text-gray-300 shrink-0"/><span className="truncate">{f.nombre}</span></span>
+                      <span className="col-span-2 text-xs text-gray-500 truncate pl-5 flex items-center gap-1.5 min-w-0"><CornerDownRight size={11} className="text-gray-300 shrink-0"/><span className="truncate">{f.nombre}</span></span>
+                      <span className="col-span-1"/>
                       <span className="col-span-2 text-sm text-gray-700 text-right">{f.horasVendidas}h</span>
                       <div className="col-span-1 text-right flex items-center justify-end gap-1">
                         <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>

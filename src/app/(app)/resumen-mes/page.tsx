@@ -32,7 +32,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const { data: proyectos } = await supabase
     .from('projects')
-    .select('id, name, sold_hours, start_date, end_date, client:clients(id, name)')
+    .select('id, name, sold_hours, start_date, end_date, client:clients(id, name, mood)')
     .eq('is_active', true)
     .order('name')
 
@@ -110,6 +110,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
     nombre: p.name,
     cliente: (p.client as any)?.name ?? '—',
     clienteId: (p.client as any)?.id ?? '',
+    clienteMood: (p.client as any)?.mood ?? null,
     horasVendidas: horasPorSegmento[p.id] !== undefined
       ? Math.round(horasPorSegmento[p.id] * 10) / 10
       : (p.sold_hours ?? 0),
