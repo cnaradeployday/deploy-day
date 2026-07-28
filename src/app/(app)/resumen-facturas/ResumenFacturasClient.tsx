@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, ChevronDown, X, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, X, Check, Trophy } from 'lucide-react'
 import { convertToUSD, type Currency } from '@/lib/utils/currency'
+import { createClient } from '@/lib/supabase/client'
 
 const FILTER_STORAGE_KEY = 'resumenFacturas.clientesExcluidos'
 
@@ -114,6 +115,141 @@ function ClientesFiltroDropdown({
   )
 }
 
+function RankingModal({
+  open, onClose, year, tipoCambio,
+}: {
+  open: boolean
+  onClose: () => void
+  year: number
+  tipoCambio: number | null
+}) {
+  const [desde, setDesde] = useState(`${year}-01`)
+  const [hasta, setHasta] = useState(`${year}-12`)
+  const [loading, setLoading] = useState(false)
+  const [facturas, setFacturas] = useState<any[]>([])
+
+  // Al abrir, arrancar con el rango del año actualmente seleccionado en la pantalla
+  useEffect(() => {
+    if (open) { setDesde(`${year}-01`); setHasta(`${year}-12`) }
+  }, [open, year])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setLoading(true)
+    createClient()
+      .from('facturas_clientes')
+      .select('client_id, importe, currency, client:clients(name)')
+      .gte('mes_servicio', desde)
+      .lte('mes_servicio', hasta)
+      .then(({ data }) => {
+        if (cancelled) return
+        setFacturas(data ?? [])
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [open, desde, hasta])
+
+  const ranking = useMemo(() => {
+    const totals: Record<string, { name: string; usd: number }> = {}
+    facturas.forEach(f => {
+      const cId = f.client_id
+      const cName = (f.client as any)?.name ?? '—'
+      const usd = convertToUSD(Number(f.importe), (f.currency ?? 'ARS') as Currency, tipoCambio ?? 0)
+      if (!totals[cId]) totals[cId] = { name: cName, usd: 0 }
+      totals[cId].usd += usd
+    })
+    const totalGeneral = Object.values(totals).reduce((s, t) => s + t.usd, 0)
+    return Object.values(totals)
+      .map(t => ({ ...t, pct: totalGeneral > 0 ? (t.usd / totalGeneral) * 100 : 0 }))
+      .sort((a, b) => b.usd - a.usd)
+  }, [facturas, tipoCambio])
+
+  const totalRankingUSD = ranking.reduce((s, r) => s + r.usd, 0)
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <Trophy size={16} className="text-amber-500"/> Ranking de facturación
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {tipoCambio ? `Todo convertido a USD (TC $${tipoCambio.toLocaleString('es-AR')})` : 'Todo convertido a USD'}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all">
+            <X size={18}/>
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-4 flex-wrap shrink-0">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400">Desde</label>
+            <input type="month" value={desde} onChange={e => setDesde(e.target.value)}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400">Hasta</label>
+            <input type="month" value={hasta} onChange={e => setHasta(e.target.value)}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <p className="px-5 py-10 text-center text-sm text-gray-400">Cargando...</p>
+          ) : ranking.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-gray-400">Sin datos de facturación en el período</p>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-400 w-10">#</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-400">Cliente</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-400">Monto acumulado (USD)</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-400 w-40">% s/ facturación total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ranking.map((r, i) => (
+                  <tr key={r.name + i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                    <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
+                    <td className="px-4 py-2.5 text-sm font-medium text-gray-800">{r.name}</td>
+                    <td className="px-4 py-2.5 text-sm font-semibold text-gray-900 text-right">{fmtUSD(r.usd)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-[#1B9BF0] rounded-full" style={{ width: `${Math.min(r.pct, 100)}%` }} />
+                        </div>
+                        <span className="text-xs font-medium text-gray-600 w-12 text-right">{r.pct.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-gray-100 bg-gray-50/50">
+                  <td className="px-4 py-2.5"></td>
+                  <td className="px-4 py-2.5 text-xs font-semibold text-gray-500">Total</td>
+                  <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{fmtUSD(totalRankingUSD)}</td>
+                  <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ResumenFacturasClient({
   facturas, months, year, availableYears, clientesAll, tipoCambio,
 }: {
@@ -187,23 +323,7 @@ export default function ResumenFacturasClient({
 
   const shownClientList = clientList.filter(c => checkedClients.has(c.id))
 
-  // Ranking de facturación del año, en USD, sobre todos los clientes (independiente del filtro)
-  const ranking = useMemo(() => {
-    const totals: Record<string, { name: string; usd: number }> = {}
-    facturas.forEach(f => {
-      const cId = f.client_id
-      const cName = (f.client as any)?.name ?? '—'
-      const usd = convertToUSD(Number(f.importe), (f.currency ?? 'ARS') as Currency, tipoCambio ?? 0)
-      if (!totals[cId]) totals[cId] = { name: cName, usd: 0 }
-      totals[cId].usd += usd
-    })
-    const totalGeneral = Object.values(totals).reduce((s, t) => s + t.usd, 0)
-    return Object.values(totals)
-      .map(t => ({ ...t, pct: totalGeneral > 0 ? (t.usd / totalGeneral) * 100 : 0 }))
-      .sort((a, b) => b.usd - a.usd)
-  }, [facturas, tipoCambio])
-
-  const totalRankingUSD = ranking.reduce((s, r) => s + r.usd, 0)
+  const [rankingOpen, setRankingOpen] = useState(false)
 
   return (
     <div className="p-6 max-w-full mx-auto">
@@ -231,7 +351,14 @@ export default function ResumenFacturasClient({
             <ChevronRight size={16} />
           </button>
         </div>
+
+        <button onClick={() => setRankingOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 bg-white transition-all">
+          <Trophy size={14} className="text-amber-500"/> Ranking de facturación
+        </button>
       </div>
+
+      <RankingModal open={rankingOpen} onClose={() => setRankingOpen(false)} year={year} tipoCambio={tipoCambio} />
 
       {/* Filtro de clientes */}
       <div className="flex flex-wrap gap-3 items-center mb-4">
@@ -270,9 +397,8 @@ export default function ResumenFacturasClient({
         </div>
       </div>
 
-      {/* Table + Ranking */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-gray-100">
@@ -323,58 +449,6 @@ export default function ResumenFacturasClient({
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Ranking de facturación (subsección) */}
-      <div className="border-t border-gray-100 bg-gray-50/40">
-        <div className="px-4 py-3 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-800">Ranking de facturación — {year}</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {tipoCambio ? `Todo convertido a USD (TC $${tipoCambio.toLocaleString('es-AR')})` : 'Todo convertido a USD'}
-          </p>
-        </div>
-        {ranking.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-gray-400">Sin datos de facturación en el período</p>
-        ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-400 w-10">#</th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-400">Cliente</th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-400">Monto acumulado (USD)</th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-400 w-40">% s/ facturación total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranking.map((r, i) => (
-                <tr key={r.name + i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
-                  <td className="px-4 py-2.5 text-xs text-gray-400">{i + 1}</td>
-                  <td className="px-4 py-2.5 text-sm font-medium text-gray-800">{r.name}</td>
-                  <td className="px-4 py-2.5 text-sm font-semibold text-gray-900 text-right">{fmtUSD(r.usd)}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#1B9BF0] rounded-full" style={{ width: `${Math.min(r.pct, 100)}%` }} />
-                      </div>
-                      <span className="text-xs font-medium text-gray-600 w-12 text-right">{r.pct.toFixed(1)}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-100 bg-gray-50/50">
-                <td className="px-4 py-2.5"></td>
-                <td className="px-4 py-2.5 text-xs font-semibold text-gray-500">Total</td>
-                <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right">{fmtUSD(totalRankingUSD)}</td>
-                <td className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">100%</td>
-              </tr>
-            </tfoot>
-          </table>
-          </div>
-        )}
-      </div>
       </div>
     </div>
   )

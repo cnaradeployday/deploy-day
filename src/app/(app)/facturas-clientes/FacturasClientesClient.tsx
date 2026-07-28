@@ -1,6 +1,6 @@
 'use client'
 import { logActivity } from '@/lib/logActivity'
-import { useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +33,65 @@ const estadoColors: Record<string, string> = {
 
 type SortKey = 'numero' | 'cliente' | 'mes_servicio' | 'fecha_emision' | 'fecha_vencimiento' | 'importe_usd' | 'estado'
 
+const ESTADOS = ['pendiente', 'cobrada', 'vencida']
+const estadoDropdownLabel: Record<string, string> = { pendiente: 'Pendiente', cobrada: 'Cobrada', vencida: 'Vencida' }
+
+function CheckDropdown({
+  label, options, selected, onChange,
+}: {
+  label: string
+  options: { value: string; label: string }[]
+  selected: Set<string>
+  onChange: (next: Set<string>) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  function toggle(v: string) {
+    const next = new Set(selected)
+    if (next.has(v)) next.delete(v)
+    else next.add(v)
+    onChange(next)
+  }
+
+  const allSelected = selected.size === options.length
+  const summary = allSelected ? 'Todos' : selected.size === 0 ? 'Ninguno' : `${selected.size} de ${options.length}`
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className={`px-3 py-2 border rounded-xl text-sm flex items-center gap-2 bg-white transition-all ${
+          open ? 'border-[#1B9BF0] ring-2 ring-[#1B9BF0]' : 'border-gray-200'
+        }`}>
+        <span className="text-gray-500">{label}:</span>
+        <span className={allSelected ? 'text-gray-400' : 'text-gray-900 font-medium'}>{summary}</span>
+        <ChevronDown size={13} className="text-gray-400"/>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="max-h-64 overflow-y-auto py-1">
+            {options.map(o => (
+              <label key={o.value} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" checked={selected.has(o.value)} onChange={() => toggle(o.value)}
+                  className="rounded accent-[#1B9BF0]"/>
+                <span className="text-gray-700 truncate">{o.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function FacturasClientesClient({
   facturas, tipoCambio, clientes, meses
 }: {
@@ -42,9 +101,10 @@ export default function FacturasClientesClient({
   meses: string[]
 }) {
   const router = useRouter()
-  const [filterEstado, setFilterEstado] = useState('')
-  const [filterCliente, setFilterCliente] = useState('')
-  const [filterMes, setFilterMes] = useState('')
+  // Todo tildado por default, salvo "Cobrada" que arranca destildada
+  const [checkedEstados, setCheckedEstados] = useState<Set<string>>(() => new Set(ESTADOS.filter(e => e !== 'cobrada')))
+  const [checkedClientes, setCheckedClientes] = useState<Set<string>>(() => new Set(clientes))
+  const [checkedMeses, setCheckedMeses] = useState<Set<string>>(() => new Set(meses))
   const [sortKey, setSortKey] = useState<SortKey>('fecha_vencimiento')
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -71,11 +131,20 @@ export default function FacturasClientesClient({
 
   // Filtrar
   const filtered = useMemo(() => enriched.filter(f => {
-    if (filterEstado && f.estado_efectivo !== filterEstado) return false
-    if (filterCliente && (f.client as any)?.name !== filterCliente) return false
-    if (filterMes && f.mes_servicio !== filterMes) return false
+    if (!checkedEstados.has(f.estado_efectivo)) return false
+    if (!checkedClientes.has((f.client as any)?.name ?? '')) return false
+    if (!checkedMeses.has(f.mes_servicio ?? '')) return false
     return true
-  }), [enriched, filterEstado, filterCliente, filterMes])
+  }), [enriched, checkedEstados, checkedClientes, checkedMeses])
+
+  const DEFAULT_ESTADOS = ESTADOS.filter(e => e !== 'cobrada')
+  const hasFilters = checkedEstados.size !== DEFAULT_ESTADOS.length || !DEFAULT_ESTADOS.every(e => checkedEstados.has(e))
+    || checkedClientes.size !== clientes.length || checkedMeses.size !== meses.length
+  function resetFiltros() {
+    setCheckedEstados(new Set(DEFAULT_ESTADOS))
+    setCheckedClientes(new Set(clientes))
+    setCheckedMeses(new Set(meses))
+  }
 
   // Ordenar
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
@@ -182,27 +251,16 @@ export default function FacturasClientesClient({
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 flex flex-wrap gap-3 items-center">
-        <select value={filterEstado} onChange={e => setFilterEstado(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="cobrada">Cobrada</option>
-          <option value="vencida">Vencida</option>
-        </select>
-        <select value={filterCliente} onChange={e => setFilterCliente(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-          <option value="">Todos los clientes</option>
-          {clientes.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={filterMes} onChange={e => setFilterMes(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white capitalize">
-          <option value="">Todos los meses</option>
-          {meses.map(m => <option key={m} value={m}>{formatMes(m)}</option>)}
-        </select>
-        {(filterEstado || filterCliente || filterMes) && (
-          <button onClick={() => { setFilterEstado(''); setFilterCliente(''); setFilterMes('') }}
+        <CheckDropdown label="Estados" options={ESTADOS.map(e => ({ value: e, label: estadoDropdownLabel[e] }))}
+          selected={checkedEstados} onChange={setCheckedEstados}/>
+        <CheckDropdown label="Clientes" options={clientes.map(c => ({ value: c, label: c }))}
+          selected={checkedClientes} onChange={setCheckedClientes}/>
+        <CheckDropdown label="Meses" options={meses.map(m => ({ value: m, label: formatMes(m) }))}
+          selected={checkedMeses} onChange={setCheckedMeses}/>
+        {hasFilters && (
+          <button onClick={resetFiltros}
             className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 px-2 py-1.5">
-            <X size={12}/> Limpiar
+            <X size={12}/> Restablecer
           </button>
         )}
         <span className="ml-auto text-xs text-gray-400">{sorted.length} factura{sorted.length !== 1 ? 's' : ''}</span>
