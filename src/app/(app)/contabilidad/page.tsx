@@ -17,17 +17,14 @@ export default async function ContabilidadPage() {
     { href: '/contabilidad/tipos-gasto', label: 'Tipos de gasto', desc: 'Plan de cuentas para clasificar gastos', icon: ListTree, color: 'bg-pink-50' },
     { href: '/contabilidad/conciliacion-bancaria', label: 'Conciliación bancaria', desc: 'Movimientos de cuenta y clasificación', icon: Landmark, color: 'bg-cyan-50' },
     { href: '/contabilidad/extractos-bancarios', label: 'Extractos bancarios', desc: 'ABM de descripción ↔ clasificación', icon: Link2, color: 'bg-indigo-50' },
-  ]
-
-  const proximamente = [
-    { label: 'Tarjeta de crédito', desc: 'Resumen de consumos por tarjeta', icon: CreditCard },
+    { href: '/contabilidad/tarjeta-credito', label: 'Tarjeta de crédito', desc: 'Resumen de consumos por tarjeta', icon: CreditCard, color: 'bg-orange-50' },
   ]
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">Contabilidad</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Información contable de facturas de sociedad SAS</p>
+        <p className="text-sm text-gray-400 mt-0.5">Subdiarios, compras, conciliación bancaria y tarjeta de crédito</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         {disponibles.map(({ href, label, desc, icon: Icon, color }) => (
@@ -38,18 +35,6 @@ export default async function ContabilidadPage() {
             <p className="text-sm font-semibold text-gray-900">{label}</p>
             <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
           </Link>
-        ))}
-      </div>
-      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Próximamente</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {proximamente.map(({ label, desc, icon: Icon }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-100 p-5 opacity-50">
-            <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center mb-3">
-              <Icon size={18} className="text-gray-400"/>
-            </div>
-            <p className="text-sm font-semibold text-gray-500">{label}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
-          </div>
         ))}
       </div>
     </div>
