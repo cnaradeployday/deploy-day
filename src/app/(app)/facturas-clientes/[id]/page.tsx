@@ -38,7 +38,13 @@ export default async function FacturaClienteDetailPage({ params }: { params: Pro
             { label: 'Proyecto', value: (f.project as any)?.name ?? '—' },
             { label: 'Emisión', value: new Date(f.fecha_emision).toLocaleDateString('es-AR') },
             { label: 'Vencimiento', value: new Date(f.fecha_vencimiento).toLocaleDateString('es-AR') },
-            { label: 'Importe', value: '$' + Number(f.importe).toLocaleString() },
+            { label: 'Sociedad', value: f.sociedad ?? '—' },
+            ...(f.sociedad === 'SAS' ? [
+              { label: 'CUIT', value: f.cuit ?? '—' },
+              { label: 'Importe neto', value: '$' + Number(f.importe_neto ?? 0).toLocaleString() },
+              { label: 'IVA (' + (f.iva_pct ?? 0) + '%)', value: '$' + Number(f.importe_iva ?? 0).toLocaleString() },
+            ] : []),
+            { label: 'Importe' + (f.sociedad === 'SAS' ? ' total' : ''), value: '$' + Number(f.importe).toLocaleString() },
             { label: 'Cobro', value: f.fecha_cobro ? new Date(f.fecha_cobro).toLocaleDateString('es-AR') : '—' },
           ].map(({ label, value }) => (
             <div key={label} className="border border-gray-100 rounded-xl px-4 py-3">

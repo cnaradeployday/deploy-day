@@ -15,7 +15,7 @@ export default function EditarClientePage() {
   const [newPayment, setNewPayment] = useState('')
   const [selectedPayments, setSelectedPayments] = useState<string[]>([])
   const [form, setForm] = useState({
-    name: '', company: '', email: '', phone: '', notes: '',
+    name: '', company: '', razon_social: '', email: '', phone: '', notes: '',
     cuit: '', empresa_cobra: 'SAS', is_active: true,
   })
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
@@ -28,6 +28,7 @@ export default function EditarClientePage() {
           setForm({
             name: data.name ?? '',
             company: data.company ?? '',
+            razon_social: data.razon_social ?? '',
             email: data.email ?? '',
             phone: data.phone ?? '',
             notes: data.notes ?? '',
@@ -70,6 +71,7 @@ export default function EditarClientePage() {
         {[
           { key: 'name', label: 'Nombre *', placeholder: 'Nombre del cliente', required: true },
           { key: 'company', label: 'Empresa', placeholder: 'Nombre de la empresa' },
+          { key: 'razon_social', label: 'Razón social', placeholder: 'Razón social (legal) del cliente' },
           { key: 'cuit', label: 'CUIT', placeholder: '20-12345678-9' },
           { key: 'email', label: 'Email', placeholder: 'email@empresa.com', type: 'email' },
           { key: 'phone', label: 'Teléfono', placeholder: '+54 11 1234-5678' },

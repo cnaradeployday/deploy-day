@@ -6,7 +6,7 @@ import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
 import FloatingChat from './FloatingChat'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell, Landmark } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -33,6 +33,7 @@ const navItems = [
   { href: '/liquidaciones',     label: 'Liquidaciones',      icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/facturas-clientes', label: 'Facturas clientes',  icon: FileText,        roles: ['admin'] },
   { href: '/resumen-facturas',  label: 'Resumen facturas',   icon: FileText,        roles: ['admin'] },
+  { href: '/contabilidad',      label: 'Contabilidad',       icon: Landmark,        roles: ['admin'] },
   { href: '/cotizaciones',      label: 'Cotizaciones USD',   icon: TrendingUp,      roles: ['admin'] },
   { href: '/roles',             label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
   { href: '/logs',              label: 'Logs',               icon: Activity,        roles: ['admin'] },

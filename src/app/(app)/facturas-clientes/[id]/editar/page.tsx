@@ -19,6 +19,7 @@ function generarMeses() {
 
 const CURRENCIES = ['ARS', 'USD', 'EUR']
 const ESTADOS = ['pendiente', 'cobrada', 'vencida']
+const SOCIEDADES = ['SAS', 'LLC', 'MONO']
 
 export default function EditarFacturaPage() {
   const router = useRouter()
@@ -33,6 +34,7 @@ export default function EditarFacturaPage() {
     fecha_emision: '', fecha_vencimiento: '', fecha_cobro: '',
     importe: '', currency: 'ARS', notas: '',
     mes_servicio: '', estado: 'pendiente',
+    sociedad: 'MONO', cuit: '', iva_pct: '21', importe_neto: '',
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
   const meses = generarMeses()
@@ -55,6 +57,10 @@ export default function EditarFacturaPage() {
           notas: f.notas ?? '',
           mes_servicio: f.mes_servicio ?? '',
           estado: f.estado ?? 'pendiente',
+          sociedad: f.sociedad ?? 'MONO',
+          cuit: f.cuit ?? '',
+          iva_pct: f.iva_pct != null ? String(f.iva_pct) : '21',
+          importe_neto: f.importe_neto != null ? String(f.importe_neto) : '',
         })
         setLoadingData(false)
       })
@@ -66,8 +72,16 @@ export default function EditarFacturaPage() {
       .then(({ data }) => setProyectos(data ?? []))
   }, [form.client_id])
 
+  const esSAS = form.sociedad === 'SAS'
+  const importeIva = esSAS ? Math.round((parseFloat(form.importe_neto || '0') * parseFloat(form.iva_pct || '0')) / 100 * 100) / 100 : 0
+  const importeTotal = esSAS ? Math.round((parseFloat(form.importe_neto || '0') + importeIva) * 100) / 100 : parseFloat(form.importe || '0')
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (esSAS && (!form.cuit.trim() || !form.iva_pct.trim() || !form.importe_neto.trim())) {
+      alert('Para sociedad SAS, CUIT e IVA son obligatorios')
+      return
+    }
     setLoading(true)
     const { error } = await createClient().from('facturas_clientes').update({
       client_id: form.client_id,
@@ -76,11 +90,16 @@ export default function EditarFacturaPage() {
       fecha_emision: form.fecha_emision,
       fecha_vencimiento: form.fecha_vencimiento,
       fecha_cobro: form.fecha_cobro || null,
-      importe: parseFloat(form.importe),
+      importe: importeTotal,
       currency: form.currency,
       notas: form.notas || null,
       mes_servicio: form.mes_servicio || null,
       estado: form.estado,
+      sociedad: form.sociedad,
+      cuit: esSAS ? form.cuit.trim() : null,
+      iva_pct: esSAS ? parseFloat(form.iva_pct) : null,
+      importe_neto: esSAS ? parseFloat(form.importe_neto) : null,
+      importe_iva: esSAS ? importeIva : null,
     }).eq('id', id)
     if (!error) router.push('/facturas-clientes')
     else { alert('Error: ' + error.message); setLoading(false) }
@@ -139,16 +158,56 @@ export default function EditarFacturaPage() {
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe *</label>
-          <div className="flex gap-2">
-            <select value={form.currency} onChange={e => set('currency', e.target.value)}
-              className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input type="number" min="0" step="0.01" value={form.importe} onChange={e => set('importe', e.target.value)} required
-              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-          </div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Sociedad que factura *</label>
+          <select value={form.sociedad} onChange={e => set('sociedad', e.target.value)} required
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            {SOCIEDADES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
+        {esSAS ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">CUIT *</label>
+              <input type="text" value={form.cuit} onChange={e => set('cuit', e.target.value)} required
+                placeholder="20-12345678-9"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe neto *</label>
+                <div className="flex gap-2">
+                  <select value={form.currency} onChange={e => set('currency', e.target.value)}
+                    className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input type="number" min="0" step="0.01" value={form.importe_neto} onChange={e => set('importe_neto', e.target.value)} required
+                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">IVA % *</label>
+                <input type="number" min="0" step="0.01" value={form.iva_pct} onChange={e => set('iva_pct', e.target.value)} required
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between text-sm">
+              <span className="text-gray-500">IVA: {importeIva.toLocaleString('es-AR', { style: 'currency', currency: form.currency === 'USD' ? 'USD' : 'ARS' })}</span>
+              <span className="font-semibold text-gray-900">Total: {importeTotal.toLocaleString('es-AR', { style: 'currency', currency: form.currency === 'USD' ? 'USD' : 'ARS' })}</span>
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe *</label>
+            <div className="flex gap-2">
+              <select value={form.currency} onChange={e => set('currency', e.target.value)}
+                className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input type="number" min="0" step="0.01" value={form.importe} onChange={e => set('importe', e.target.value)} required
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+            </div>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
           <select value={form.estado} onChange={e => set('estado', e.target.value)}

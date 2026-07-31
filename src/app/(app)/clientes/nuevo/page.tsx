@@ -14,7 +14,7 @@ export default function NuevoClientePage() {
   const [newPayment, setNewPayment] = useState('')
   const [selectedPayments, setSelectedPayments] = useState<string[]>([])
   const [form, setForm] = useState({
-    name: '', company: '', email: '', phone: '', notes: '',
+    name: '', company: '', razon_social: '', email: '', phone: '', notes: '',
     cuit: '', empresa_cobra: 'SAS',
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -56,6 +56,7 @@ export default function NuevoClientePage() {
         {[
           { key: 'name', label: 'Nombre *', placeholder: 'Nombre del cliente', required: true },
           { key: 'company', label: 'Empresa', placeholder: 'Nombre de la empresa' },
+          { key: 'razon_social', label: 'Razón social', placeholder: 'Razón social (legal) del cliente' },
           { key: 'cuit', label: 'CUIT', placeholder: '20-12345678-9' },
           { key: 'email', label: 'Email', placeholder: 'email@empresa.com', type: 'email' },
           { key: 'phone', label: 'Teléfono', placeholder: '+54 11 1234-5678' },
