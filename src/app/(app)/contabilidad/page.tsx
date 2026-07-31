@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree } from 'lucide-react'
+import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree, Link2 } from 'lucide-react'
 
 export default async function ContabilidadPage() {
   const supabase = await createClient()
@@ -15,10 +15,11 @@ export default async function ContabilidadPage() {
     { href: '/contabilidad/subdiario-ingresos', label: 'Subdiario de Ingresos', desc: 'Importe neto y estado de cobro', icon: TrendingUp, color: 'bg-green-50' },
     { href: '/contabilidad/facturas-compra', label: 'Factura de compra', desc: 'Comprobantes de proveedores', icon: ShoppingCart, color: 'bg-purple-50' },
     { href: '/contabilidad/tipos-gasto', label: 'Tipos de gasto', desc: 'Plan de cuentas para clasificar gastos', icon: ListTree, color: 'bg-pink-50' },
+    { href: '/contabilidad/conciliacion-bancaria', label: 'Conciliación bancaria', desc: 'Movimientos de cuenta y clasificación', icon: Landmark, color: 'bg-cyan-50' },
+    { href: '/contabilidad/extractos-bancarios', label: 'Extractos bancarios', desc: 'ABM de descripción ↔ clasificación', icon: Link2, color: 'bg-indigo-50' },
   ]
 
   const proximamente = [
-    { label: 'Conciliación bancaria', desc: 'Movimientos de cuenta y clasificación', icon: Landmark },
     { label: 'Tarjeta de crédito', desc: 'Resumen de consumos por tarjeta', icon: CreditCard },
   ]
 
