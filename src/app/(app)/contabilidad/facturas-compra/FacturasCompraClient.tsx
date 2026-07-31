@@ -18,9 +18,17 @@ type FacturaCompra = {
   iibb: number
   otros_impuestos: number
   monto_total: number
+  estado: string
+  notas: string | null
   archivo_nombre: string | null
   archivo_path: string | null
   tipo_gasto: { numero: string; nombre: string } | null
+}
+
+const estadoLabel: Record<string, string> = { pendiente: 'Pendiente de pago', pagado: 'Pagado' }
+const estadoColors: Record<string, string> = {
+  pendiente: 'bg-amber-50 text-amber-600',
+  pagado:    'bg-green-50 text-green-600',
 }
 
 type SortKey = 'fecha_factura' | 'numero_factura' | 'razon_social_proveedor' | 'monto_total'
@@ -91,6 +99,8 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
     'Otros impuestos': Number(f.otros_impuestos),
     'Monto total': Number(f.monto_total),
     'Tipo de gasto': f.tipo_gasto ? f.tipo_gasto.numero + ' - ' + f.tipo_gasto.nombre : '',
+    'Estado': estadoLabel[f.estado] ?? f.estado,
+    'Notas': f.notas ?? '',
   }))
 
   return (
@@ -164,6 +174,7 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
                   className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none">
                   <div className="flex items-center gap-1">Monto total<SortIcon k="monto_total"/></div>
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Estado</th>
                 <th className="px-4 py-3"/>
               </tr>
             </thead>
@@ -177,6 +188,9 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
                   <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{f.tipo_gasto ? f.tipo_gasto.numero + ' - ' + f.tipo_gasto.nombre : '—'}</td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900 whitespace-nowrap">
                     {Number(f.monto_total).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + estadoColors[f.estado]}>{estadoLabel[f.estado] ?? f.estado}</span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {f.archivo_path && (

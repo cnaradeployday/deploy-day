@@ -18,6 +18,7 @@ export default function EditarFacturaCompraPage() {
   const [form, setForm] = useState({
     cuit: '', numero_factura: '', fecha_factura: '', razon_social_proveedor: '', fecha_pago: '',
     monto_neto: '0', iva: '0', iibb: '0', otros_impuestos: '0', tipo_gasto_id: '',
+    estado: 'pendiente', notas: '',
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -33,6 +34,7 @@ export default function EditarFacturaCompraPage() {
         monto_neto: String(f.monto_neto ?? 0), iva: String(f.iva ?? 0),
         iibb: String(f.iibb ?? 0), otros_impuestos: String(f.otros_impuestos ?? 0),
         tipo_gasto_id: f.tipo_gasto_id ?? '',
+        estado: f.estado ?? 'pendiente', notas: f.notas ?? '',
       })
       if (f.archivo_path) setArchivoActual({ path: f.archivo_path, nombre: f.archivo_nombre ?? f.archivo_path })
       setLoadingData(false)
@@ -82,6 +84,8 @@ export default function EditarFacturaCompraPage() {
       iibb: parseFloat(form.iibb) || 0,
       otros_impuestos: parseFloat(form.otros_impuestos) || 0,
       tipo_gasto_id: form.tipo_gasto_id || null,
+      estado: form.estado,
+      notas: form.notas || null,
       archivo_path, archivo_nombre,
       updated_at: new Date().toISOString(),
     }).eq('id', id)
@@ -105,8 +109,8 @@ export default function EditarFacturaCompraPage() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">CUIT *</label>
-            <input type="text" value={form.cuit} onChange={e => set('cuit', e.target.value)} required
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">CUIT</label>
+            <input type="text" value={form.cuit} onChange={e => set('cuit', e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
           <div>
@@ -126,6 +130,14 @@ export default function EditarFacturaCompraPage() {
             <input type="date" value={form.fecha_pago} onChange={e => set('fecha_pago', e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
+          <select value={form.estado} onChange={e => set('estado', e.target.value)}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+            <option value="pendiente">Pendiente de pago</option>
+            <option value="pagado">Pagado</option>
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo de gasto</label>
@@ -162,6 +174,12 @@ export default function EditarFacturaCompraPage() {
         <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between text-sm">
           <span className="text-gray-500">Monto total</span>
           <span className="font-semibold text-gray-900">{montoTotal.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
+          <input type="text" value={form.notas} onChange={e => set('notas', e.target.value)}
+            placeholder="Ej: Servicios Enero 2026, Panel pared..."
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Adjunto</label>
