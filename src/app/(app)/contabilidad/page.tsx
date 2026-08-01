@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree, Link2 } from 'lucide-react'
+import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree, Link2, Banknote } from 'lucide-react'
 
 export default async function ContabilidadPage() {
   const supabase = await createClient()
@@ -18,6 +18,7 @@ export default async function ContabilidadPage() {
     { href: '/contabilidad/conciliacion-bancaria', label: 'Conciliación bancaria', desc: 'Movimientos de cuenta y clasificación', icon: Landmark, color: 'bg-cyan-50' },
     { href: '/contabilidad/extractos-bancarios', label: 'Extractos bancarios', desc: 'ABM de descripción ↔ clasificación', icon: Link2, color: 'bg-indigo-50' },
     { href: '/contabilidad/tarjeta-credito', label: 'Tarjeta de crédito', desc: 'Resumen de consumos por tarjeta', icon: CreditCard, color: 'bg-orange-50' },
+    { href: '/contabilidad/prestamos', label: 'Préstamos', desc: 'Vigencia, tasa y devengamiento mensual de intereses', icon: Banknote, color: 'bg-teal-50' },
   ]
 
   return (
