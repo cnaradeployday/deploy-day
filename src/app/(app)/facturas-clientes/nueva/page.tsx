@@ -1,13 +1,14 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Paperclip, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Currency, CURRENCIES } from '@/lib/utils/currency'
 
 const SOCIEDADES = ['SAS', 'LLC', 'MONO']
 const empresaCobraToSociedad = (v: string | null | undefined) => v === 'SAS' ? 'SAS' : v === 'LLC' ? 'LLC' : 'MONO'
+const soloDigitos = (s: string) => s.replace(/\D/g, '')
 
 function generarMeses() {
   const meses: { value: string; label: string }[] = []
@@ -39,6 +40,12 @@ export default function NuevaFacturaClientePage() {
   })
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const [file, setFile] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [extracting, setExtracting] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [cuitFactura, setCuitFactura] = useState('')
+
   useEffect(() => {
     createClient().from('clients').select('id, name, cuit, empresa_cobra').order('name').then(({ data }) => setClientes(data ?? []))
   }, [])
@@ -59,6 +66,46 @@ export default function NuevaFacturaClientePage() {
     createClient().from('projects').select('id, name').eq('client_id', form.client_id).order('name')
       .then(({ data }) => setProyectos(data ?? []))
   }, [form.client_id])
+
+  const clienteSeleccionado = clientes.find(c => c.id === form.client_id) ?? null
+  const cuitCheck = useMemo(() => {
+    if (!cuitFactura || !clienteSeleccionado) return null
+    if (!clienteSeleccionado.cuit) return 'sin_cuit_cliente' as const
+    return soloDigitos(cuitFactura) === soloDigitos(clienteSeleccionado.cuit) ? 'match' as const : 'mismatch' as const
+  }, [cuitFactura, clienteSeleccionado])
+
+  async function handleExtract() {
+    if (!file) return
+    setExtracting(true)
+    setAiError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/ai/extraer-factura-cliente', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
+      setCuitFactura(data.cuit_receptor || '')
+      setForm(f => {
+        const importeNeto = data.importe_neto ? String(data.importe_neto) : f.importe_neto
+        const importeTotal = data.importe_total ? String(data.importe_total) : f.importe
+        const ivaPct = data.importe_neto && data.importe_iva
+          ? String(Math.round((data.importe_iva / data.importe_neto) * 100 * 100) / 100)
+          : f.iva_pct
+        return {
+          ...f,
+          numero: data.numero || f.numero,
+          fecha_emision: data.fecha_emision || f.fecha_emision,
+          importe_neto: importeNeto,
+          importe: importeTotal,
+          iva_pct: ivaPct,
+        }
+      })
+    } catch (e: any) {
+      setAiError(e.message ?? 'Error al procesar el documento')
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -96,6 +143,26 @@ export default function NuevaFacturaClientePage() {
         <ArrowLeft size={15}/> Volver
       </Link>
       <h1 className="text-xl font-semibold text-gray-900 mb-6">Nueva factura</h1>
+
+      <div className="bg-[#E8F4FE] rounded-2xl border border-[#1B9BF0]/20 p-4 mb-4">
+        <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5 mb-1">
+          <Sparkles size={14} className="text-[#1B9BF0]"/> Completar con IA
+        </p>
+        <p className="text-xs text-gray-500 mb-3">Subí el PDF o la foto de la factura y completamos los campos automáticamente.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => fileRef.current?.click()}
+            className="flex-1 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 bg-white rounded-xl text-sm text-gray-500 hover:bg-gray-50">
+            <Paperclip size={14}/> {file ? file.name : 'Seleccionar archivo...'}
+          </button>
+          <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setAiError(null) }}/>
+          <button type="button" onClick={handleExtract} disabled={!file || extracting}
+            className="shrink-0 flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+            <Sparkles size={14}/> {extracting ? 'Analizando...' : 'Completar'}
+          </button>
+        </div>
+        {aiError && <p className="text-xs text-red-500 mt-2">{aiError}</p>}
+      </div>
+
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Cliente *</label>
@@ -105,6 +172,21 @@ export default function NuevaFacturaClientePage() {
             {clientes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        {cuitCheck === 'match' && (
+          <p className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2">
+            <CheckCircle2 size={13}/> El CUIT del comprobante coincide con el cliente.
+          </p>
+        )}
+        {cuitCheck === 'mismatch' && (
+          <p className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">
+            <AlertTriangle size={13}/> El CUIT del comprobante ({cuitFactura}) no coincide con el CUIT del cliente ({clienteSeleccionado?.cuit}).
+          </p>
+        )}
+        {cuitCheck === 'sin_cuit_cliente' && (
+          <p className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+            <AlertTriangle size={13}/> El cliente no tiene CUIT cargado para comparar. Comprobante: {cuitFactura}.
+          </p>
+        )}
         {proyectos.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Proyecto</label>

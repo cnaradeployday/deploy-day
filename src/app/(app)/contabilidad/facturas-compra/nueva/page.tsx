@@ -3,11 +3,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft, Paperclip } from 'lucide-react'
+import { ArrowLeft, Paperclip, Sparkles } from 'lucide-react'
+
+function normalizar(s: string) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+}
 
 export default function NuevaFacturaCompraPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
   const [tipos, setTipos] = useState<any[]>([])
   const [file, setFile] = useState<File | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -23,6 +29,39 @@ export default function NuevaFacturaCompraPage() {
   useEffect(() => {
     createClient().from('tipos_gasto').select('id, numero, nombre').order('numero').then(({ data }) => setTipos(data ?? []))
   }, [])
+
+  async function handleExtract() {
+    if (!file) return
+    setExtracting(true)
+    setAiError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/ai/extraer-factura-compra', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
+      const tipoMatch = data.tipo_gasto_sugerido
+        ? tipos.find(t => normalizar(t.nombre) === normalizar(data.tipo_gasto_sugerido))
+          ?? tipos.find(t => normalizar(t.nombre).includes(normalizar(data.tipo_gasto_sugerido)) || normalizar(data.tipo_gasto_sugerido).includes(normalizar(t.nombre)))
+        : null
+      setForm(f => ({
+        ...f,
+        cuit: data.cuit || f.cuit,
+        numero_factura: data.numero_factura || f.numero_factura,
+        fecha_factura: data.fecha_factura || f.fecha_factura,
+        razon_social_proveedor: data.razon_social_proveedor || f.razon_social_proveedor,
+        monto_neto: data.monto_neto ? String(data.monto_neto) : f.monto_neto,
+        iva: data.iva ? String(data.iva) : f.iva,
+        iibb: data.iibb ? String(data.iibb) : f.iibb,
+        otros_impuestos: data.otros_impuestos ? String(data.otros_impuestos) : f.otros_impuestos,
+        tipo_gasto_id: tipoMatch ? tipoMatch.id : f.tipo_gasto_id,
+      }))
+    } catch (e: any) {
+      setAiError(e.message ?? 'Error al procesar el documento')
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   const montoTotal = ['monto_neto', 'iva', 'iibb', 'otros_impuestos']
     .reduce((s, k) => s + (parseFloat((form as any)[k]) || 0), 0)
@@ -70,6 +109,26 @@ export default function NuevaFacturaCompraPage() {
         <ArrowLeft size={15}/> Volver
       </Link>
       <h1 className="text-xl font-semibold text-gray-900 mb-6">Nueva factura de compra</h1>
+
+      <div className="bg-[#E8F4FE] rounded-2xl border border-[#1B9BF0]/20 p-4 mb-4">
+        <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5 mb-1">
+          <Sparkles size={14} className="text-[#1B9BF0]"/> Completar con IA
+        </p>
+        <p className="text-xs text-gray-500 mb-3">Subí el PDF o la foto de la factura y completamos los campos automáticamente.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => fileRef.current?.click()}
+            className="flex-1 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 bg-white rounded-xl text-sm text-gray-500 hover:bg-gray-50">
+            <Paperclip size={14}/> {file ? file.name : 'Seleccionar archivo...'}
+          </button>
+          <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setAiError(null) }}/>
+          <button type="button" onClick={handleExtract} disabled={!file || extracting}
+            className="shrink-0 flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+            <Sparkles size={14}/> {extracting ? 'Analizando...' : 'Completar'}
+          </button>
+        </div>
+        {aiError && <p className="text-xs text-red-500 mt-2">{aiError}</p>}
+      </div>
+
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Razón social del proveedor *</label>
@@ -150,14 +209,6 @@ export default function NuevaFacturaCompraPage() {
           <input type="text" value={form.notas} onChange={e => set('notas', e.target.value)}
             placeholder="Ej: Servicios Enero 2026, Panel pared..."
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Adjuntar factura</label>
-          <button type="button" onClick={() => fileRef.current?.click()}
-            className="w-full flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:bg-gray-50">
-            <Paperclip size={14}/> {file ? file.name : 'Seleccionar archivo...'}
-          </button>
-          <input ref={fileRef} type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)}/>
         </div>
         <div className="flex gap-3 pt-2">
           <Link href="/contabilidad/facturas-compra" className="flex-1 text-center py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</Link>
