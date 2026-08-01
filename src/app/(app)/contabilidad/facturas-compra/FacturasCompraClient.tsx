@@ -8,7 +8,7 @@ import ExportExcelButton from '@/components/shared/ExportExcelButton'
 
 type FacturaCompra = {
   id: string
-  cuit: string
+  cuit: string | null
   numero_factura: string
   fecha_factura: string
   razon_social_proveedor: string
@@ -33,13 +33,35 @@ const estadoColors: Record<string, string> = {
 
 type SortKey = 'fecha_factura' | 'numero_factura' | 'razon_social_proveedor' | 'monto_total'
 
+const ESTADOS: { value: string; label: string }[] = [
+  { value: 'pendiente', label: 'Pendiente de pago' },
+  { value: 'pagado', label: 'Pagado' },
+]
+
+const filterInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
+
 export default function FacturasCompraClient({ facturas }: { facturas: FacturaCompra[] }) {
   const router = useRouter()
-  const [q, setQ] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('fecha_factura')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+
+  const [fFechaDesde, setFFechaDesde] = useState('')
+  const [fFechaHasta, setFFechaHasta] = useState('')
+  const [fNumero, setFNumero] = useState('')
+  const [fProveedor, setFProveedor] = useState('')
+  const [fCuit, setFCuit] = useState('')
+  const [fTipo, setFTipo] = useState('')
+  const [fEstado, setFEstado] = useState('')
+  const [fMontoMin, setFMontoMin] = useState('')
+  const [fMontoMax, setFMontoMax] = useState('')
+
+  function clearFilters() {
+    setFFechaDesde(''); setFFechaHasta(''); setFNumero(''); setFProveedor(''); setFCuit('')
+    setFTipo(''); setFEstado(''); setFMontoMin(''); setFMontoMax('')
+  }
+  const hasFilters = !!(fFechaDesde || fFechaHasta || fNumero || fProveedor || fCuit || fTipo || fEstado || fMontoMin || fMontoMax)
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -50,16 +72,26 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
     return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
   }
 
+  const tipoOptions = useMemo(() => {
+    const map = new Map<string, string>()
+    facturas.forEach(f => { if (f.tipo_gasto) map.set(f.tipo_gasto.numero, f.tipo_gasto.nombre) })
+    return [...map.entries()].sort((a, b) => Number(a[0]) - Number(b[0]))
+  }, [facturas])
+
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase()
-    if (!term) return facturas
-    return facturas.filter(f =>
-      f.numero_factura.toLowerCase().includes(term) ||
-      f.cuit.toLowerCase().includes(term) ||
-      f.razon_social_proveedor.toLowerCase().includes(term) ||
-      (f.tipo_gasto?.nombre ?? '').toLowerCase().includes(term)
-    )
-  }, [facturas, q])
+    return facturas.filter(f => {
+      if (fFechaDesde && f.fecha_factura < fFechaDesde) return false
+      if (fFechaHasta && f.fecha_factura > fFechaHasta) return false
+      if (fNumero.trim() && !f.numero_factura.toLowerCase().includes(fNumero.trim().toLowerCase())) return false
+      if (fProveedor.trim() && !f.razon_social_proveedor.toLowerCase().includes(fProveedor.trim().toLowerCase())) return false
+      if (fCuit.trim() && !(f.cuit ?? '').toLowerCase().includes(fCuit.trim().toLowerCase())) return false
+      if (fTipo && f.tipo_gasto?.numero !== fTipo) return false
+      if (fEstado && f.estado !== fEstado) return false
+      if (fMontoMin && Number(f.monto_total) < parseFloat(fMontoMin)) return false
+      if (fMontoMax && Number(f.monto_total) > parseFloat(fMontoMax)) return false
+      return true
+    })
+  }, [facturas, fFechaDesde, fFechaHasta, fNumero, fProveedor, fCuit, fTipo, fEstado, fMontoMin, fMontoMax])
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
     const va = a[sortKey], vb = b[sortKey]
@@ -142,10 +174,57 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 flex flex-wrap gap-3 items-center">
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por número, CUIT, proveedor o tipo de gasto..."
-          className="flex-1 min-w-[240px] px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-        <span className="text-xs text-gray-400">{sorted.length} factura{sorted.length !== 1 ? 's' : ''} · Total {total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Fecha desde</label>
+            <input type="date" value={fFechaDesde} onChange={e => setFFechaDesde(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Fecha hasta</label>
+            <input type="date" value={fFechaHasta} onChange={e => setFFechaHasta(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Número</label>
+            <input type="text" value={fNumero} onChange={e => setFNumero(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Proveedor</label>
+            <input type="text" value={fProveedor} onChange={e => setFProveedor(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">CUIT</label>
+            <input type="text" value={fCuit} onChange={e => setFCuit(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Tipo de gasto</label>
+            <select value={fTipo} onChange={e => setFTipo(e.target.value)} className={filterInputClass + ' bg-white'}>
+              <option value="">Todos</option>
+              {tipoOptions.map(([numero, nombre]) => <option key={numero} value={numero}>{numero} - {nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Estado</label>
+            <select value={fEstado} onChange={e => setFEstado(e.target.value)} className={filterInputClass + ' bg-white'}>
+              <option value="">Todos</option>
+              {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Monto mín.</label>
+            <input type="number" step="0.01" value={fMontoMin} onChange={e => setFMontoMin(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Monto máx.</label>
+            <input type="number" step="0.01" value={fMontoMax} onChange={e => setFMontoMax(e.target.value)} className={filterInputClass}/>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          {hasFilters ? (
+            <button onClick={clearFilters} className="text-xs text-[#1B9BF0] hover:underline">Limpiar filtros</button>
+          ) : <span/>}
+          <span className="text-xs text-gray-400">{sorted.length} factura{sorted.length !== 1 ? 's' : ''} · Total {total.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+        </div>
       </div>
 
       {!sorted.length ? (
