@@ -59,7 +59,7 @@ export default function ExtractosBancariosClient({ clasificaciones }: { clasific
       <Link href="/contabilidad" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Contabilidad
       </Link>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <Link2 size={18} className="text-[#1B9BF0]"/> Extractos bancarios

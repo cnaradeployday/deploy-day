@@ -117,8 +117,8 @@ export default function NuevaFacturaCompraPage() {
         <p className="text-xs text-gray-500 mb-3">Subí el PDF o la foto de la factura y completamos los campos automáticamente.</p>
         <div className="flex gap-2">
           <button type="button" onClick={() => fileRef.current?.click()}
-            className="flex-1 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 bg-white rounded-xl text-sm text-gray-500 hover:bg-gray-50">
-            <Paperclip size={14}/> {file ? file.name : 'Seleccionar archivo...'}
+            className="flex-1 min-w-0 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 bg-white rounded-xl text-sm text-gray-500 hover:bg-gray-50">
+            <Paperclip size={14} className="shrink-0"/> <span className="truncate">{file ? file.name : 'Seleccionar archivo...'}</span>
           </button>
           <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setAiError(null) }}/>
           <button type="button" onClick={handleExtract} disabled={!file || extracting}
