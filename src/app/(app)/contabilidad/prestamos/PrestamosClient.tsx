@@ -67,7 +67,7 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6 w-full">
       <Link href="/contabilidad" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Contabilidad
       </Link>

@@ -75,7 +75,7 @@ export default function PrestamoDetalleClient({ prestamo, devengamientos }: { pr
   const totalDevengado = devengamientos.reduce((s, d) => s + Number(d.monto), 0)
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 w-full">
       <Link href="/contabilidad/prestamos" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Préstamos
       </Link>
@@ -92,7 +92,7 @@ export default function PrestamoDetalleClient({ prestamo, devengamientos }: { pr
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 max-w-3xl">
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
           <div className="flex justify-between sm:justify-start sm:gap-3">
             <dt className="text-sm text-gray-400">Vigencia 1ª</dt>

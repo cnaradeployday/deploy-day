@@ -96,7 +96,8 @@ export default function EditarFacturaCompraPage() {
   if (loadingData) return <div className="p-6 text-sm text-gray-400">Cargando...</div>
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
+    <div className="p-6 w-full">
+      <div className="max-w-xl mx-auto">
       <Link href="/contabilidad/facturas-compra" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Volver
       </Link>
@@ -207,6 +208,7 @@ export default function EditarFacturaCompraPage() {
           </button>
         </div>
       </form>
+      </div>
     </div>
   )
 }

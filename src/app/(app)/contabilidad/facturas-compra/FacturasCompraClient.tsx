@@ -136,7 +136,7 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
   }))
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 w-full">
       {confirmId && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">

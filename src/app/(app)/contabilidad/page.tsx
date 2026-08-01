@@ -22,12 +22,12 @@ export default async function ContabilidadPage() {
   ]
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 w-full">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">Contabilidad</h1>
         <p className="text-sm text-gray-400 mt-0.5">Subdiarios, compras, conciliación bancaria y tarjeta de crédito</p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
         {disponibles.map(({ href, label, desc, icon: Icon, color }) => (
           <Link key={href} href={href} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 hover:shadow-sm transition-all">
             <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center mb-3`}>

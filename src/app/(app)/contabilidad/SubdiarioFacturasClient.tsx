@@ -174,7 +174,7 @@ export default function SubdiarioFacturasClient({
   ]
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 w-full">
       <Link href="/contabilidad" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Contabilidad
       </Link>
