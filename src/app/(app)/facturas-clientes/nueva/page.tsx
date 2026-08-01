@@ -9,6 +9,7 @@ import { Currency, CURRENCIES } from '@/lib/utils/currency'
 const SOCIEDADES = ['SAS', 'LLC', 'MONO']
 const empresaCobraToSociedad = (v: string | null | undefined) => v === 'SAS' ? 'SAS' : v === 'LLC' ? 'LLC' : 'MONO'
 const soloDigitos = (s: string) => s.replace(/\D/g, '')
+const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 
 function generarMeses() {
   const meses: { value: string; label: string }[] = []
@@ -58,8 +59,10 @@ export default function NuevaFacturaClientePage() {
   }, [form.client_id, clientes])
 
   const esSAS = form.sociedad === 'SAS'
-  const importeIva = esSAS ? Math.round((parseFloat(form.importe_neto || '0') * parseFloat(form.iva_pct || '0')) / 100 * 100) / 100 : 0
-  const importeTotal = esSAS ? Math.round((parseFloat(form.importe_neto || '0') + importeIva) * 100) / 100 : parseFloat(form.importe || '0')
+  const netoNum = parseFloat(form.importe_neto)
+  const hasNeto = form.importe_neto.trim() !== '' && !isNaN(netoNum)
+  const importeIva = hasNeto ? Math.round((netoNum * parseFloat(form.iva_pct || '0')) / 100 * 100) / 100 : 0
+  const importeTotal = hasNeto ? Math.round((netoNum + importeIva) * 100) / 100 : parseFloat(form.importe || '0')
 
   useEffect(() => {
     if (!form.client_id) return
@@ -85,6 +88,19 @@ export default function NuevaFacturaClientePage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
       setCuitFactura(data.cuit_receptor || '')
+
+      // Intentar matchear el cliente automáticamente por CUIT o razón social
+      let matchedClientId: string | null = null
+      if (data.cuit_receptor) {
+        const porCuit = clientes.find(c => c.cuit && soloDigitos(c.cuit) === soloDigitos(data.cuit_receptor))
+        if (porCuit) matchedClientId = porCuit.id
+      }
+      if (!matchedClientId && data.razon_social_receptor) {
+        const nombreNorm = normalizar(data.razon_social_receptor)
+        const porNombre = clientes.find(c => normalizar(c.name) === nombreNorm || nombreNorm.includes(normalizar(c.name)) || normalizar(c.name).includes(nombreNorm))
+        if (porNombre) matchedClientId = porNombre.id
+      }
+
       setForm(f => {
         const importeNeto = data.importe_neto ? String(data.importe_neto) : f.importe_neto
         const importeTotal = data.importe_total ? String(data.importe_total) : f.importe
@@ -93,6 +109,7 @@ export default function NuevaFacturaClientePage() {
           : f.iva_pct
         return {
           ...f,
+          client_id: matchedClientId ?? f.client_id,
           numero: data.numero || f.numero,
           fecha_emision: data.fecha_emision || f.fecha_emision,
           importe_neto: importeNeto,
@@ -113,6 +130,10 @@ export default function NuevaFacturaClientePage() {
       alert('Para sociedad SAS, CUIT e IVA son obligatorios')
       return
     }
+    if (!hasNeto && !form.importe.trim()) {
+      alert('Ingresá el importe neto o el importe total')
+      return
+    }
     setLoading(true)
     const sb = createClient()
     const { data: { user } } = await sb.auth.getUser()
@@ -128,10 +149,10 @@ export default function NuevaFacturaClientePage() {
       mes_servicio: form.mes_servicio || null,
       created_by: user?.id,
       sociedad: form.sociedad || 'MONO',
-      cuit: esSAS ? form.cuit.trim() : null,
-      iva_pct: esSAS ? parseFloat(form.iva_pct) : null,
-      importe_neto: esSAS ? parseFloat(form.importe_neto) : null,
-      importe_iva: esSAS ? importeIva : null,
+      cuit: form.cuit.trim() || null,
+      iva_pct: hasNeto && form.iva_pct.trim() ? parseFloat(form.iva_pct) : null,
+      importe_neto: hasNeto ? netoNum : null,
+      importe_iva: hasNeto ? importeIva : null,
     })
     if (!error) router.push('/facturas-clientes')
     else { alert('Error: ' + error.message); setLoading(false) }
@@ -151,8 +172,8 @@ export default function NuevaFacturaClientePage() {
         <p className="text-xs text-gray-500 mb-3">Subí el PDF o la foto de la factura y completamos los campos automáticamente.</p>
         <div className="flex gap-2">
           <button type="button" onClick={() => fileRef.current?.click()}
-            className="flex-1 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 bg-white rounded-xl text-sm text-gray-500 hover:bg-gray-50">
-            <Paperclip size={14}/> {file ? file.name : 'Seleccionar archivo...'}
+            className="flex-1 min-w-0 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 bg-white rounded-xl text-sm text-gray-500 hover:bg-gray-50">
+            <Paperclip size={14} className="shrink-0"/> <span className="truncate">{file ? file.name : 'Seleccionar archivo...'}</span>
           </button>
           <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setAiError(null) }}/>
           <button type="button" onClick={handleExtract} disabled={!file || extracting}
@@ -231,39 +252,37 @@ export default function NuevaFacturaClientePage() {
             {SOCIEDADES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        {esSAS ? (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">CUIT *</label>
-              <input type="text" value={form.cuit} onChange={e => set('cuit', e.target.value)} required
-                placeholder="20-12345678-9"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">CUIT {esSAS && '*'}</label>
+          <input type="text" value={form.cuit} onChange={e => set('cuit', e.target.value)} required={esSAS}
+            placeholder="20-12345678-9"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe neto {esSAS && '*'}</label>
+            <div className="flex gap-2">
+              <select value={form.currency} onChange={e => set('currency', e.target.value)}
+                className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
+                {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+              <input type="number" min="0" step="0.01" value={form.importe_neto} onChange={e => set('importe_neto', e.target.value)} required={esSAS}
+                placeholder="0.00"
+                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe neto *</label>
-                <div className="flex gap-2">
-                  <select value={form.currency} onChange={e => set('currency', e.target.value)}
-                    className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-                    {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
-                  <input type="number" min="0" step="0.01" value={form.importe_neto} onChange={e => set('importe_neto', e.target.value)} required
-                    placeholder="0.00"
-                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">IVA % *</label>
-                <input type="number" min="0" step="0.01" value={form.iva_pct} onChange={e => set('iva_pct', e.target.value)} required
-                  placeholder="21"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between text-sm">
-              <span className="text-gray-500">IVA: {importeIva.toLocaleString('es-AR', { style: 'currency', currency: form.currency === 'USD' ? 'USD' : 'ARS' })}</span>
-              <span className="font-semibold text-gray-900">Total: {importeTotal.toLocaleString('es-AR', { style: 'currency', currency: form.currency === 'USD' ? 'USD' : 'ARS' })}</span>
-            </div>
-          </>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">IVA % {esSAS && '*'}</label>
+            <input type="number" min="0" step="0.01" value={form.iva_pct} onChange={e => set('iva_pct', e.target.value)} required={esSAS}
+              placeholder="21"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+        </div>
+        {hasNeto ? (
+          <div className="bg-gray-50 rounded-xl px-4 py-3 flex justify-between text-sm">
+            <span className="text-gray-500">IVA: {importeIva.toLocaleString('es-AR', { style: 'currency', currency: form.currency === 'USD' ? 'USD' : 'ARS' })}</span>
+            <span className="font-semibold text-gray-900">Total: {importeTotal.toLocaleString('es-AR', { style: 'currency', currency: form.currency === 'USD' ? 'USD' : 'ARS' })}</span>
+          </div>
         ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Importe *</label>
@@ -272,7 +291,7 @@ export default function NuevaFacturaClientePage() {
                 className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
                 {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
-              <input type="number" min="0" step="0.01" value={form.importe} onChange={e => set('importe', e.target.value)} required
+              <input type="number" min="0" step="0.01" value={form.importe} onChange={e => set('importe', e.target.value)} required={!hasNeto}
                 placeholder="0.00"
                 className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
             </div>
