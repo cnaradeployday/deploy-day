@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Trash2, Landmark, X } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Landmark, X } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
 
@@ -26,9 +26,27 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ fecha: new Date().toISOString().split('T')[0], clasificacion_id: '', credito_debito: '', saldo: '' })
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  function openNew() {
+    setEditingId(null)
+    setForm({ fecha: new Date().toISOString().split('T')[0], clasificacion_id: '', credito_debito: '', saldo: '' })
+    setShowForm(true)
+  }
+
+  function openEdit(m: Movimiento) {
+    setEditingId(m.id)
+    setForm({
+      fecha: m.fecha,
+      clasificacion_id: clasificaciones.find(c => c.descripcion === m.descripcion)?.id ?? '',
+      credito_debito: String(m.credito_debito),
+      saldo: String(m.saldo),
+    })
+    setShowForm(true)
+  }
 
   const [fFechaDesde, setFFechaDesde] = useState('')
   const [fFechaHasta, setFFechaHasta] = useState('')
@@ -77,20 +95,22 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
     if (!selected) { alert('Elegí una descripción'); return }
     setLoading(true)
     const sb = createClient()
-    const { data: { user } } = await sb.auth.getUser()
-    const { error } = await sb.from('conciliacion_bancaria').insert({
+    const payload = {
       fecha: form.fecha,
       descripcion: selected.descripcion,
       clasificacion_id: selected.id,
       clasificacion: selected.clasificacion,
       credito_debito: parseFloat(form.credito_debito) || 0,
       saldo: parseFloat(form.saldo) || 0,
-      created_by: user?.id,
-    })
+    }
+    const { error } = editingId
+      ? await sb.from('conciliacion_bancaria').update(payload).eq('id', editingId)
+      : await sb.from('conciliacion_bancaria').insert({ ...payload, created_by: (await sb.auth.getUser()).data.user?.id })
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
     setForm(f => ({ ...f, clasificacion_id: '', credito_debito: '', saldo: '' }))
     setShowForm(false)
+    setEditingId(null)
     router.refresh()
   }
 
@@ -119,8 +139,8 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full">
             <div className="flex items-center justify-between mb-4">
-              <p className="font-semibold text-gray-900">Agregar movimiento</p>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
+              <p className="font-semibold text-gray-900">{editingId ? 'Editar movimiento' : 'Agregar movimiento'}</p>
+              <button onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-400 hover:text-gray-600">
                 <X size={16}/>
               </button>
             </div>
@@ -156,11 +176,11 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)}
+                <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
                 <button type="submit" disabled={loading}
                   className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-                  {loading ? 'Guardando...' : 'Guardar'}
+                  {loading ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Guardar'}
                 </button>
               </div>
             </form>
@@ -180,7 +200,7 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="conciliacion_bancaria"/>
-          <button onClick={() => setShowForm(true)}
+          <button onClick={openNew}
             className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Agregar movimiento
           </button>
@@ -253,7 +273,11 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900 whitespace-nowrap">{fmt(m.saldo)}</td>
                   <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{m.clasificacion ?? '—'}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <button onClick={() => openEdit(m)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                      <Pencil size={13}/>
+                    </button>
                     <button onClick={() => handleDelete(m.id)} disabled={deletingId === m.id}
                       className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
                       <Trash2 size={13}/>

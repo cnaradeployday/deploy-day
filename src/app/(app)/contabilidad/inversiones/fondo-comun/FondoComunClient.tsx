@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Trash2, LineChart, X } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, LineChart, X, Check } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 
 type Movimiento = {
@@ -34,10 +34,28 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [montoTouched, setMontoTouched] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0], operacion: 'SUSCRIPCION' as 'SUSCRIPCION' | 'RESCATE',
     cantidad_cuotas: '', tc_fondo: '', monto: '',
   })
+
+  function openNew() {
+    setEditingId(null)
+    setMontoTouched(false)
+    setForm({ fecha: new Date().toISOString().split('T')[0], operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
+    setShowForm(true)
+  }
+
+  function openEdit(m: Movimiento) {
+    setEditingId(m.id)
+    setMontoTouched(true)
+    setForm({
+      fecha: m.fecha, operacion: m.operacion,
+      cantidad_cuotas: String(m.cantidad_cuotas), tc_fondo: String(m.tc_fondo), monto: String(m.monto),
+    })
+    setShowForm(true)
+  }
 
   function updateCuotasOTc(k: 'cantidad_cuotas' | 'tc_fondo', v: string) {
     setForm(f => {
@@ -55,19 +73,21 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
     e.preventDefault()
     setLoading(true)
     const sb = createClient()
-    const { data: { user } } = await sb.auth.getUser()
-    const { error } = await sb.from('inversiones_fci_movimientos').insert({
+    const payload = {
       fecha: form.fecha,
       operacion: form.operacion,
       cantidad_cuotas: parseFloat(form.cantidad_cuotas) || 0,
       tc_fondo: parseFloat(form.tc_fondo) || 0,
       monto: parseFloat(form.monto) || 0,
-      created_by: user?.id,
-    })
+    }
+    const { error } = editingId
+      ? await sb.from('inversiones_fci_movimientos').update(payload).eq('id', editingId)
+      : await sb.from('inversiones_fci_movimientos').insert({ ...payload, created_by: (await sb.auth.getUser()).data.user?.id })
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
     setForm({ fecha: new Date().toISOString().split('T')[0], operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
     setMontoTouched(false)
+    setEditingId(null)
     setShowForm(false)
     router.refresh()
   }
@@ -85,6 +105,22 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
   const [cierreForm, setCierreForm] = useState({ mes: '', tc_fondo: '' })
   const [cierreLoading, setCierreLoading] = useState(false)
   const [deletingCierreId, setDeletingCierreId] = useState<string | null>(null)
+  const [editingCierreId, setEditingCierreId] = useState<string | null>(null)
+  const [editingCierreValue, setEditingCierreValue] = useState('')
+
+  function openEditCierre(c: Cierre) {
+    setEditingCierreId(c.id)
+    setEditingCierreValue(String(c.tc_fondo))
+  }
+
+  async function handleSaveCierre(id: string) {
+    const tc = parseFloat(editingCierreValue)
+    if (isNaN(tc)) { setEditingCierreId(null); return }
+    const { error } = await createClient().from('inversiones_fci_cierres_mensuales').update({ tc_fondo: tc }).eq('id', id)
+    if (error) { alert('Error: ' + error.message); return }
+    setEditingCierreId(null)
+    router.refresh()
+  }
 
   async function handleAddCierre(e: React.FormEvent) {
     e.preventDefault()
@@ -132,8 +168,8 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
-              <p className="font-semibold text-gray-900">Agregar movimiento</p>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
+              <p className="font-semibold text-gray-900">{editingId ? 'Editar movimiento' : 'Agregar movimiento'}</p>
+              <button onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
             </div>
             <form onSubmit={handleAdd} className="space-y-3">
               <div>
@@ -169,11 +205,11 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
                 <p className="text-[11px] text-gray-400 mt-1">Se calcula automáticamente como cuotas × TC, pero podés ajustarlo.</p>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)}
+                <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
                 <button type="submit" disabled={loading}
                   className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-                  {loading ? 'Guardando...' : 'Guardar'}
+                  {loading ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Guardar'}
                 </button>
               </div>
             </form>
@@ -193,7 +229,7 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="fondo_comun_inversion"/>
-          <button onClick={() => setShowForm(true)}
+          <button onClick={openNew}
             className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Agregar movimiento
           </button>
@@ -258,7 +294,11 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
                       <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmtNum(Number(m.cantidad_cuotas))}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmtMoney(Number(m.tc_fondo))}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right whitespace-nowrap">{fmtMoney(Number(m.monto))}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <button onClick={() => openEdit(m)}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                          <Pencil size={13}/>
+                        </button>
                         <button onClick={() => handleDelete(m.id)} disabled={deletingId === m.id}
                           className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
                           <Trash2 size={13}/>
@@ -293,13 +333,34 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
                 {cierres.map(c => (
                   <div key={c.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50">
                     <span className="text-sm text-gray-700">{mesCorto(c.mes)}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900">{fmtMoney(Number(c.tc_fondo))}</span>
-                      <button onClick={() => handleDeleteCierre(c.id)} disabled={deletingCierreId === c.id}
-                        className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
-                        <Trash2 size={12}/>
-                      </button>
-                    </div>
+                    {editingCierreId === c.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <input type="number" step="0.01" autoFocus value={editingCierreValue}
+                          onChange={e => setEditingCierreValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleSaveCierre(c.id); if (e.key === 'Escape') setEditingCierreId(null) }}
+                          className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+                        <button onClick={() => handleSaveCierre(c.id)}
+                          className="p-1 rounded-lg text-gray-300 hover:text-green-600 hover:bg-green-50 transition-all">
+                          <Check size={12}/>
+                        </button>
+                        <button onClick={() => setEditingCierreId(null)}
+                          className="p-1 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition-all">
+                          <X size={12}/>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{fmtMoney(Number(c.tc_fondo))}</span>
+                        <button onClick={() => openEditCierre(c)}
+                          className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                          <Pencil size={12}/>
+                        </button>
+                        <button onClick={() => handleDeleteCierre(c.id)} disabled={deletingCierreId === c.id}
+                          className="p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
+                          <Trash2 size={12}/>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

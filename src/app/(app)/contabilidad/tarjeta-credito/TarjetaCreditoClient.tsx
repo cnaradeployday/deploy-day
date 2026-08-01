@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Trash2, CreditCard, X, Sparkles, Paperclip } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, CreditCard, X, Sparkles, Paperclip } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
 
@@ -39,12 +39,30 @@ function normalizar(s: string) {
 export default function TarjetaCreditoClient({ movimientos, tipos }: { movimientos: Movimiento[]; tipos: Tipo[] }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0], proveedor: '', cuota: '',
     tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos',
   })
+
+  function openNew() {
+    setEditingId(null)
+    setForm({ fecha: new Date().toISOString().split('T')[0], proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos' })
+    setShowForm(true)
+  }
+
+  function openEdit(m: Movimiento) {
+    setEditingId(m.id)
+    setForm({
+      fecha: m.fecha, proveedor: m.proveedor, cuota: m.cuota ?? '',
+      tipo_gasto_id: tipos.find(t => t.nombre === m.clasificacion)?.id ?? '',
+      pesos: m.pesos != null ? String(m.pesos) : '', dolares: m.dolares != null ? String(m.dolares) : '',
+      comprobante: m.comprobante ?? '', solapa: m.solapa ?? 'Ctas de gastos',
+    })
+    setShowForm(true)
+  }
 
   // Importación masiva con IA
   const [showImport, setShowImport] = useState(false)
@@ -126,8 +144,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
     e.preventDefault()
     setLoading(true)
     const sb = createClient()
-    const { data: { user } } = await sb.auth.getUser()
-    const { error } = await sb.from('tarjeta_credito').insert({
+    const payload = {
       fecha: form.fecha,
       proveedor: form.proveedor,
       cuota: form.cuota || null,
@@ -137,12 +154,15 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
       dolares: form.dolares ? parseFloat(form.dolares) : null,
       comprobante: form.comprobante || null,
       solapa: form.solapa || null,
-      created_by: user?.id,
-    })
+    }
+    const { error } = editingId
+      ? await sb.from('tarjeta_credito').update(payload).eq('id', editingId)
+      : await sb.from('tarjeta_credito').insert({ ...payload, created_by: (await sb.auth.getUser()).data.user?.id })
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
     setForm(f => ({ ...f, proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '' }))
     setShowForm(false)
+    setEditingId(null)
     router.refresh()
   }
 
@@ -228,8 +248,8 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full">
             <div className="flex items-center justify-between mb-4">
-              <p className="font-semibold text-gray-900">Agregar movimiento</p>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
+              <p className="font-semibold text-gray-900">{editingId ? 'Editar movimiento' : 'Agregar movimiento'}</p>
+              <button onClick={() => { setShowForm(false); setEditingId(null) }} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
             </div>
             <form onSubmit={handleAdd} className="grid grid-cols-2 gap-3">
               <div>
@@ -281,11 +301,11 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
                 </select>
               </div>
               <div className="col-span-2 flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)}
+                <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
                 <button type="submit" disabled={loading}
                   className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-                  {loading ? 'Guardando...' : 'Guardar'}
+                  {loading ? 'Guardando...' : editingId ? 'Guardar cambios' : 'Guardar'}
                 </button>
               </div>
             </form>
@@ -306,8 +326,8 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
                 <p className="text-sm text-gray-500 mb-3">Subí el PDF del resumen que te da el banco y extraemos todos los consumos automáticamente.</p>
                 <div className="flex gap-2 mb-2">
                   <button type="button" onClick={() => importFileRef.current?.click()}
-                    className="flex-1 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:bg-gray-50">
-                    <Paperclip size={14}/> {importFile ? importFile.name : 'Seleccionar PDF...'}
+                    className="flex-1 min-w-0 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:bg-gray-50">
+                    <Paperclip size={14} className="shrink-0"/> <span className="truncate">{importFile ? importFile.name : 'Seleccionar PDF...'}</span>
                   </button>
                   <input ref={importFileRef} type="file" accept="application/pdf" className="hidden"
                     onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportError(null) }}/>
@@ -394,7 +414,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
             className="flex items-center gap-2 border border-[#1B9BF0] text-[#1B9BF0] hover:bg-[#E8F4FE] px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Sparkles size={15}/> Importar con IA
           </button>
-          <button onClick={() => setShowForm(true)}
+          <button onClick={openNew}
             className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Agregar movimiento
           </button>
@@ -483,7 +503,11 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
                   <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(m.dolares)}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.comprobante ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.solapa ?? '—'}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <button onClick={() => openEdit(m)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                      <Pencil size={13}/>
+                    </button>
                     <button onClick={() => handleDelete(m.id)} disabled={deletingId === m.id}
                       className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
                       <Trash2 size={13}/>

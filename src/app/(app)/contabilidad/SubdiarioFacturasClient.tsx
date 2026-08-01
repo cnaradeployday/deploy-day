@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ChevronDown, ChevronUp, X, FileText } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, X, FileText, Pencil } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 
 export type SubdiarioFactura = {
@@ -178,7 +178,7 @@ export default function SubdiarioFacturasClient({
       <Link href="/contabilidad" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Contabilidad
       </Link>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
           <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
@@ -216,6 +216,7 @@ export default function SubdiarioFacturasClient({
                     <div className="flex items-center gap-1">{label}<SortIcon k={key}/></div>
                   </th>
                 ))}
+                <th className="px-4 py-3"/>
               </tr>
               <tr className="border-b border-gray-50 bg-gray-50">
                 <th className="px-4 py-2"/>
@@ -237,6 +238,7 @@ export default function SubdiarioFacturasClient({
                 </th>
                 <th className="px-2 py-2"/>
                 {showEstado && <th className="px-2 py-2"/>}
+                <th className="px-2 py-2"/>
               </tr>
             </thead>
             <tbody>
@@ -255,6 +257,12 @@ export default function SubdiarioFacturasClient({
                       <span className={'text-xs px-2 py-0.5 rounded-full whitespace-nowrap ' + estadoColors[f.estado]}>{estadoLabel[f.estado] ?? f.estado}</span>
                     </td>
                   )}
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <Link href={`/facturas-clientes/${f.id}/editar`}
+                      className="inline-flex p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                      <Pencil size={13}/>
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

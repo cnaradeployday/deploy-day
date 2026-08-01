@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Trash2, Banknote } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Banknote, X } from 'lucide-react'
 
 type Prestamo = {
   id: string
@@ -14,6 +14,7 @@ type Prestamo = {
   moneda: string
   monto: number
   tasa_interes_anual: number
+  notas: string | null
 }
 
 const fmt = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -29,18 +30,31 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    acreedor: '', fecha_inicio: '', fecha_fin: '', moneda: 'ARS', monto: '', tasa_interes_anual: '', notas: '',
-  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const emptyForm = { acreedor: '', fecha_inicio: '', fecha_fin: '', moneda: 'ARS', monto: '', tasa_interes_anual: '', notas: '' }
+  const [form, setForm] = useState(emptyForm)
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  function openEdit(p: Prestamo) {
+    setEditingId(p.id)
+    setForm({
+      acreedor: p.acreedor ?? '', fecha_inicio: p.fecha_inicio, fecha_fin: p.fecha_fin,
+      moneda: p.moneda, monto: String(p.monto), tasa_interes_anual: String(p.tasa_interes_anual),
+      notas: p.notas ?? '',
+    })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setForm(emptyForm)
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     const sb = createClient()
-    const { data: { user } } = await sb.auth.getUser()
     const plazo_meses = mesesEntre(form.fecha_inicio, form.fecha_fin)
-    const { error } = await sb.from('prestamos').insert({
+    const payload = {
       acreedor: form.acreedor || null,
       fecha_inicio: form.fecha_inicio,
       fecha_fin: form.fecha_fin,
@@ -49,11 +63,14 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
       monto: parseFloat(form.monto) || 0,
       tasa_interes_anual: parseFloat(form.tasa_interes_anual) || 0,
       notas: form.notas || null,
-      created_by: user?.id,
-    })
+    }
+    const { error } = editingId
+      ? await sb.from('prestamos').update(payload).eq('id', editingId)
+      : await sb.from('prestamos').insert({ ...payload, created_by: (await sb.auth.getUser()).data.user?.id })
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
-    setForm({ acreedor: '', fecha_inicio: '', fecha_fin: '', moneda: 'ARS', monto: '', tasa_interes_anual: '', notas: '' })
+    setForm(emptyForm)
+    setEditingId(null)
     router.refresh()
   }
 
@@ -117,10 +134,18 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
           <input type="text" value={form.notas} onChange={e => set('notas', e.target.value)} placeholder="Opcional"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
         </div>
-        <button type="submit" disabled={loading}
-          className="flex items-center justify-center gap-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-          <Plus size={15}/> Agregar
-        </button>
+        <div className="col-span-2 sm:col-span-4 lg:col-span-1 flex gap-2">
+          {editingId && (
+            <button type="button" onClick={cancelEdit}
+              className="flex items-center justify-center gap-1 border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-2 rounded-xl text-sm font-semibold transition-all">
+              <X size={15}/> Cancelar
+            </button>
+          )}
+          <button type="submit" disabled={loading}
+            className="flex-1 flex items-center justify-center gap-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+            {editingId ? <><Pencil size={15}/> Guardar cambios</> : <><Plus size={15}/> Agregar</>}
+          </button>
+        </div>
       </form>
 
       {!prestamos.length ? (
@@ -162,7 +187,11 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
                     <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(interesAnual)}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(mensual)}</td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{mesesDevengados[p.id] ?? 0}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <button onClick={() => openEdit(p)}
+                        className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                        <Pencil size={13}/>
+                      </button>
                       <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id}
                         className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
                         <Trash2 size={13}/>
