@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Trash2, LineChart, X } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
-import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
 
 type Movimiento = {
   id: string
@@ -26,11 +25,6 @@ const mesCorto = (s: string) => {
   return `${MESES_ES[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`
 }
 const filterInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
-
-const OPERACION_OPTIONS = [
-  { value: 'SUSCRIPCION', label: 'Suscripción' },
-  { value: 'RESCATE', label: 'Rescate' },
-]
 
 export default function FondoComunClient({ movimientos, cierres }: { movimientos: Movimiento[]; cierres: Cierre[] }) {
   const router = useRouter()
@@ -118,54 +112,19 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
     router.refresh()
   }
 
-  // Filtros
-  const [fFechaDesde, setFFechaDesde] = useState('')
-  const [fFechaHasta, setFFechaHasta] = useState('')
-  const [fOperacion, setFOperacion] = useState<string[]>([])
-  const [fCuotasMin, setFCuotasMin] = useState('')
-  const [fCuotasMax, setFCuotasMax] = useState('')
-  const [fTcMin, setFTcMin] = useState('')
-  const [fTcMax, setFTcMax] = useState('')
-  const [fMontoMin, setFMontoMin] = useState('')
-  const [fMontoMax, setFMontoMax] = useState('')
-
-  function clearFilters() {
-    setFFechaDesde(''); setFFechaHasta(''); setFOperacion([])
-    setFCuotasMin(''); setFCuotasMax(''); setFTcMin(''); setFTcMax(''); setFMontoMin(''); setFMontoMax('')
-  }
-  const hasFilters = !!(fFechaDesde || fFechaHasta || fOperacion.length || fCuotasMin || fCuotasMax || fTcMin || fTcMax || fMontoMin || fMontoMax)
-
-  const filtered = useMemo(() => {
-    return movimientos.filter(m => {
-      if (fFechaDesde && m.fecha < fFechaDesde) return false
-      if (fFechaHasta && m.fecha > fFechaHasta) return false
-      if (fOperacion.length && !fOperacion.includes(m.operacion)) return false
-      if (fCuotasMin && Number(m.cantidad_cuotas) < parseFloat(fCuotasMin)) return false
-      if (fCuotasMax && Number(m.cantidad_cuotas) > parseFloat(fCuotasMax)) return false
-      if (fTcMin && Number(m.tc_fondo) < parseFloat(fTcMin)) return false
-      if (fTcMax && Number(m.tc_fondo) > parseFloat(fTcMax)) return false
-      if (fMontoMin && Number(m.monto) < parseFloat(fMontoMin)) return false
-      if (fMontoMax && Number(m.monto) > parseFloat(fMontoMax)) return false
-      return true
-    })
-  }, [movimientos, fFechaDesde, fFechaHasta, fOperacion, fCuotasMin, fCuotasMax, fTcMin, fTcMax, fMontoMin, fMontoMax])
-
-  // Posicion actual (siempre sobre el total, no sobre el filtrado)
   const cuotasSuscriptas = movimientos.filter(m => m.operacion === 'SUSCRIPCION').reduce((s, m) => s + Number(m.cantidad_cuotas), 0)
   const cuotasRescatadas = movimientos.filter(m => m.operacion === 'RESCATE').reduce((s, m) => s + Number(m.cantidad_cuotas), 0)
   const cuotasEnCartera = cuotasSuscriptas - cuotasRescatadas
   const ultimoTc = movimientos.length ? Number(movimientos[movimientos.length - 1].tc_fondo) : 0
   const valorEstimado = cuotasEnCartera * ultimoTc
 
-  const totalMontoFiltrado = filtered.reduce((s, m) => s + Number(m.monto), 0)
-
-  const exportData = useMemo(() => filtered.map(m => ({
+  const exportData = useMemo(() => movimientos.map(m => ({
     Fecha: fechaAr(m.fecha),
     Operacion: m.operacion,
     'Cantidad de cuotas': Number(m.cantidad_cuotas),
     'TC FONDO': Number(m.tc_fondo),
     Monto: Number(m.monto),
-  })), [filtered])
+  })), [movimientos])
 
   return (
     <div className="p-6 w-full">
@@ -264,60 +223,15 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="flex-1 min-w-0 w-full">
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mb-3">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Fecha desde</label>
-                <input type="date" value={fFechaDesde} onChange={e => setFFechaDesde(e.target.value)} className={filterInputClass}/>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Fecha hasta</label>
-                <input type="date" value={fFechaHasta} onChange={e => setFFechaHasta(e.target.value)} className={filterInputClass}/>
-              </div>
-              <MultiSelectFilter label="Operación" options={OPERACION_OPTIONS} selected={fOperacion} onChange={setFOperacion}/>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1.5">Cuotas mín.</label>
-                  <input type="number" step="0.01" value={fCuotasMin} onChange={e => setFCuotasMin(e.target.value)} className={filterInputClass}/>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1.5">Cuotas máx.</label>
-                  <input type="number" step="0.01" value={fCuotasMax} onChange={e => setFCuotasMax(e.target.value)} className={filterInputClass}/>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1.5">TC mín.</label>
-                  <input type="number" step="0.01" value={fTcMin} onChange={e => setFTcMin(e.target.value)} className={filterInputClass}/>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1.5">TC máx.</label>
-                  <input type="number" step="0.01" value={fTcMax} onChange={e => setFTcMax(e.target.value)} className={filterInputClass}/>
-                </div>
-              </div>
-              <div className="flex gap-2 col-span-2">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1.5">Monto mín.</label>
-                  <input type="number" step="0.01" value={fMontoMin} onChange={e => setFMontoMin(e.target.value)} className={filterInputClass}/>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-400 mb-1.5">Monto máx.</label>
-                  <input type="number" step="0.01" value={fMontoMax} onChange={e => setFMontoMax(e.target.value)} className={filterInputClass}/>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              {hasFilters ? (
-                <button onClick={clearFilters} className="text-xs text-[#1B9BF0] hover:underline">Deseleccionar todos</button>
-              ) : <span/>}
-              <span className="text-xs text-gray-400">{filtered.length} movimiento{filtered.length !== 1 ? 's' : ''} · Total {fmtMoney(totalMontoFiltrado)}</span>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-gray-900">Movimientos</p>
+            <span className="text-xs text-gray-400">{movimientos.length} movimiento{movimientos.length !== 1 ? 's' : ''}</span>
           </div>
 
-          {!filtered.length ? (
+          {!movimientos.length ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
               <LineChart size={32} className="mx-auto mb-3 opacity-20"/>
-              <p className="text-sm">{movimientos.length ? 'Ningún movimiento coincide con los filtros' : 'Sin movimientos cargados'}</p>
+              <p className="text-sm">Sin movimientos cargados</p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
@@ -333,7 +247,7 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(m => (
+                  {movimientos.map(m => (
                     <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fechaAr(m.fecha)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
