@@ -3,8 +3,9 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Trash2, CreditCard } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, CreditCard, X } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
 
 type Tipo = { id: string; numero: string; nombre: string }
 type Movimiento = {
@@ -24,9 +25,11 @@ const SOLAPAS = ['Ctas de gastos', 'Proveedores', 'Proveedores - Cuotas', 'IVA',
 const COMPROBANTES = ['Ticket no fiscal', 'Factura A', 'Ticket B', 'Propina']
 
 const fmt = (n: number | null) => n == null ? '' : n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const filterInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
 
 export default function TarjetaCreditoClient({ movimientos, tipos }: { movimientos: Movimiento[]; tipos: Tipo[] }) {
   const router = useRouter()
+  const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -56,6 +59,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
     setForm(f => ({ ...f, proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '' }))
+    setShowForm(false)
     router.refresh()
   }
 
@@ -68,10 +72,63 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
     router.refresh()
   }
 
-  const totalPesos = movimientos.reduce((s, m) => s + (Number(m.pesos) || 0), 0)
-  const totalDolares = movimientos.reduce((s, m) => s + (Number(m.dolares) || 0), 0)
+  // Filtros
+  const [fFechaDesde, setFFechaDesde] = useState('')
+  const [fFechaHasta, setFFechaHasta] = useState('')
+  const [fProveedor, setFProveedor] = useState('')
+  const [fCuota, setFCuota] = useState('')
+  const [fClasificaciones, setFClasificaciones] = useState<string[]>([])
+  const [fPesosMin, setFPesosMin] = useState('')
+  const [fPesosMax, setFPesosMax] = useState('')
+  const [fDolaresMin, setFDolaresMin] = useState('')
+  const [fDolaresMax, setFDolaresMax] = useState('')
+  const [fComprobantes, setFComprobantes] = useState<string[]>([])
+  const [fSolapas, setFSolapas] = useState<string[]>([])
 
-  const exportData = useMemo(() => movimientos.map(m => ({
+  function clearFilters() {
+    setFFechaDesde(''); setFFechaHasta(''); setFProveedor(''); setFCuota('')
+    setFClasificaciones([]); setFPesosMin(''); setFPesosMax('')
+    setFDolaresMin(''); setFDolaresMax(''); setFComprobantes([]); setFSolapas([])
+  }
+  const hasFilters = !!(fFechaDesde || fFechaHasta || fProveedor || fCuota || fClasificaciones.length ||
+    fPesosMin || fPesosMax || fDolaresMin || fDolaresMax || fComprobantes.length || fSolapas.length)
+
+  const clasificacionOptions = useMemo(() => {
+    const uniq = [...new Set(movimientos.map(m => m.clasificacion).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b))
+    return uniq.map(c => ({ value: c, label: c }))
+  }, [movimientos])
+
+  const comprobanteOptions = useMemo(() => {
+    const uniq = [...new Set(movimientos.map(m => m.comprobante).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b))
+    return uniq.map(c => ({ value: c, label: c }))
+  }, [movimientos])
+
+  const solapaOptions = useMemo(() => {
+    const uniq = [...new Set(movimientos.map(m => m.solapa).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b))
+    return uniq.map(c => ({ value: c, label: c }))
+  }, [movimientos])
+
+  const filtered = useMemo(() => {
+    return movimientos.filter(m => {
+      if (fFechaDesde && m.fecha < fFechaDesde) return false
+      if (fFechaHasta && m.fecha > fFechaHasta) return false
+      if (fProveedor.trim() && !m.proveedor.toLowerCase().includes(fProveedor.trim().toLowerCase())) return false
+      if (fCuota.trim() && !(m.cuota ?? '').toLowerCase().includes(fCuota.trim().toLowerCase())) return false
+      if (fClasificaciones.length && !fClasificaciones.includes(m.clasificacion ?? '')) return false
+      if (fPesosMin && Number(m.pesos ?? 0) < parseFloat(fPesosMin)) return false
+      if (fPesosMax && Number(m.pesos ?? 0) > parseFloat(fPesosMax)) return false
+      if (fDolaresMin && Number(m.dolares ?? 0) < parseFloat(fDolaresMin)) return false
+      if (fDolaresMax && Number(m.dolares ?? 0) > parseFloat(fDolaresMax)) return false
+      if (fComprobantes.length && !fComprobantes.includes(m.comprobante ?? '')) return false
+      if (fSolapas.length && !fSolapas.includes(m.solapa ?? '')) return false
+      return true
+    })
+  }, [movimientos, fFechaDesde, fFechaHasta, fProveedor, fCuota, fClasificaciones, fPesosMin, fPesosMax, fDolaresMin, fDolaresMax, fComprobantes, fSolapas])
+
+  const totalPesos = filtered.reduce((s, m) => s + (Number(m.pesos) || 0), 0)
+  const totalDolares = filtered.reduce((s, m) => s + (Number(m.dolares) || 0), 0)
+
+  const exportData = useMemo(() => filtered.map(m => ({
     FECHA: new Date(m.fecha).toLocaleDateString('es-AR'),
     PROVEEDOR: m.proveedor,
     CUOTA: m.cuota ?? '',
@@ -80,83 +137,152 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
     DÓLARES: m.dolares ?? '',
     Comprobante: m.comprobante ?? '',
     Solapa: m.solapa ?? '',
-  })), [movimientos])
+  })), [filtered])
 
   return (
     <div className="p-6 w-full">
+      {showForm && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-semibold text-gray-900">Agregar movimiento</p>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
+            </div>
+            <form onSubmit={handleAdd} className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Fecha</label>
+                <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} required
+                  className={filterInputClass}/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Cuota</label>
+                <input type="text" value={form.cuota} onChange={e => setForm(f => ({ ...f, cuota: e.target.value }))} placeholder="1/6"
+                  className={filterInputClass}/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1.5">Proveedor</label>
+                <input type="text" value={form.proveedor} onChange={e => setForm(f => ({ ...f, proveedor: e.target.value }))} required
+                  className={filterInputClass}/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1.5">Clasificación</label>
+                <select value={form.tipo_gasto_id} onChange={e => setForm(f => ({ ...f, tipo_gasto_id: e.target.value }))}
+                  className={filterInputClass + ' bg-white'}>
+                  <option value="">Sin especificar</option>
+                  {tipos.map(t => <option key={t.id} value={t.id}>{t.numero} - {t.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Pesos</label>
+                <input type="number" step="0.01" value={form.pesos} onChange={e => setForm(f => ({ ...f, pesos: e.target.value }))}
+                  className={filterInputClass}/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Dólares</label>
+                <input type="number" step="0.01" value={form.dolares} onChange={e => setForm(f => ({ ...f, dolares: e.target.value }))}
+                  className={filterInputClass}/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1.5">Comprobante</label>
+                <input type="text" list="comprobantes" value={form.comprobante} onChange={e => setForm(f => ({ ...f, comprobante: e.target.value }))}
+                  placeholder="Ticket no fiscal" className={filterInputClass}/>
+                <datalist id="comprobantes">
+                  {COMPROBANTES.map(c => <option key={c} value={c}/>)}
+                </datalist>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1.5">Solapa</label>
+                <select value={form.solapa} onChange={e => setForm(f => ({ ...f, solapa: e.target.value }))}
+                  className={filterInputClass + ' bg-white'}>
+                  {SOLAPAS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2 flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
+                <button type="submit" disabled={loading}
+                  className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <Link href="/contabilidad" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Contabilidad
       </Link>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <CreditCard size={18} className="text-[#1B9BF0]"/> Tarjeta de crédito
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">Consumos del resumen de tarjeta</p>
         </div>
-        <ExportExcelButton data={exportData} filename="tarjeta_credito"/>
+        <div className="flex items-center gap-2">
+          <ExportExcelButton data={exportData} filename="tarjeta_credito"/>
+          <button onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+            <Plus size={15}/> Agregar movimiento
+          </button>
+        </div>
       </div>
 
-      <form onSubmit={handleAdd} className="bg-white rounded-2xl border border-gray-100 p-4 mb-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 items-end">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Fecha</label>
-          <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} required
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Fecha desde</label>
+            <input type="date" value={fFechaDesde} onChange={e => setFFechaDesde(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Fecha hasta</label>
+            <input type="date" value={fFechaHasta} onChange={e => setFFechaHasta(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Proveedor</label>
+            <input type="text" value={fProveedor} onChange={e => setFProveedor(e.target.value)} className={filterInputClass}/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">Cuota</label>
+            <input type="text" value={fCuota} onChange={e => setFCuota(e.target.value)} className={filterInputClass}/>
+          </div>
+          <MultiSelectFilter label="Clasificación" options={clasificacionOptions} selected={fClasificaciones} onChange={setFClasificaciones}/>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1.5">Pesos mín.</label>
+              <input type="number" step="0.01" value={fPesosMin} onChange={e => setFPesosMin(e.target.value)} className={filterInputClass}/>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1.5">Pesos máx.</label>
+              <input type="number" step="0.01" value={fPesosMax} onChange={e => setFPesosMax(e.target.value)} className={filterInputClass}/>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1.5">Dólares mín.</label>
+              <input type="number" step="0.01" value={fDolaresMin} onChange={e => setFDolaresMin(e.target.value)} className={filterInputClass}/>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1.5">Dólares máx.</label>
+              <input type="number" step="0.01" value={fDolaresMax} onChange={e => setFDolaresMax(e.target.value)} className={filterInputClass}/>
+            </div>
+          </div>
+          <MultiSelectFilter label="Comprobante" options={comprobanteOptions} selected={fComprobantes} onChange={setFComprobantes}/>
+          <MultiSelectFilter label="Solapa" options={solapaOptions} selected={fSolapas} onChange={setFSolapas}/>
         </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 mb-1.5">Proveedor</label>
-          <input type="text" value={form.proveedor} onChange={e => setForm(f => ({ ...f, proveedor: e.target.value }))} required
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        <div className="flex items-center justify-between">
+          {hasFilters ? (
+            <button onClick={clearFilters} className="text-xs text-[#1B9BF0] hover:underline">Deseleccionar todos</button>
+          ) : <span/>}
+          <span className="text-xs text-gray-400">{filtered.length} movimiento{filtered.length !== 1 ? 's' : ''}</span>
         </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Cuota</label>
-          <input type="text" value={form.cuota} onChange={e => setForm(f => ({ ...f, cuota: e.target.value }))} placeholder="1/6"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 mb-1.5">Clasificación</label>
-          <select value={form.tipo_gasto_id} onChange={e => setForm(f => ({ ...f, tipo_gasto_id: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-            <option value="">Sin especificar</option>
-            {tipos.map(t => <option key={t.id} value={t.id}>{t.numero} - {t.nombre}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Pesos</label>
-          <input type="number" step="0.01" value={form.pesos} onChange={e => setForm(f => ({ ...f, pesos: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Dólares</label>
-          <input type="number" step="0.01" value={form.dolares} onChange={e => setForm(f => ({ ...f, dolares: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 mb-1.5">Comprobante</label>
-          <input type="text" list="comprobantes" value={form.comprobante} onChange={e => setForm(f => ({ ...f, comprobante: e.target.value }))}
-            placeholder="Ticket no fiscal"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
-          <datalist id="comprobantes">
-            {COMPROBANTES.map(c => <option key={c} value={c}/>)}
-          </datalist>
-        </div>
-        <div className="col-span-2">
-          <label className="block text-xs text-gray-400 mb-1.5">Solapa</label>
-          <select value={form.solapa} onChange={e => setForm(f => ({ ...f, solapa: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white">
-            {SOLAPAS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <button type="submit" disabled={loading}
-          className="flex items-center justify-center gap-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-3 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-          <Plus size={15}/> Agregar
-        </button>
-      </form>
+      </div>
 
-      {!movimientos.length ? (
+      {!filtered.length ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
           <CreditCard size={32} className="mx-auto mb-3 opacity-20"/>
-          <p className="text-sm">Sin movimientos cargados</p>
+          <p className="text-sm">{movimientos.length ? 'Ningún movimiento coincide con los filtros' : 'Sin movimientos cargados'}</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
@@ -175,7 +301,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
               </tr>
             </thead>
             <tbody>
-              {movimientos.map(m => (
+              {filtered.map(m => (
                 <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{m.proveedor}</td>
