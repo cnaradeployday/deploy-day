@@ -116,19 +116,21 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   }
 
   {
-    const { data: tipos } = await sb.from('tipos_gasto').select('id, nombre')
+    const [{ data: tipos }, { data: fc }, { data: tj }] = await Promise.all([
+      sb.from('tipos_gasto').select('id, nombre'),
+      sb.from('facturas_compra').select('tipo_gasto_id, monto_total').not('tipo_gasto_id', 'is', null).gte('fecha_factura', inicio).lte('fecha_factura', fin),
+      sb.from('tarjeta_credito').select('tipo_gasto_id, pesos, dolares').not('tipo_gasto_id', 'is', null).gte('fecha', inicio).lte('fecha', fin),
+    ])
+    const porTipo = new Map<string, number>()
+    for (const f of fc ?? []) porTipo.set(f.tipo_gasto_id, (porTipo.get(f.tipo_gasto_id) ?? 0) + Number(f.monto_total))
+    for (const t of tj ?? []) porTipo.set(t.tipo_gasto_id, (porTipo.get(t.tipo_gasto_id) ?? 0) + (Number(t.pesos) || 0) + (Number(t.dolares) || 0) * tc)
+
     for (const cuenta of cuentasGastos) {
       if (cuenta.nombre === 'Comisiones bancarias') continue
       const nombreBuscado = MAPEO_TIPO_GASTO[cuenta.nombre] ?? cuenta.nombre
       const tipo = (tipos ?? []).find((t: any) => t.nombre === nombreBuscado)
       if (!tipo) continue
-      const [{ data: fc }, { data: tj }] = await Promise.all([
-        sb.from('facturas_compra').select('monto_total').eq('tipo_gasto_id', tipo.id).gte('fecha_factura', inicio).lte('fecha_factura', fin),
-        sb.from('tarjeta_credito').select('pesos, dolares').eq('tipo_gasto_id', tipo.id).gte('fecha', inicio).lte('fecha', fin),
-      ])
-      const totalFc = (fc ?? []).reduce((s: number, f: any) => s + Number(f.monto_total), 0)
-      const totalTj = (tj ?? []).reduce((s: number, t: any) => s + (Number(t.pesos) || 0) + (Number(t.dolares) || 0) * tc, 0)
-      out[cuenta.nombre] = -1 * (totalFc + totalTj)
+      out[cuenta.nombre] = -1 * (porTipo.get(tipo.id) ?? 0)
     }
   }
 
@@ -171,12 +173,9 @@ export async function calcularResultadoYTD(
   const cuentasGastos = cuentas.filter(c => c.origen === 'auto')
   const cuentasManualIds = cuentas.filter(c => c.origen === 'manual').map(c => c.id)
 
-  let total = 0
-  for (let m = 1; m <= mesSel; m++) {
-    const periodoMes = `${anio}-${String(m).padStart(2, '0')}`
-    const auto = await calcularSaldosResultadoAuto(sb, periodoMes, cuentasGastos)
-    total += Object.values(auto).reduce((s, v) => s + v, 0)
-  }
+  const meses = Array.from({ length: mesSel }, (_, i) => `${anio}-${String(i + 1).padStart(2, '0')}`)
+  const resultadosPorMes = await Promise.all(meses.map(periodoMes => calcularSaldosResultadoAuto(sb, periodoMes, cuentasGastos)))
+  let total = resultadosPorMes.reduce((s, auto) => s + Object.values(auto).reduce((s2, v) => s2 + v, 0), 0)
 
   if (cuentasManualIds.length) {
     const { data } = await sb.from('plan_cuentas_saldos').select('monto')
