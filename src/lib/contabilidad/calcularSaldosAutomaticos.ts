@@ -79,6 +79,24 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
     out['Prestamo socio a pagar - Intereses'] = -1 * (data ?? []).reduce((s: number, d: any) => s + Number(d.monto), 0)
   }
 
+  {
+    const { data } = await sb.from('facturas_compra').select('iva').lte('fecha_factura', fin)
+    out['IVA CREDITO FISCAL'] = (data ?? []).reduce((s: number, f: any) => s + Number(f.iva), 0)
+  }
+
+  {
+    const { data } = await sb.from('facturas_clientes').select('importe_iva').lte('fecha_emision', fin)
+    out['IVA DEBITO FISCAL'] = -1 * (data ?? []).reduce((s: number, f: any) => s + Number(f.importe_iva ?? 0), 0)
+  }
+
+  {
+    const { data } = await sb.from('tarjeta_credito').select('pesos, dolares').lte('fecha', fin)
+    const pesos = (data ?? []).reduce((s: number, m: any) => s + (Number(m.pesos) || 0), 0)
+    const dolares = (data ?? []).reduce((s: number, m: any) => s + (Number(m.dolares) || 0), 0)
+    out['Tarjeta de credito VISA a pagar $'] = -1 * pesos
+    out['Tarjeta de credito VISA a pagar USD'] = -1 * dolares * tc
+  }
+
   return out
 }
 

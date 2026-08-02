@@ -12,6 +12,15 @@ type Cuenta = {
   nombre: string
   orden: number
   origen: 'manual' | 'auto'
+  codigo: number
+}
+
+// 1xx Activo · 2xx Pasivo · 3xx Patrimonio Neto · 4xx Resultado positivos · 5xx Resultado negativos
+const CODIGO_HINT: Record<Cuenta['categoria'], string> = {
+  activo: '1xx',
+  pasivo: '2xx',
+  patrimonio_neto: '3xx',
+  resultado: '4xx (ingreso) / 5xx (gasto)',
 }
 
 const CATEGORIAS: { value: Cuenta['categoria']; label: string }[] = [
@@ -29,17 +38,17 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ categoria: 'activo' as Cuenta['categoria'], subcategoria: '', nombre: '', orden: '0', origen: 'manual' as Cuenta['origen'] })
+  const [form, setForm] = useState({ categoria: 'activo' as Cuenta['categoria'], subcategoria: '', nombre: '', orden: '0', origen: 'manual' as Cuenta['origen'], codigo: '' })
 
   function openNew() {
     setEditingId(null)
-    setForm({ categoria: 'activo', subcategoria: '', nombre: '', orden: '0', origen: 'manual' })
+    setForm({ categoria: 'activo', subcategoria: '', nombre: '', orden: '0', origen: 'manual', codigo: '' })
     setShowForm(true)
   }
 
   function openEdit(c: Cuenta) {
     setEditingId(c.id)
-    setForm({ categoria: c.categoria, subcategoria: c.subcategoria ?? '', nombre: c.nombre, orden: String(c.orden), origen: c.origen })
+    setForm({ categoria: c.categoria, subcategoria: c.subcategoria ?? '', nombre: c.nombre, orden: String(c.orden), origen: c.origen, codigo: String(c.codigo) })
     setShowForm(true)
   }
 
@@ -53,6 +62,7 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
       nombre: form.nombre.trim(),
       orden: parseInt(form.orden) || 0,
       origen: form.origen,
+      codigo: parseInt(form.codigo) || 0,
     }
     const { error } = editingId
       ? await sb.from('plan_cuentas').update(payload).eq('id', editingId)
@@ -82,7 +92,7 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
     return CATEGORIAS.map(cat => ({
       categoria: cat.value,
       label: cat.label,
-      cuentas: (porCategoria.get(cat.value) ?? []).sort((a, b) => (a.subcategoria ?? '').localeCompare(b.subcategoria ?? '') || a.orden - b.orden),
+      cuentas: (porCategoria.get(cat.value) ?? []).sort((a, b) => a.codigo - b.codigo),
     })).filter(g => g.cuentas.length)
   }, [cuentas])
 
@@ -102,6 +112,11 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
                   className={filterInputClass + ' bg-white'}>
                   {CATEGORIAS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Código ({CODIGO_HINT[form.categoria]})</label>
+                <input type="number" value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} required
+                  className={filterInputClass}/>
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Subcategoría</label>
@@ -183,7 +198,8 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {g.cuentas.map((c, i) => (
                   <div key={c.id}
-                    className={'grid grid-cols-[1fr_1fr_auto_auto] px-5 py-3 items-center hover:bg-gray-50 ' + (i !== g.cuentas.length - 1 ? 'border-b border-gray-50' : '')}>
+                    className={'grid grid-cols-[auto_1fr_1fr_auto_auto] gap-3 px-5 py-3 items-center hover:bg-gray-50 ' + (i !== g.cuentas.length - 1 ? 'border-b border-gray-50' : '')}>
+                    <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{c.codigo}</span>
                     <span className="text-sm text-gray-900">{c.nombre}</span>
                     <span className="text-xs text-gray-400">{c.subcategoria ?? '—'}</span>
                     {c.origen === 'auto' ? (
