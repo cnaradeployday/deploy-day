@@ -2,9 +2,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Scale, Pencil, Check, X, Info } from 'lucide-react'
+import { ArrowLeft, Scale, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
+import { calcularSaldosBalanceAuto, calcularResultadoYTD } from '@/lib/contabilidad/calcularSaldosAutomaticos'
 
-type Cuenta = { id: string; categoria: 'activo' | 'pasivo' | 'patrimonio_neto' | 'resultado'; subcategoria: string | null; nombre: string; orden: number }
+type Cuenta = { id: string; categoria: 'activo' | 'pasivo' | 'patrimonio_neto' | 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
 const fmt = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const mesActual = () => new Date().toISOString().slice(0, 7)
@@ -21,27 +22,31 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
   const activo = useMemo(() => cuentas.filter(c => c.categoria === 'activo').sort((a, b) => a.orden - b.orden), [cuentas])
   const pasivo = useMemo(() => cuentas.filter(c => c.categoria === 'pasivo').sort((a, b) => a.orden - b.orden), [cuentas])
   const patrimonio = useMemo(() => cuentas.filter(c => c.categoria === 'patrimonio_neto').sort((a, b) => a.orden - b.orden), [cuentas])
-  const resultadoIds = useMemo(() => cuentas.filter(c => c.categoria === 'resultado').map(c => c.id), [cuentas])
+  const resultadoCuentas = useMemo(() => cuentas.filter(c => c.categoria === 'resultado'), [cuentas])
 
   async function cargarSaldos() {
     setLoadingSaldos(true)
     const sb = createClient()
     const periodoDate = `${periodo}-01`
-    const anio = periodo.slice(0, 4)
 
-    const noResultadoIds = cuentas.filter(c => c.categoria !== 'resultado').map(c => c.id)
-    const [{ data: rows }, { data: ytd }] = await Promise.all([
-      noResultadoIds.length
-        ? sb.from('plan_cuentas_saldos').select('cuenta_id, monto').in('cuenta_id', noResultadoIds).eq('periodo', periodoDate)
+    const noResultado = cuentas.filter(c => c.categoria !== 'resultado')
+    const manualIds = noResultado.filter(c => c.origen === 'manual').map(c => c.id)
+
+    const [{ data: rows }, auto, resultadoYTD] = await Promise.all([
+      manualIds.length
+        ? sb.from('plan_cuentas_saldos').select('cuenta_id, monto').in('cuenta_id', manualIds).eq('periodo', periodoDate)
         : Promise.resolve({ data: [] as any[] }),
-      resultadoIds.length
-        ? sb.from('plan_cuentas_saldos').select('monto').in('cuenta_id', resultadoIds).gte('periodo', `${anio}-01-01`).lte('periodo', periodoDate)
-        : Promise.resolve({ data: [] as any[] }),
+      calcularSaldosBalanceAuto(sb, periodo),
+      calcularResultadoYTD(sb, periodo, resultadoCuentas),
     ])
+
     const map: Record<string, number> = {}
     for (const r of rows ?? []) map[r.cuenta_id] = Number(r.monto)
+    for (const c of noResultado) {
+      if (c.origen === 'auto' && auto[c.nombre] != null) map[c.id] = auto[c.nombre]
+    }
     setSaldos(map)
-    setResultadoEjercicio(-1 * (ytd ?? []).reduce((s, r) => s + Number(r.monto), 0))
+    setResultadoEjercicio(-1 * resultadoYTD)
     setLoadingSaldos(false)
   }
 
@@ -70,8 +75,13 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
     const monto = saldos[c.id]
     return (
       <div className="grid grid-cols-[1fr_auto] px-5 py-2.5 items-center border-b border-gray-50 last:border-0 hover:bg-gray-50">
-        <span className="text-sm text-gray-700">{c.nombre}</span>
-        {editingId === c.id ? (
+        <span className="text-sm text-gray-700 flex items-center gap-1.5">
+          {c.nombre}
+          {c.origen === 'auto' && <Sparkles size={11} className="text-[#1B9BF0]" aria-label="Calculado automáticamente"/>}
+        </span>
+        {c.origen === 'auto' ? (
+          <span className="text-sm font-medium text-gray-900 text-right whitespace-nowrap">{monto != null ? fmt(monto) : '—'}</span>
+        ) : editingId === c.id ? (
           <div className="flex items-center gap-1.5 justify-end">
             <input type="number" step="0.01" autoFocus value={editingValue} onChange={e => setEditingValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSave(c.id); if (e.key === 'Escape') setEditingId(null) }}
@@ -115,7 +125,7 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
 
       <p className="flex items-start gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 mb-6">
         <Info size={14} className="shrink-0 mt-0.5"/>
-        Los saldos se cargan manualmente por mes ("as of"). El Resultado del Ejercicio se calcula automáticamente sumando las cuentas de Resultado del P&amp;L desde enero hasta el mes seleccionado.
+        Las cuentas con <Sparkles size={11} className="inline text-[#1B9BF0] mx-0.5"/> se calculan automáticamente a partir de los demás módulos de Contabilidad; el resto se carga a mano por mes ("as of"). El Resultado del Ejercicio suma el P&amp;L (auto + manual) desde enero hasta el mes seleccionado.
       </p>
 
       {loadingSaldos ? (
@@ -147,7 +157,7 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
               {patrimonio.map(c => <Row key={c.id} c={c}/>)}
               <div className="grid grid-cols-[1fr_auto] px-5 py-2.5 items-center border-b border-gray-50 hover:bg-gray-50">
-                <span className="text-sm text-gray-700">Resultado del Ejercicio</span>
+                <span className="text-sm text-gray-700 flex items-center gap-1.5">Resultado del Ejercicio <Sparkles size={11} className="text-[#1B9BF0]"/></span>
                 <span className="text-sm font-medium text-gray-900 text-right">{fmt(resultadoEjercicio)}</span>
               </div>
               <div className="grid grid-cols-[1fr_auto] px-5 py-3 items-center bg-gray-50 font-semibold text-sm text-gray-900">

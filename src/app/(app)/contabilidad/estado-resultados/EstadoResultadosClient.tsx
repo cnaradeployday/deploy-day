@@ -2,9 +2,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, TrendingUp, Pencil, Check, X } from 'lucide-react'
+import { ArrowLeft, TrendingUp, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
+import { calcularSaldosResultadoAuto } from '@/lib/contabilidad/calcularSaldosAutomaticos'
 
-type Cuenta = { id: string; categoria: 'resultado'; subcategoria: string | null; nombre: string; orden: number }
+type Cuenta = { id: string; categoria: 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
 const fmt = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const mesActual = () => new Date().toISOString().slice(0, 7)
@@ -39,12 +40,20 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
   async function cargarSaldos() {
     setLoadingSaldos(true)
     const sb = createClient()
-    const ids = cuentas.map(c => c.id)
-    const { data: rows } = ids.length
-      ? await sb.from('plan_cuentas_saldos').select('cuenta_id, monto').in('cuenta_id', ids).eq('periodo', `${periodo}-01`)
-      : { data: [] as any[] }
+    const manualIds = cuentas.filter(c => c.origen === 'manual').map(c => c.id)
+    const cuentasAuto = cuentas.filter(c => c.origen === 'auto')
+
+    const [{ data: rows }, auto] = await Promise.all([
+      manualIds.length
+        ? sb.from('plan_cuentas_saldos').select('cuenta_id, monto').in('cuenta_id', manualIds).eq('periodo', `${periodo}-01`)
+        : Promise.resolve({ data: [] as any[] }),
+      calcularSaldosResultadoAuto(sb, periodo, cuentasAuto),
+    ])
     const map: Record<string, number> = {}
     for (const r of rows ?? []) map[r.cuenta_id] = Number(r.monto)
+    for (const c of cuentasAuto) {
+      if (auto[c.nombre] != null) map[c.id] = auto[c.nombre]
+    }
     setSaldos(map)
     setLoadingSaldos(false)
   }
@@ -90,6 +99,11 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
           className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
       </div>
 
+      <p className="flex items-start gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 mb-6">
+        <Info size={14} className="shrink-0 mt-0.5"/>
+        Las cuentas con <Sparkles size={11} className="inline text-[#1B9BF0] mx-0.5"/> se calculan automáticamente a partir de Facturas de clientes, Facturas de compra, Tarjeta de crédito, Conciliación bancaria, Préstamos y Fondo Común de Inversión, filtradas al mes seleccionado. El resto se carga a mano.
+      </p>
+
       {loadingSaldos ? (
         <p className="text-sm text-gray-400 text-center py-10">Cargando...</p>
       ) : (
@@ -104,8 +118,13 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
                     const monto = saldos[c.id]
                     return (
                       <div key={c.id} className="grid grid-cols-[1fr_auto] px-5 py-2.5 items-center border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                        <span className="text-sm text-gray-700">{c.nombre}</span>
-                        {editingId === c.id ? (
+                        <span className="text-sm text-gray-700 flex items-center gap-1.5">
+                          {c.nombre}
+                          {c.origen === 'auto' && <Sparkles size={11} className="text-[#1B9BF0]" aria-label="Calculado automáticamente"/>}
+                        </span>
+                        {c.origen === 'auto' ? (
+                          <span className="text-sm font-medium text-gray-900 text-right whitespace-nowrap">{monto != null ? fmt(monto) : '—'}</span>
+                        ) : editingId === c.id ? (
                           <div className="flex items-center gap-1.5 justify-end">
                             <input type="number" step="0.01" autoFocus value={editingValue} onChange={e => setEditingValue(e.target.value)}
                               onKeyDown={e => { if (e.key === 'Enter') handleSave(c.id); if (e.key === 'Escape') setEditingId(null) }}

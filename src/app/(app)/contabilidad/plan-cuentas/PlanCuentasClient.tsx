@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Pencil, Trash2, BookOpen, X } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, BookOpen, X, Sparkles } from 'lucide-react'
 
 type Cuenta = {
   id: string
@@ -11,6 +11,7 @@ type Cuenta = {
   subcategoria: string | null
   nombre: string
   orden: number
+  origen: 'manual' | 'auto'
 }
 
 const CATEGORIAS: { value: Cuenta['categoria']; label: string }[] = [
@@ -28,17 +29,17 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ categoria: 'activo' as Cuenta['categoria'], subcategoria: '', nombre: '', orden: '0' })
+  const [form, setForm] = useState({ categoria: 'activo' as Cuenta['categoria'], subcategoria: '', nombre: '', orden: '0', origen: 'manual' as Cuenta['origen'] })
 
   function openNew() {
     setEditingId(null)
-    setForm({ categoria: 'activo', subcategoria: '', nombre: '', orden: '0' })
+    setForm({ categoria: 'activo', subcategoria: '', nombre: '', orden: '0', origen: 'manual' })
     setShowForm(true)
   }
 
   function openEdit(c: Cuenta) {
     setEditingId(c.id)
-    setForm({ categoria: c.categoria, subcategoria: c.subcategoria ?? '', nombre: c.nombre, orden: String(c.orden) })
+    setForm({ categoria: c.categoria, subcategoria: c.subcategoria ?? '', nombre: c.nombre, orden: String(c.orden), origen: c.origen })
     setShowForm(true)
   }
 
@@ -51,6 +52,7 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
       subcategoria: form.subcategoria.trim() || null,
       nombre: form.nombre.trim(),
       orden: parseInt(form.orden) || 0,
+      origen: form.origen,
     }
     const { error } = editingId
       ? await sb.from('plan_cuentas').update(payload).eq('id', editingId)
@@ -116,6 +118,19 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
                 <input type="number" value={form.orden} onChange={e => setForm(f => ({ ...f, orden: e.target.value }))}
                   className={filterInputClass}/>
               </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Origen del saldo</label>
+                <select value={form.origen} onChange={e => setForm(f => ({ ...f, origen: e.target.value as Cuenta['origen'] }))}
+                  className={filterInputClass + ' bg-white'}>
+                  <option value="manual">Manual (se carga a mano por mes)</option>
+                  <option value="auto">Automático (se calcula desde otros módulos)</option>
+                </select>
+                {form.origen === 'auto' && (
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Solo funciona si el nombre de la cuenta coincide con la lógica de cálculo automático ya definida en el código. Si no coincide, se mostrará vacía en los reportes.
+                  </p>
+                )}
+              </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setShowForm(false); setEditingId(null) }}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
@@ -168,9 +183,16 @@ export default function PlanCuentasClient({ cuentas }: { cuentas: Cuenta[] }) {
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {g.cuentas.map((c, i) => (
                   <div key={c.id}
-                    className={'grid grid-cols-[1fr_1fr_auto] px-5 py-3 items-center hover:bg-gray-50 ' + (i !== g.cuentas.length - 1 ? 'border-b border-gray-50' : '')}>
+                    className={'grid grid-cols-[1fr_1fr_auto_auto] px-5 py-3 items-center hover:bg-gray-50 ' + (i !== g.cuentas.length - 1 ? 'border-b border-gray-50' : '')}>
                     <span className="text-sm text-gray-900">{c.nombre}</span>
                     <span className="text-xs text-gray-400">{c.subcategoria ?? '—'}</span>
+                    {c.origen === 'auto' ? (
+                      <span className="flex items-center gap-1 text-xs text-[#1B9BF0] bg-[#E8F4FE] px-2 py-0.5 rounded-full whitespace-nowrap">
+                        <Sparkles size={11}/> Automático
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400 whitespace-nowrap">Manual</span>
+                    )}
                     <div className="flex items-center gap-1 justify-end">
                       <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                         <Pencil size={13}/>
