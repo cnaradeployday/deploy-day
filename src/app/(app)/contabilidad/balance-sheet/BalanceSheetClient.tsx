@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Scale, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
 import { calcularSaldosBalanceAuto, calcularResultadoYTD } from '@/lib/contabilidad/calcularSaldosAutomaticos'
+import ExportExcelButton from '@/components/shared/ExportExcelButton'
 
 type Cuenta = { id: string; categoria: 'activo' | 'pasivo' | 'patrimonio_neto' | 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
@@ -107,6 +108,27 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
   const control = totalActivo + totalPasivo + totalPatrimonioNeto
   const balanceado = Math.abs(control) < 1
 
+  const exportData = useMemo(() => {
+    const rows: { Cuenta: string; Monto: number | string }[] = []
+    rows.push({ Cuenta: `Balance Sheet - ${periodo}`, Monto: '' })
+    rows.push({ Cuenta: '', Monto: '' })
+    rows.push({ Cuenta: 'ACTIVO', Monto: '' })
+    activo.forEach(c => rows.push({ Cuenta: c.nombre, Monto: saldos[c.id] ?? '' }))
+    rows.push({ Cuenta: 'Total Activo', Monto: totalActivo })
+    rows.push({ Cuenta: '', Monto: '' })
+    rows.push({ Cuenta: 'PASIVO', Monto: '' })
+    pasivo.forEach(c => rows.push({ Cuenta: c.nombre, Monto: saldos[c.id] ?? '' }))
+    rows.push({ Cuenta: 'Total Pasivo', Monto: totalPasivo })
+    rows.push({ Cuenta: '', Monto: '' })
+    rows.push({ Cuenta: 'PATRIMONIO NETO', Monto: '' })
+    patrimonio.forEach(c => rows.push({ Cuenta: c.nombre, Monto: saldos[c.id] ?? '' }))
+    rows.push({ Cuenta: 'Resultado del Ejercicio', Monto: resultadoEjercicio })
+    rows.push({ Cuenta: 'Total Patrimonio Neto', Monto: totalPatrimonioNeto })
+    rows.push({ Cuenta: '', Monto: '' })
+    rows.push({ Cuenta: 'Control (Activo + Pasivo + Patrimonio Neto)', Monto: control })
+    return rows
+  }, [activo, pasivo, patrimonio, saldos, resultadoEjercicio, totalActivo, totalPasivo, totalPatrimonioNeto, control, periodo])
+
   return (
     <div className="p-6 w-full max-w-3xl mx-auto">
       <Link href="/contabilidad/plan-cuentas" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
@@ -119,8 +141,11 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
           </h1>
           <p className="text-sm text-gray-400 mt-0.5">Estado de situación patrimonial</p>
         </div>
-        <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        <div className="flex items-center gap-2">
+          <ExportExcelButton data={exportData} filename={`balance_sheet_${periodo}`}/>
+          <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        </div>
       </div>
 
       <p className="flex items-start gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 mb-6">

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
 import { calcularSaldosResultadoAutoRango } from '@/lib/contabilidad/calcularSaldosAutomaticos'
+import ExportExcelButton from '@/components/shared/ExportExcelButton'
 
 type Cuenta = { id: string; categoria: 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
@@ -87,6 +88,23 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
   const resultado = cuentas.reduce((s, c) => s + (saldos[c.id] ?? 0), 0)
   const margen = ventas ? (resultado / ventas) * 100 : null
 
+  const rangoLabel = esUnMes ? periodoDesde : `${periodoDesde}_a_${periodoHasta}`
+  const exportData = useMemo(() => {
+    const rows: { Cuenta: string; Monto: number | string }[] = []
+    rows.push({ Cuenta: `P&L - ${esUnMes ? periodoDesde : `${periodoDesde} a ${periodoHasta}`}`, Monto: '' })
+    rows.push({ Cuenta: '', Monto: '' })
+    grupos.forEach(g => {
+      rows.push({ Cuenta: g.subcategoria.toUpperCase(), Monto: '' })
+      const subtotal = g.items.reduce((s, c) => s + (saldos[c.id] ?? 0), 0)
+      g.items.forEach(c => rows.push({ Cuenta: c.nombre, Monto: saldos[c.id] ?? '' }))
+      rows.push({ Cuenta: `Subtotal ${g.subcategoria}`, Monto: subtotal })
+      rows.push({ Cuenta: '', Monto: '' })
+    })
+    rows.push({ Cuenta: 'Resultado GAN - (PERD)', Monto: resultado })
+    if (margen != null) rows.push({ Cuenta: 'Margen %', Monto: Math.round(margen) })
+    return rows
+  }, [grupos, saldos, resultado, margen, periodoDesde, periodoHasta, esUnMes])
+
   return (
     <div className="p-6 w-full max-w-3xl mx-auto">
       <Link href="/contabilidad/plan-cuentas" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
@@ -100,6 +118,7 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
           <p className="text-sm text-gray-400 mt-0.5">Estado de resultados</p>
         </div>
         <div className="flex items-center gap-2">
+          <ExportExcelButton data={exportData} filename={`p_l_${rangoLabel}`}/>
           <input type="month" value={periodoDesde} onChange={e => setPeriodoDesde(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           <span className="text-sm text-gray-400">a</span>
