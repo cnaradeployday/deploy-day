@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree, Link2, Banknote, LineChart } from 'lucide-react'
+import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree, Link2, Banknote, LineChart, BookOpen, Scale } from 'lucide-react'
 
 export default async function ContabilidadPage() {
   const supabase = await createClient()
@@ -20,6 +20,9 @@ export default async function ContabilidadPage() {
     { href: '/contabilidad/tarjeta-credito', label: 'Tarjeta de crédito', desc: 'Resumen de consumos por tarjeta', icon: CreditCard, color: 'bg-orange-50' },
     { href: '/contabilidad/prestamos', label: 'Préstamos', desc: 'Vigencia, tasa y devengamiento mensual de intereses', icon: Banknote, color: 'bg-teal-50' },
     { href: '/contabilidad/inversiones', label: 'Inversiones', desc: 'Plazo fijo y Fondo Común de Inversión', icon: LineChart, color: 'bg-sky-50' },
+    { href: '/contabilidad/plan-cuentas', label: 'Plan de cuentas', desc: 'Cuentas contables para Balance Sheet y P&L', icon: BookOpen, color: 'bg-rose-50' },
+    { href: '/contabilidad/balance-sheet', label: 'Balance Sheet', desc: 'Estado de situación patrimonial', icon: Scale, color: 'bg-lime-50' },
+    { href: '/contabilidad/estado-resultados', label: 'P&L', desc: 'Estado de resultados del mes', icon: TrendingUp, color: 'bg-fuchsia-50' },
   ]
 
   return (
