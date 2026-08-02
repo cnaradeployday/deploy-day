@@ -31,7 +31,7 @@ const estadoColors: Record<string, string> = {
   pagado:    'bg-green-50 text-green-600',
 }
 
-type SortKey = 'fecha_factura' | 'numero_factura' | 'razon_social_proveedor' | 'monto_total'
+type SortKey = 'fecha_factura' | 'numero_factura' | 'razon_social_proveedor' | 'cuit' | 'tipo_gasto' | 'monto_total' | 'estado'
 
 const ESTADOS: { value: string; label: string }[] = [
   { value: 'pendiente', label: 'Pendiente de pago' },
@@ -94,7 +94,8 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
   }, [facturas, fFechaDesde, fFechaHasta, fNumero, fProveedor, fCuit, fTipo, fEstado, fMontoMin, fMontoMax])
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => {
-    const va = a[sortKey], vb = b[sortKey]
+    const va = sortKey === 'tipo_gasto' ? (a.tipo_gasto?.numero ?? '') : a[sortKey as keyof FacturaCompra]
+    const vb = sortKey === 'tipo_gasto' ? (b.tipo_gasto?.numero ?? '') : b[sortKey as keyof FacturaCompra]
     const cmp = typeof va === 'number' ? va - (vb as number) : String(va ?? '').localeCompare(String(vb ?? ''))
     return sortDir === 'asc' ? cmp : -cmp
   }), [filtered, sortKey, sortDir])
@@ -241,19 +242,16 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
                   { key: 'fecha_factura', label: 'Fecha' },
                   { key: 'numero_factura', label: 'Número' },
                   { key: 'razon_social_proveedor', label: 'Proveedor' },
+                  { key: 'cuit', label: 'CUIT' },
+                  { key: 'tipo_gasto', label: 'Tipo de gasto' },
+                  { key: 'monto_total', label: 'Monto total' },
+                  { key: 'estado', label: 'Estado' },
                 ] as { key: SortKey; label: string }[]).map(({ key, label }) => (
                   <th key={key} onClick={() => toggleSort(key)}
                     className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none">
                     <div className="flex items-center gap-1">{label}<SortIcon k={key}/></div>
                   </th>
                 ))}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">CUIT</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Tipo de gasto</th>
-                <th onClick={() => toggleSort('monto_total')}
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none">
-                  <div className="flex items-center gap-1">Monto total<SortIcon k="monto_total"/></div>
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Estado</th>
                 <th className="px-4 py-3"/>
               </tr>
             </thead>

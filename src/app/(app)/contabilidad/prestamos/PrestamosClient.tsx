@@ -1,9 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Pencil, Trash2, Banknote, X } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Banknote, X, ChevronUp, ChevronDown } from 'lucide-react'
 
 type Prestamo = {
   id: string
@@ -16,6 +16,7 @@ type Prestamo = {
   tasa_interes_anual: number
   notas: string | null
 }
+type SortKey = 'acreedor' | 'fecha_inicio' | 'plazo_meses' | 'monto' | 'tasa_interes_anual' | 'interesAnual' | 'mensual' | 'mesesDevengados'
 
 const fmt = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fechaAr = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('es-AR')
@@ -82,6 +83,26 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
     if (error) { alert('Error: ' + error.message); return }
     router.refresh()
   }
+
+  const [sortKey, setSortKey] = useState<SortKey>('fecha_inicio')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <ChevronUp size={11} className="opacity-20"/>
+    return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
+  }
+  const enriched = useMemo(() => prestamos.map(p => {
+    const interesAnual = p.monto * p.tasa_interes_anual / 100
+    return { ...p, interesAnual, mensual: interesAnual / 12, mesesDevengados: mesesDevengados[p.id] ?? 0 }
+  }), [prestamos, mesesDevengados])
+  const sorted = useMemo(() => [...enriched].sort((a, b) => {
+    const va = a[sortKey] ?? '', vb = b[sortKey] ?? ''
+    const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+    return sortDir === 'asc' ? cmp : -cmp
+  }), [enriched, sortKey, sortDir])
 
   return (
     <div className="p-6 w-full">
@@ -158,48 +179,46 @@ export default function PrestamosClient({ prestamos, mesesDevengados }: { presta
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Acreedor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Vigencia</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Plazo</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Monto</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Tasa anual</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Interés anual</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Mensual</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Meses devengados</th>
+                {([
+                  ['acreedor', 'Acreedor', 'left'], ['fecha_inicio', 'Vigencia', 'left'], ['plazo_meses', 'Plazo', 'right'],
+                  ['monto', 'Monto', 'right'], ['tasa_interes_anual', 'Tasa anual', 'right'], ['interesAnual', 'Interés anual', 'right'],
+                  ['mensual', 'Mensual', 'right'], ['mesesDevengados', 'Meses devengados', 'right'],
+                ] as [SortKey, string, 'left' | 'right'][]).map(([key, label, align]) => (
+                  <th key={key} onClick={() => toggleSort(key)}
+                    className={`px-4 py-3 text-${align} text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none`}>
+                    <div className={'flex items-center gap-1' + (align === 'right' ? ' justify-end' : '')}>{label}<SortIcon k={key}/></div>
+                  </th>
+                ))}
                 <th className="px-4 py-3"/>
               </tr>
             </thead>
             <tbody>
-              {prestamos.map(p => {
-                const interesAnual = p.monto * p.tasa_interes_anual / 100
-                const mensual = interesAnual / 12
-                return (
-                  <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-sm">
-                      <Link href={`/contabilidad/prestamos/${p.id}`} className="text-gray-900 font-medium hover:text-[#1B9BF0]">
-                        {p.acreedor || 'Sin nombre'}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fechaAr(p.fecha_inicio)} – {fechaAr(p.fecha_fin)}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 text-right whitespace-nowrap">{p.plazo_meses} meses</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{p.moneda} {fmt(p.monto)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{p.tasa_interes_anual}%</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(interesAnual)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(mensual)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{mesesDevengados[p.id] ?? 0}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <button onClick={() => openEdit(p)}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
-                        <Pencil size={13}/>
-                      </button>
-                      <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
-                        <Trash2 size={13}/>
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
+              {sorted.map(p => (
+                <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-sm">
+                    <Link href={`/contabilidad/prestamos/${p.id}`} className="text-gray-900 font-medium hover:text-[#1B9BF0]">
+                      {p.acreedor || 'Sin nombre'}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fechaAr(p.fecha_inicio)} – {fechaAr(p.fecha_fin)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 text-right whitespace-nowrap">{p.plazo_meses} meses</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{p.moneda} {fmt(p.monto)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{p.tasa_interes_anual}%</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(p.interesAnual)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(p.mensual)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{p.mesesDevengados}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <button onClick={() => openEdit(p)}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                      <Pencil size={13}/>
+                    </button>
+                    <button onClick={() => handleDelete(p.id)} disabled={deletingId === p.id}
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
+                      <Trash2 size={13}/>
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

@@ -1,10 +1,11 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Pencil, Trash2, LineChart, X, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, LineChart, X, Check, Sparkles, Paperclip, ChevronUp, ChevronDown } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 type Movimiento = {
   id: string
@@ -15,6 +16,10 @@ type Movimiento = {
   monto: number
 }
 type Cierre = { id: string; mes: string; tc_fondo: number }
+type ImportRow = {
+  fecha: string; operacion: 'SUSCRIPCION' | 'RESCATE'; cantidad_cuotas: number; tc_fondo: number; monto: number; selected: boolean
+}
+type SortKey = 'fecha' | 'operacion' | 'cantidad_cuotas' | 'tc_fondo' | 'monto'
 
 const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const fmtMoney = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
@@ -25,6 +30,7 @@ const mesCorto = (s: string) => {
   return `${MESES_ES[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`
 }
 const filterInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
+const cellInputClass = 'w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
 
 export default function FondoComunClient({ movimientos, cierres }: { movimientos: Movimiento[]; cierres: Cierre[] }) {
   const router = useRouter()
@@ -101,6 +107,71 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
     router.refresh()
   }
 
+  // Importación masiva con IA
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importRows, setImportRows] = useState<ImportRow[] | null>(null)
+  const [savingImport, setSavingImport] = useState(false)
+
+  function closeImport() {
+    setShowImport(false); setImportFile(null); setImportRows(null); setImportError(null)
+  }
+
+  async function handleAnalyzeImport() {
+    if (!importFile) return
+    setImporting(true)
+    setImportError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      const res = await fetch('/api/ai/extraer-movimientos-fci', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
+      const rows: ImportRow[] = (data.movimientos ?? []).map((m: any) => ({
+        fecha: m.fecha || new Date().toISOString().split('T')[0],
+        operacion: m.operacion === 'RESCATE' ? 'RESCATE' : 'SUSCRIPCION',
+        cantidad_cuotas: m.cantidad_cuotas || 0,
+        tc_fondo: m.tc_fondo || 0,
+        monto: m.monto || 0,
+        selected: true,
+      }))
+      setImportRows(rows)
+    } catch (e: any) {
+      setImportError(e.message ?? 'Error al procesar el documento')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function updateImportRow(idx: number, patch: Partial<ImportRow>) {
+    setImportRows(rows => rows ? rows.map((r, i) => i === idx ? { ...r, ...patch } : r) : rows)
+  }
+
+  async function handleConfirmImport() {
+    if (!importRows) return
+    const rows = importRows.filter(r => r.selected)
+    if (!rows.length) return
+    setSavingImport(true)
+    const sb = createClient()
+    const { data: { user } } = await sb.auth.getUser()
+    const { error } = await sb.from('inversiones_fci_movimientos').insert(rows.map(r => ({
+      fecha: r.fecha,
+      operacion: r.operacion,
+      cantidad_cuotas: r.cantidad_cuotas,
+      tc_fondo: r.tc_fondo,
+      monto: r.monto,
+      created_by: user?.id,
+    })))
+    if (error) { setSavingImport(false); alert('Error: ' + error.message); return }
+    if (importFile) await registrarDocumentoIA(sb, { seccion: 'fondo_comun_inversion', file: importFile, cantidadRegistros: rows.length, userId: user?.id })
+    setSavingImport(false)
+    closeImport()
+    router.refresh()
+  }
+
   // Cierres mensuales
   const [cierreForm, setCierreForm] = useState({ mes: '', tc_fondo: '' })
   const [cierreLoading, setCierreLoading] = useState(false)
@@ -153,6 +224,22 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
   const cuotasEnCartera = cuotasSuscriptas - cuotasRescatadas
   const ultimoTc = movimientos.length ? Number(movimientos[movimientos.length - 1].tc_fondo) : 0
   const valorEstimado = cuotasEnCartera * ultimoTc
+
+  const [sortKey, setSortKey] = useState<SortKey>('fecha')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <ChevronUp size={11} className="opacity-20"/>
+    return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
+  }
+  const sortedMovimientos = useMemo(() => [...movimientos].sort((a, b) => {
+    const va = a[sortKey], vb = b[sortKey]
+    const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
+    return sortDir === 'asc' ? cmp : -cmp
+  }), [movimientos, sortKey, sortDir])
 
   const exportData = useMemo(() => movimientos.map(m => ({
     Fecha: fechaAr(m.fecha),
@@ -217,6 +304,83 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
         </div>
       )}
 
+      {showImport && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-semibold text-gray-900 flex items-center gap-1.5"><Sparkles size={15} className="text-[#1B9BF0]"/> Importar movimientos con IA</p>
+              <button onClick={closeImport} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
+            </div>
+
+            {!importRows ? (
+              <>
+                <p className="text-sm text-gray-500 mb-3">Subí el PDF con los movimientos del fondo y extraemos las suscripciones y rescates automáticamente.</p>
+                <div className="flex gap-2 mb-2">
+                  <button type="button" onClick={() => importFileRef.current?.click()}
+                    className="flex-1 min-w-0 flex items-center gap-2 px-4 py-2.5 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:bg-gray-50">
+                    <Paperclip size={14} className="shrink-0"/> <span className="truncate">{importFile ? importFile.name : 'Seleccionar PDF...'}</span>
+                  </button>
+                  <input ref={importFileRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportError(null) }}/>
+                  <button type="button" onClick={handleAnalyzeImport} disabled={!importFile || importing}
+                    className="shrink-0 flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+                    <Sparkles size={14}/> {importing ? 'Analizando...' : 'Analizar'}
+                  </button>
+                </div>
+                {importError && <p className="text-xs text-red-500 mt-2">{importError}</p>}
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mb-3">
+                  Encontramos {importRows.length} movimiento{importRows.length !== 1 ? 's' : ''}. Revisá y desmarcá lo que no quieras cargar.
+                </p>
+                <div className="border border-gray-100 rounded-xl overflow-x-auto mb-4">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-50 bg-gray-50">
+                        <th className="px-2 py-2"/>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-400">Fecha</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-400">Operación</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-400">Cantidad de cuotas</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-400">TC FONDO</th>
+                        <th className="px-2 py-2 text-right text-xs font-medium text-gray-400">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importRows.map((r, i) => (
+                        <tr key={i} className={'border-b border-gray-50 last:border-0 ' + (r.selected ? '' : 'opacity-40')}>
+                          <td className="px-2 py-1.5">
+                            <input type="checkbox" checked={r.selected} onChange={e => updateImportRow(i, { selected: e.target.checked })}
+                              className="rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
+                          </td>
+                          <td className="px-2 py-1.5"><input type="date" value={r.fecha} onChange={e => updateImportRow(i, { fecha: e.target.value })} className={cellInputClass}/></td>
+                          <td className="px-2 py-1.5 min-w-[130px]">
+                            <select value={r.operacion} onChange={e => updateImportRow(i, { operacion: e.target.value as 'SUSCRIPCION' | 'RESCATE' })} className={cellInputClass + ' bg-white'}>
+                              <option value="SUSCRIPCION">Suscripción</option>
+                              <option value="RESCATE">Rescate</option>
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5 w-28"><input type="number" step="0.01" value={r.cantidad_cuotas} onChange={e => updateImportRow(i, { cantidad_cuotas: parseFloat(e.target.value) || 0 })} className={cellInputClass + ' text-right'}/></td>
+                          <td className="px-2 py-1.5 w-24"><input type="number" step="0.01" value={r.tc_fondo} onChange={e => updateImportRow(i, { tc_fondo: parseFloat(e.target.value) || 0 })} className={cellInputClass + ' text-right'}/></td>
+                          <td className="px-2 py-1.5 w-24"><input type="number" step="0.01" value={r.monto} onChange={e => updateImportRow(i, { monto: parseFloat(e.target.value) || 0 })} className={cellInputClass + ' text-right'}/></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex gap-3">
+                  <button type="button" onClick={closeImport} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">Cancelar</button>
+                  <button type="button" onClick={handleConfirmImport} disabled={savingImport || !importRows.some(r => r.selected)}
+                    className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
+                    {savingImport ? 'Importando...' : `Importar ${importRows.filter(r => r.selected).length} movimiento${importRows.filter(r => r.selected).length !== 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <Link href="/contabilidad/inversiones" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-6">
         <ArrowLeft size={15}/> Inversiones
       </Link>
@@ -229,6 +393,10 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="fondo_comun_inversion"/>
+          <button onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 border border-[#1B9BF0] text-[#1B9BF0] hover:bg-[#E8F4FE] px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+            <Sparkles size={15}/> Importar con IA
+          </button>
           <button onClick={openNew}
             className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Agregar movimiento
@@ -274,16 +442,20 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Fecha</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Operación</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Cantidad de cuotas</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">TC FONDO</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Monto</th>
+                    {([
+                      ['fecha', 'Fecha', 'left'], ['operacion', 'Operación', 'left'], ['cantidad_cuotas', 'Cantidad de cuotas', 'right'],
+                      ['tc_fondo', 'TC FONDO', 'right'], ['monto', 'Monto', 'right'],
+                    ] as [SortKey, string, 'left' | 'right'][]).map(([key, label, align]) => (
+                      <th key={key} onClick={() => toggleSort(key)}
+                        className={`px-4 py-3 text-${align} text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none`}>
+                        <div className={'flex items-center gap-1' + (align === 'right' ? ' justify-end' : '')}>{label}<SortIcon k={key}/></div>
+                      </th>
+                    ))}
                     <th className="px-4 py-3"/>
                   </tr>
                 </thead>
                 <tbody>
-                  {movimientos.map(m => (
+                  {sortedMovimientos.map(m => (
                     <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fechaAr(m.fecha)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">

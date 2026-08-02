@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, Paperclip, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Currency, CURRENCIES } from '@/lib/utils/currency'
+import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 const SOCIEDADES = ['SAS', 'LLC', 'MONO']
 const empresaCobraToSociedad = (v: string | null | undefined) => v === 'SAS' ? 'SAS' : v === 'LLC' ? 'LLC' : 'MONO'
@@ -42,6 +43,7 @@ export default function NuevaFacturaClientePage() {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const [file, setFile] = useState<File | null>(null)
+  const [usedAi, setUsedAi] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [extracting, setExtracting] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -117,6 +119,7 @@ export default function NuevaFacturaClientePage() {
           iva_pct: ivaPct,
         }
       })
+      setUsedAi(true)
     } catch (e: any) {
       setAiError(e.message ?? 'Error al procesar el documento')
     } finally {
@@ -137,7 +140,7 @@ export default function NuevaFacturaClientePage() {
     setLoading(true)
     const sb = createClient()
     const { data: { user } } = await sb.auth.getUser()
-    const { error } = await sb.from('facturas_clientes').insert({
+    const { data: inserted, error } = await sb.from('facturas_clientes').insert({
       client_id: form.client_id,
       project_id: form.project_id || null,
       numero: form.numero,
@@ -153,9 +156,10 @@ export default function NuevaFacturaClientePage() {
       iva_pct: hasNeto && form.iva_pct.trim() ? parseFloat(form.iva_pct) : null,
       importe_neto: hasNeto ? netoNum : null,
       importe_iva: hasNeto ? importeIva : null,
-    })
-    if (!error) router.push('/facturas-clientes')
-    else { alert('Error: ' + error.message); setLoading(false) }
+    }).select('id').single()
+    if (error) { alert('Error: ' + error.message); setLoading(false); return }
+    if (usedAi && file) await registrarDocumentoIA(sb, { seccion: 'facturas_clientes', file, referenciaId: inserted?.id, userId: user?.id })
+    router.push('/facturas-clientes')
   }
 
   return (

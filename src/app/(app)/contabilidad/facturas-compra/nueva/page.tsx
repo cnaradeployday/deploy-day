@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, Paperclip, Sparkles } from 'lucide-react'
+import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 function normalizar(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -16,6 +17,7 @@ export default function NuevaFacturaCompraPage() {
   const [aiError, setAiError] = useState<string | null>(null)
   const [tipos, setTipos] = useState<any[]>([])
   const [file, setFile] = useState<File | null>(null)
+  const [usedAi, setUsedAi] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     cuit: '', numero_factura: '',
@@ -56,6 +58,7 @@ export default function NuevaFacturaCompraPage() {
         otros_impuestos: data.otros_impuestos ? String(data.otros_impuestos) : f.otros_impuestos,
         tipo_gasto_id: tipoMatch ? tipoMatch.id : f.tipo_gasto_id,
       }))
+      setUsedAi(true)
     } catch (e: any) {
       setAiError(e.message ?? 'Error al procesar el documento')
     } finally {
@@ -82,7 +85,7 @@ export default function NuevaFacturaCompraPage() {
       archivo_nombre = file.name
     }
 
-    const { error } = await sb.from('facturas_compra').insert({
+    const { data: inserted, error } = await sb.from('facturas_compra').insert({
       cuit: form.cuit,
       numero_factura: form.numero_factura,
       fecha_factura: form.fecha_factura,
@@ -97,9 +100,10 @@ export default function NuevaFacturaCompraPage() {
       notas: form.notas || null,
       archivo_path, archivo_nombre,
       created_by: user?.id,
-    })
-    if (!error) router.push('/contabilidad/facturas-compra')
-    else { alert('Error: ' + error.message); setLoading(false) }
+    }).select('id').single()
+    if (error) { alert('Error: ' + error.message); setLoading(false); return }
+    if (usedAi && file) await registrarDocumentoIA(sb, { seccion: 'facturas_compra', file, referenciaId: inserted?.id, userId: user?.id })
+    router.push('/contabilidad/facturas-compra')
   }
 
   return (

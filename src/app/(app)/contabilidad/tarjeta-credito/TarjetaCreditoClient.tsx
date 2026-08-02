@@ -3,9 +3,10 @@ import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Pencil, Trash2, CreditCard, X, Sparkles, Paperclip } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, CreditCard, X, Sparkles, Paperclip, ChevronUp, ChevronDown } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
+import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 type Tipo = { id: string; numero: string; nombre: string }
 type Movimiento = {
@@ -20,6 +21,7 @@ type Movimiento = {
   solapa: string | null
   tipo_gasto: { numero: string; nombre: string } | null
 }
+type SortKey = 'fecha' | 'proveedor' | 'cuota' | 'clasificacion' | 'pesos' | 'dolares' | 'comprobante' | 'solapa'
 type ImportRow = {
   fecha: string; proveedor: string; cuota: string; pesos: number; dolares: number
   comprobante: string; tipo_gasto_id: string; solapa: string; selected: boolean
@@ -132,8 +134,9 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
       solapa: r.solapa || null,
       created_by: user?.id,
     })))
+    if (error) { setSavingImport(false); alert('Error: ' + error.message); return }
+    if (importFile) await registrarDocumentoIA(sb, { seccion: 'tarjeta_credito', file: importFile, cantidadRegistros: rows.length, userId: user?.id })
     setSavingImport(false)
-    if (error) { alert('Error: ' + error.message); return }
     closeImport()
     router.refresh()
   }
@@ -227,6 +230,25 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
       return true
     })
   }, [movimientos, fFechaDesde, fFechaHasta, fProveedor, fCuota, fClasificaciones, fPesosMin, fPesosMax, fDolaresMin, fDolaresMax, fComprobantes, fSolapas])
+
+  const [sortKey, setSortKey] = useState<SortKey>('fecha')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <ChevronUp size={11} className="opacity-20"/>
+    return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
+  }
+  const NUMERIC_KEYS: SortKey[] = ['pesos', 'dolares']
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    const isNum = NUMERIC_KEYS.includes(sortKey)
+    const va = a[sortKey] ?? (isNum ? 0 : '')
+    const vb = b[sortKey] ?? (isNum ? 0 : '')
+    const cmp = isNum ? (va as number) - (vb as number) : String(va).localeCompare(String(vb))
+    return sortDir === 'asc' ? cmp : -cmp
+  }), [filtered, sortKey, sortDir])
 
   const totalPesos = filtered.reduce((s, m) => s + (Number(m.pesos) || 0), 0)
   const totalDolares = filtered.reduce((s, m) => s + (Number(m.dolares) || 0), 0)
@@ -481,19 +503,21 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Fecha</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Proveedor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Cuota</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Clasificación</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Pesos</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Dólares</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Comprobante</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Solapa</th>
+                {([
+                  ['fecha', 'Fecha', 'left'], ['proveedor', 'Proveedor', 'left'], ['cuota', 'Cuota', 'left'],
+                  ['clasificacion', 'Clasificación', 'left'], ['pesos', 'Pesos', 'right'], ['dolares', 'Dólares', 'right'],
+                  ['comprobante', 'Comprobante', 'left'], ['solapa', 'Solapa', 'left'],
+                ] as [SortKey, string, 'left' | 'right'][]).map(([key, label, align]) => (
+                  <th key={key} onClick={() => toggleSort(key)}
+                    className={`px-4 py-3 text-${align} text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none`}>
+                    <div className={'flex items-center gap-1' + (align === 'right' ? ' justify-end' : '')}>{label}<SortIcon k={key}/></div>
+                  </th>
+                ))}
                 <th className="px-4 py-3"/>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(m => (
+              {sorted.map(m => (
                 <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{m.proveedor}</td>
