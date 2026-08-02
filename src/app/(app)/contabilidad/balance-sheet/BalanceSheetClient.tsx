@@ -166,9 +166,16 @@ export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
             </div>
           </div>
 
-          <div className={'rounded-2xl border p-4 flex items-center justify-between ' + (balanceado ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100')}>
-            <span className={'text-sm font-medium ' + (balanceado ? 'text-green-700' : 'text-red-600')}>Control (Activo + Pasivo + Patrimonio Neto)</span>
-            <span className={'text-sm font-semibold ' + (balanceado ? 'text-green-700' : 'text-red-600')}>{fmt(control)}</span>
+          <div className={'rounded-2xl border p-4 ' + (balanceado ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100')}>
+            <div className="flex items-center justify-between">
+              <span className={'text-sm font-medium ' + (balanceado ? 'text-green-700' : 'text-red-600')}>Control (Activo + Pasivo + Patrimonio Neto)</span>
+              <span className={'text-sm font-semibold ' + (balanceado ? 'text-green-700' : 'text-red-600')}>{fmt(control)}</span>
+            </div>
+            {!balanceado && (
+              <p className="text-xs text-red-500/80 mt-2">
+                Si Activo, Pasivo y Resultado del Ejercicio ya están cargados/calculados y esto no cierra, probablemente falte cargar Capital Social (y cualquier resultado acumulado de ejercicios anteriores a este año) en Patrimonio Neto — hoy son de carga manual.
+              </p>
+            )}
           </div>
         </div>
       )}

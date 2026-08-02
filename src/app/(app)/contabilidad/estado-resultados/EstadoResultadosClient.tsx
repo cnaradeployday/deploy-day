@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
-import { calcularSaldosResultadoAuto } from '@/lib/contabilidad/calcularSaldosAutomaticos'
+import { calcularSaldosResultadoAutoRango } from '@/lib/contabilidad/calcularSaldosAutomaticos'
 
 type Cuenta = { id: string; categoria: 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
@@ -12,7 +12,9 @@ const mesActual = () => new Date().toISOString().slice(0, 7)
 const SUBCATEGORIA_ORDEN = ['Ventas', 'Gastos operativos', 'Otros resultados']
 
 export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] }) {
-  const [periodo, setPeriodo] = useState(mesActual())
+  const [periodoDesde, setPeriodoDesde] = useState(mesActual())
+  const [periodoHasta, setPeriodoHasta] = useState(mesActual())
+  const esUnMes = periodoDesde === periodoHasta
   const [saldos, setSaldos] = useState<Record<string, number>>({})
   const [loadingSaldos, setLoadingSaldos] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -38,6 +40,7 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
   }, [cuentas])
 
   async function cargarSaldos() {
+    if (periodoHasta < periodoDesde) return
     setLoadingSaldos(true)
     const sb = createClient()
     const manualIds = cuentas.filter(c => c.origen === 'manual').map(c => c.id)
@@ -45,12 +48,13 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
 
     const [{ data: rows }, auto] = await Promise.all([
       manualIds.length
-        ? sb.from('plan_cuentas_saldos').select('cuenta_id, monto').in('cuenta_id', manualIds).eq('periodo', `${periodo}-01`)
+        ? sb.from('plan_cuentas_saldos').select('cuenta_id, monto').in('cuenta_id', manualIds)
+            .gte('periodo', `${periodoDesde}-01`).lte('periodo', `${periodoHasta}-01`)
         : Promise.resolve({ data: [] as any[] }),
-      calcularSaldosResultadoAuto(sb, periodo, cuentasAuto),
+      calcularSaldosResultadoAutoRango(sb, periodoDesde, periodoHasta, cuentasAuto),
     ])
     const map: Record<string, number> = {}
-    for (const r of rows ?? []) map[r.cuenta_id] = Number(r.monto)
+    for (const r of rows ?? []) map[r.cuenta_id] = (map[r.cuenta_id] ?? 0) + Number(r.monto)
     for (const c of cuentasAuto) {
       if (auto[c.nombre] != null) map[c.id] = auto[c.nombre]
     }
@@ -58,7 +62,7 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
     setLoadingSaldos(false)
   }
 
-  useEffect(() => { cargarSaldos() }, [periodo, cuentas])
+  useEffect(() => { cargarSaldos() }, [periodoDesde, periodoHasta, cuentas])
 
   function openEdit(cuentaId: string) {
     setEditingId(cuentaId)
@@ -72,7 +76,7 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
     const sb = createClient()
     const { data: { user } } = await sb.auth.getUser()
     const { error } = await sb.from('plan_cuentas_saldos')
-      .upsert({ cuenta_id: cuentaId, periodo: `${periodo}-01`, monto, created_by: user?.id }, { onConflict: 'cuenta_id,periodo' })
+      .upsert({ cuenta_id: cuentaId, periodo: `${periodoDesde}-01`, monto, created_by: user?.id }, { onConflict: 'cuenta_id,periodo' })
     setSaving(false)
     if (error) { alert('Error: ' + error.message); return }
     setEditingId(null)
@@ -93,16 +97,25 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
           <h1 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <TrendingUp size={18} className="text-[#1B9BF0]"/> P&amp;L
           </h1>
-          <p className="text-sm text-gray-400 mt-0.5">Estado de resultados del mes</p>
+          <p className="text-sm text-gray-400 mt-0.5">Estado de resultados</p>
         </div>
-        <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        <div className="flex items-center gap-2">
+          <input type="month" value={periodoDesde} onChange={e => setPeriodoDesde(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          <span className="text-sm text-gray-400">a</span>
+          <input type="month" value={periodoHasta} onChange={e => setPeriodoHasta(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+        </div>
       </div>
 
-      <p className="flex items-start gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 mb-6">
-        <Info size={14} className="shrink-0 mt-0.5"/>
-        Las cuentas con <Sparkles size={11} className="inline text-[#1B9BF0] mx-0.5"/> se calculan automáticamente a partir de Facturas de clientes, Facturas de compra, Tarjeta de crédito, Conciliación bancaria, Préstamos y Fondo Común de Inversión, filtradas al mes seleccionado. El resto se carga a mano.
-      </p>
+      {periodoHasta < periodoDesde ? (
+        <p className="text-sm text-red-500 bg-red-50 rounded-xl px-4 py-3 mb-6">El mes "hasta" no puede ser anterior al mes "desde".</p>
+      ) : (
+        <p className="flex items-start gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3 mb-6">
+          <Info size={14} className="shrink-0 mt-0.5"/>
+          Las cuentas con <Sparkles size={11} className="inline text-[#1B9BF0] mx-0.5"/> se calculan automáticamente a partir de Facturas de clientes, Facturas de compra, Tarjeta de crédito, Conciliación bancaria, Préstamos y Fondo Común de Inversión, sumadas en el rango seleccionado. El resto se carga a mano{!esUnMes && ' y solo se puede editar seleccionando un único mes'}.
+        </p>
+      )}
 
       {loadingSaldos ? (
         <p className="text-sm text-gray-400 text-center py-10">Cargando...</p>
@@ -116,15 +129,14 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                   {g.items.map(c => {
                     const monto = saldos[c.id]
+                    const editable = c.origen === 'manual' && esUnMes
                     return (
                       <div key={c.id} className="grid grid-cols-[1fr_auto] px-5 py-2.5 items-center border-b border-gray-50 last:border-0 hover:bg-gray-50">
                         <span className="text-sm text-gray-700 flex items-center gap-1.5">
                           {c.nombre}
                           {c.origen === 'auto' && <Sparkles size={11} className="text-[#1B9BF0]" aria-label="Calculado automáticamente"/>}
                         </span>
-                        {c.origen === 'auto' ? (
-                          <span className="text-sm font-medium text-gray-900 text-right whitespace-nowrap">{monto != null ? fmt(monto) : '—'}</span>
-                        ) : editingId === c.id ? (
+                        {editingId === c.id ? (
                           <div className="flex items-center gap-1.5 justify-end">
                             <input type="number" step="0.01" autoFocus value={editingValue} onChange={e => setEditingValue(e.target.value)}
                               onKeyDown={e => { if (e.key === 'Enter') handleSave(c.id); if (e.key === 'Escape') setEditingId(null) }}
@@ -135,9 +147,11 @@ export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] 
                         ) : (
                           <div className="flex items-center gap-2 justify-end">
                             <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{monto != null ? fmt(monto) : '—'}</span>
-                            <button onClick={() => openEdit(c.id)} className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
-                              <Pencil size={12}/>
-                            </button>
+                            {editable && (
+                              <button onClick={() => openEdit(c.id)} className="p-1 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
+                                <Pencil size={12}/>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

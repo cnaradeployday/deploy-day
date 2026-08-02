@@ -32,6 +32,18 @@ async function cuotasFciAlCierre(sb: SupabaseClient, fecha: string): Promise<num
   return (data ?? []).reduce((s: number, m: any) => s + (m.operacion === 'SUSCRIPCION' ? Number(m.cantidad_cuotas) : -Number(m.cantidad_cuotas)), 0)
 }
 
+// TC del fondo a una fecha: prioriza la "TC de cierre de mes" cargada a mano en Inversiones > Fondo
+// Común; si no hay ninguna cargada (como suele pasar), cae al tc_fondo del último movimiento
+// registrado en el propio módulo, que es lo mismo que usa esa pantalla para "Valor estimado cartera".
+async function tcFondoAlCierre(sb: SupabaseClient, fecha: string): Promise<number> {
+  const { data: cierres } = await sb.from('inversiones_fci_cierres_mensuales').select('tc_fondo')
+    .lte('mes', fecha).order('mes', { ascending: false }).limit(1)
+  if (cierres?.[0]) return Number(cierres[0].tc_fondo)
+  const { data: movs } = await sb.from('inversiones_fci_movimientos').select('tc_fondo')
+    .lte('fecha', fecha).order('fecha', { ascending: false }).limit(1)
+  return movs?.[0] ? Number(movs[0].tc_fondo) : 0
+}
+
 // Saldos "as of" fin de mes para las cuentas automáticas de Activo/Pasivo (Balance Sheet).
 export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: string): Promise<Record<string, number>> {
   const fin = finDeMes(periodo)
@@ -45,15 +57,12 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
   }
 
   {
-    const cuotas = await cuotasFciAlCierre(sb, fin)
-    const { data: cierres } = await sb.from('inversiones_fci_cierres_mensuales').select('tc_fondo')
-      .lte('mes', inicioDeMes(periodo)).order('mes', { ascending: false }).limit(1)
-    const tcFondo = cierres?.[0] ? Number(cierres[0].tc_fondo) : 0
+    const [cuotas, tcFondo] = await Promise.all([cuotasFciAlCierre(sb, fin), tcFondoAlCierre(sb, fin)])
     out['Fondo Comun de Inversion (FIMA)'] = cuotas * tcFondo
   }
 
   {
-    const { data } = await sb.from('facturas_clientes').select('importe, currency, fecha_emision, fecha_cobro').lte('fecha_emision', fin)
+    const { data } = await sb.from('facturas_clientes').select('importe, currency, fecha_emision, fecha_cobro').eq('sociedad', 'SAS').lte('fecha_emision', fin)
     const pendientes = (data ?? []).filter((f: any) => !f.fecha_cobro || f.fecha_cobro > fin)
     out['Clientes a cobrar'] = pendientes.reduce((s: number, f: any) => s + (f.currency === 'USD' ? Number(f.importe) * tc : Number(f.importe)), 0)
   }
@@ -85,7 +94,7 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
   }
 
   {
-    const { data } = await sb.from('facturas_clientes').select('importe_iva').lte('fecha_emision', fin)
+    const { data } = await sb.from('facturas_clientes').select('importe_iva').eq('sociedad', 'SAS').lte('fecha_emision', fin)
     out['IVA DEBITO FISCAL'] = -1 * (data ?? []).reduce((s: number, f: any) => s + Number(f.importe_iva ?? 0), 0)
   }
 
@@ -108,7 +117,7 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   const out: Record<string, number> = {}
 
   {
-    const { data } = await sb.from('facturas_clientes').select('importe, importe_neto, currency').eq('mes_servicio', periodo)
+    const { data } = await sb.from('facturas_clientes').select('importe, importe_neto, currency').eq('sociedad', 'SAS').eq('mes_servicio', periodo)
     out['Ventas a clientes'] = (data ?? []).reduce((s: number, f: any) => {
       const monto = f.importe_neto != null ? Number(f.importe_neto) : Number(f.importe)
       return s + (f.currency === 'USD' ? monto * tc : monto)
@@ -151,16 +160,42 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
 
   {
     const anterior = mesAnterior(periodo)
-    const cuotasInicio = await cuotasFciAlCierre(sb, finDeMes(anterior))
-    const [{ data: cierreActual }, { data: cierreAnterior }] = await Promise.all([
-      sb.from('inversiones_fci_cierres_mensuales').select('tc_fondo').eq('mes', inicio).limit(1),
-      sb.from('inversiones_fci_cierres_mensuales').select('tc_fondo').eq('mes', inicioDeMes(anterior)).limit(1),
+    const [cuotasInicio, tcActual, tcAnterior] = await Promise.all([
+      cuotasFciAlCierre(sb, finDeMes(anterior)),
+      tcFondoAlCierre(sb, fin),
+      tcFondoAlCierre(sb, finDeMes(anterior)),
     ])
-    if (cierreActual?.[0] && cierreAnterior?.[0]) {
-      out['Intereses Ganados FCI'] = cuotasInicio * (Number(cierreActual[0].tc_fondo) - Number(cierreAnterior[0].tc_fondo))
+    if (tcActual && tcAnterior) {
+      out['Intereses Ganados FCI'] = cuotasInicio * (tcActual - tcAnterior)
     }
   }
 
+  return out
+}
+
+function mesesEntreRango(desde: string, hasta: string): string[] {
+  const [y1, m1] = desde.split('-').map(Number)
+  const [y2, m2] = hasta.split('-').map(Number)
+  const meses: string[] = []
+  let y = y1, m = m1
+  while (y < y2 || (y === y2 && m <= m2)) {
+    meses.push(`${y}-${String(m).padStart(2, '0')}`)
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+  return meses
+}
+
+// Suma, cuenta por cuenta, el Resultado automático entre dos meses (inclusive) para el P&L.
+export async function calcularSaldosResultadoAutoRango(
+  sb: SupabaseClient, periodoDesde: string, periodoHasta: string, cuentasGastos: { nombre: string }[]
+): Promise<Record<string, number>> {
+  const meses = mesesEntreRango(periodoDesde, periodoHasta)
+  const resultadosPorMes = await Promise.all(meses.map(p => calcularSaldosResultadoAuto(sb, p, cuentasGastos)))
+  const out: Record<string, number> = {}
+  for (const r of resultadosPorMes) {
+    for (const [k, v] of Object.entries(r)) out[k] = (out[k] ?? 0) + v
+  }
   return out
 }
 
