@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
@@ -8,8 +9,20 @@ import { applyNickname } from '@/lib/utils/displayName'
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileNick } = await supabase.from('users').select('nickname').eq('id', user?.id ?? '').single()
+  if (!user) redirect('/login')
+
+  const { data: profileNick } = await supabase.from('users').select('nickname, role, custom_role_id').eq('id', user.id).single()
   const nickname = profileNick?.nickname ?? null
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profileNick?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profileNick?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profileNick.custom_role_id).eq('module', 'tareas').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
   const sp = await searchParams
   const { status, priority, cliente, proyecto, responsable, mes } = sp
 

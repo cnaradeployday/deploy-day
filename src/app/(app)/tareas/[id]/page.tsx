@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { applyNickname } from '@/lib/utils/displayName'
@@ -61,7 +61,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
   const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
-  // Permiso editar tareas
+  // Permiso editar tareas / ver la tarea via el listado general de Tareas
   let canEditTask = isAdmin
   if (!canEditTask && profile?.custom_role_id) {
     const { data: permEdit } = await supabase
@@ -69,6 +69,10 @@ export default async function TareaDetailPage({ params, searchParams }: { params
       .eq('role_id', profile.custom_role_id).eq('module', 'tareas').single()
     canEditTask = permEdit?.can_read ?? false
   }
+
+  const esResponsableOColaborador = t.direct_responsible_id === user?.id
+    || (t.task_collaborators as any[])?.some((c: any) => c.user?.id === user?.id)
+  if (!isAdmin && !canEditTask && !esResponsableOColaborador) redirect('/dashboard')
 
   // Permiso cargar horas en nombre de otros
   let canCargarHorasOtros = isAdmin

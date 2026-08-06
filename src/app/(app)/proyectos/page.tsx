@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Pencil } from 'lucide-react'
 import ProyectosClient from './ProyectosClient'
@@ -7,17 +8,21 @@ export default async function ProyectosPage() {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
   const { data: profile } = await supabase
-    .from('users').select('role, custom_role_id').eq('id', user?.id ?? '').single()
+    .from('users').select('role, custom_role_id').eq('id', user.id).single()
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
   let canDelete = isAdmin
-  if (!canDelete && profile?.custom_role_id) {
+  if (profile?.custom_role_id) {
     const { data: perm } = await supabase
-      .from('role_permissions').select('can_delete')
+      .from('role_permissions').select('can_read, can_delete')
       .eq('role_id', profile.custom_role_id).eq('module', 'proyectos').single()
-    canDelete = perm?.can_delete ?? false
+    if (!canAccess) canAccess = perm?.can_read ?? false
+    if (!canDelete) canDelete = perm?.can_delete ?? false
   }
+  if (!canAccess) redirect('/dashboard')
 
   const { data: proyectos } = await supabase
     .from('projects')

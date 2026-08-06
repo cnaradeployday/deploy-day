@@ -7,6 +7,19 @@ export default async function MiPizarraPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase
+    .from('users').select('role, custom_role_id').eq('id', user.id).single()
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'mi_pizarra').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
+
   const [{ data: postits }, { data: teammates }, { data: myProfile }, { data: clients }] = await Promise.all([
     supabase
       .from('postits')

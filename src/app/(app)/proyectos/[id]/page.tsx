@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Clock, CheckSquare, Pencil } from 'lucide-react'
 import ProyectoSegmentos from './ProyectoSegmentos'
@@ -25,6 +25,21 @@ const priorityColors: Record<string, string> = {
 export default async function ProyectoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role, custom_role_id').eq('id', user.id).single()
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'proyectos').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
 
   const { data: proyecto } = await supabase
     .from('projects')
@@ -50,11 +65,6 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
     ? await supabase.from('time_entries').select('task_id, hours_logged, entry_date').in('task_id', taskIds)
     : { data: [] }
   const totalConsumido = Math.round(((timeEntries ?? []).reduce((s, e) => s + e.hours_logged, 0)) * 10) / 10
-
-  const { data: profile } = await supabase.auth.getUser()
-    .then(({ data }) => supabase.from('users').select('role').eq('id', data.user?.id ?? '').single())
-
-  const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
   const totalEstimado = tareas?.reduce((sum, t) => sum + (t.estimated_hours ?? 0), 0) ?? 0
   const totalSegmentos = segmentos?.reduce((s, seg) => s + seg.horas, 0) ?? 0
