@@ -1,13 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { hasModuleAccess } from '@/lib/permissions'
 import Link from 'next/link'
 import { ArrowLeft, PiggyBank, LineChart } from 'lucide-react'
 
 export default async function InversionesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user?.id ?? '').single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (!(await hasModuleAccess(supabase, user?.id, 'contabilidad'))) redirect('/dashboard')
 
   const disponibles = [
     { href: '/contabilidad/inversiones/plazo-fijo', label: 'Plazo fijo', desc: 'Próximamente', icon: PiggyBank, color: 'bg-emerald-50' },

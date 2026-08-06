@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Pencil, Trash2, LineChart, X, Check, Sparkles, Paperclip, ChevronUp, ChevronDown } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 type Movimiento = {
@@ -32,7 +33,7 @@ const mesCorto = (s: string) => {
 const filterInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
 const cellInputClass = 'w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
 
-export default function FondoComunClient({ movimientos, cierres }: { movimientos: Movimiento[]; cierres: Cierre[] }) {
+export default function FondoComunClient({ movimientos, cierres, documentos }: { movimientos: Movimiento[]; cierres: Cierre[]; documentos: DocumentoImportado[] }) {
   const router = useRouter()
 
   // Alta de movimiento
@@ -393,6 +394,7 @@ export default function FondoComunClient({ movimientos, cierres }: { movimientos
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="fondo_comun_inversion"/>
+          <DocumentosImportadosButton documentos={documentos}/>
           <button onClick={() => setShowImport(true)}
             className="flex items-center gap-2 border border-[#1B9BF0] text-[#1B9BF0] hover:bg-[#E8F4FE] px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Sparkles size={15}/> Importar con IA

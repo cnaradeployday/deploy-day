@@ -1,12 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { hasModuleAccess } from '@/lib/permissions'
 import ConciliacionBancariaClient from './ConciliacionBancariaClient'
 
 export default async function ConciliacionBancariaPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user?.id ?? '').single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (!(await hasModuleAccess(supabase, user?.id, 'contabilidad'))) redirect('/dashboard')
 
   const { data: movimientos } = await supabase
     .from('conciliacion_bancaria')
@@ -16,5 +16,11 @@ export default async function ConciliacionBancariaPage() {
 
   const { data: clasificaciones } = await supabase.from('banco_clasificaciones').select('*').order('descripcion')
 
-  return <ConciliacionBancariaClient movimientos={movimientos ?? []} clasificaciones={clasificaciones ?? []}/>
+  const { data: documentos } = await supabase
+    .from('documentos_ia_importados')
+    .select('id, archivo_nombre, archivo_path, cantidad_registros, created_at')
+    .eq('seccion', 'conciliacion_bancaria')
+    .order('created_at', { ascending: false })
+
+  return <ConciliacionBancariaClient movimientos={movimientos ?? []} clasificaciones={clasificaciones ?? []} documentos={documentos ?? []}/>
 }

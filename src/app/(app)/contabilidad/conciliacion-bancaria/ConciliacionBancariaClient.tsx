@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Pencil, Trash2, Landmark, X, ChevronUp, ChevronDown, Sparkles, Paperclip } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
+import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 type Clasificacion = { id: string; descripcion: string; clasificacion: string }
@@ -30,9 +31,10 @@ function normalizar(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
-export default function ConciliacionBancariaClient({ movimientos, clasificaciones }: {
+export default function ConciliacionBancariaClient({ movimientos, clasificaciones, documentos }: {
   movimientos: Movimiento[]
   clasificaciones: Clasificacion[]
+  documentos: DocumentoImportado[]
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
@@ -378,6 +380,7 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="conciliacion_bancaria"/>
+          <DocumentosImportadosButton documentos={documentos}/>
           <button onClick={() => setShowImport(true)}
             className="flex items-center gap-2 border border-[#1B9BF0] text-[#1B9BF0] hover:bg-[#E8F4FE] px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Sparkles size={15}/> Importar con IA

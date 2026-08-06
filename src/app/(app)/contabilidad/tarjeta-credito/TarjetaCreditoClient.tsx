@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Pencil, Trash2, CreditCard, X, Sparkles, Paperclip, ChevronUp, ChevronDown } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
+import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 
 type Tipo = { id: string; numero: string; nombre: string }
@@ -38,7 +39,7 @@ function normalizar(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
-export default function TarjetaCreditoClient({ movimientos, tipos }: { movimientos: Movimiento[]; tipos: Tipo[] }) {
+export default function TarjetaCreditoClient({ movimientos, tipos, documentos }: { movimientos: Movimiento[]; tipos: Tipo[]; documentos: DocumentoImportado[] }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -432,6 +433,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos }: { movimient
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="tarjeta_credito"/>
+          <DocumentosImportadosButton documentos={documentos}/>
           <button onClick={() => setShowImport(true)}
             className="flex items-center gap-2 border border-[#1B9BF0] text-[#1B9BF0] hover:bg-[#E8F4FE] px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Sparkles size={15}/> Importar con IA

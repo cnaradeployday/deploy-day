@@ -1,13 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { hasModuleAccess } from '@/lib/permissions'
 import Link from 'next/link'
 import { FileText, Users, TrendingUp, ShoppingCart, Landmark, CreditCard, ListTree, Link2, Banknote, LineChart, BookOpen, Scale } from 'lucide-react'
 
 export default async function ContabilidadPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user?.id ?? '').single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (!(await hasModuleAccess(supabase, user?.id, 'contabilidad'))) redirect('/dashboard')
 
   const disponibles = [
     { href: '/contabilidad/subdiario-iva', label: 'Subdiario de IVA', desc: 'Débito fiscal por factura SAS', icon: FileText, color: 'bg-blue-50' },
