@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, ChevronDown, X, Check, Trophy } from 'lucide-react'
 import { convertToUSD, type Currency } from '@/lib/utils/currency'
 import { createClient } from '@/lib/supabase/client'
+import { isPastDate } from '@/lib/utils/date'
 
 const FILTER_STORAGE_KEY = 'resumenFacturas.clientesExcluidos'
 
@@ -17,7 +18,7 @@ function formatMesLabel(yyyymm: string): string {
 function getEstadoEfectivo(f: any): 'cobrada' | 'vencida' | 'pendiente' {
   if (f.estado === 'cobrada') return 'cobrada'
   if (f.estado === 'vencida') return 'vencida'
-  if (f.fecha_vencimiento && new Date(f.fecha_vencimiento) < new Date()) return 'vencida'
+  if (f.fecha_vencimiento && isPastDate(f.fecha_vencimiento)) return 'vencida'
   return 'pendiente'
 }
 

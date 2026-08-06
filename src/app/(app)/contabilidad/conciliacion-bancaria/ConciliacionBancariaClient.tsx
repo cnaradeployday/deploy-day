@@ -8,6 +8,7 @@ import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
 import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
+import { formatDateAR, todayISO } from '@/lib/utils/date'
 
 type Clasificacion = { id: string; descripcion: string; clasificacion: string }
 type Movimiento = {
@@ -39,13 +40,13 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ fecha: new Date().toISOString().split('T')[0], clasificacion_id: '', credito_debito: '', saldo: '' })
+  const [form, setForm] = useState({ fecha: todayISO(), clasificacion_id: '', credito_debito: '', saldo: '' })
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   function openNew() {
     setEditingId(null)
-    setForm({ fecha: new Date().toISOString().split('T')[0], clasificacion_id: '', credito_debito: '', saldo: '' })
+    setForm({ fecha: todayISO(), clasificacion_id: '', credito_debito: '', saldo: '' })
     setShowForm(true)
   }
 
@@ -180,7 +181,7 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
         const match = clasificaciones.find(c => normalizar(c.descripcion) === descNorm)
           ?? clasificaciones.find(c => normalizar(c.descripcion).includes(descNorm) || descNorm.includes(normalizar(c.descripcion)))
         return {
-          fecha: m.fecha || new Date().toISOString().split('T')[0],
+          fecha: m.fecha || todayISO(),
           descripcion: m.descripcion || '',
           credito_debito: m.credito_debito || 0,
           saldo: m.saldo || 0,
@@ -229,7 +230,7 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
   const ultimoSaldo = movimientos.length ? movimientos[movimientos.length - 1].saldo : 0
 
   const exportData = useMemo(() => filtered.map(m => ({
-    Fecha: new Date(m.fecha).toLocaleDateString('es-AR'),
+    Fecha: formatDateAR(m.fecha),
     Descripcion: m.descripcion,
     'Credito / Debito': m.credito_debito,
     Saldo: m.saldo,
@@ -455,7 +456,7 @@ export default function ConciliacionBancariaClient({ movimientos, clasificacione
             <tbody>
               {sorted.map(m => (
                 <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDateAR(m.fecha)}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{m.descripcion}</td>
                   <td className={'px-4 py-3 text-sm font-medium whitespace-nowrap ' + (m.credito_debito < 0 ? 'text-red-500' : 'text-green-600')}>
                     {fmt(m.credito_debito)}

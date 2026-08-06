@@ -7,6 +7,7 @@ import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actio
 import Link from 'next/link'
 import { ArrowLeft, X, AlertTriangle, CheckCircle } from 'lucide-react'
 import SearchableSelect from '@/components/shared/SearchableSelect'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 interface Colab { uid: string; hours: string }
 
@@ -48,12 +49,8 @@ export default function NuevaTareaPage() {
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   // Mes derivado de la fecha límite o el mes actual
-  const mesRef = form.due_date
-    ? form.due_date.slice(0, 7)
-    : new Date().toISOString().slice(0, 7)
-  const [anioM, mesM] = mesRef.split('-').map(Number)
-  const primerDiaMes = new Date(anioM, mesM - 1, 1).toISOString().split('T')[0]
-  const ultimoDiaMes = new Date(anioM, mesM, 0).toISOString().split('T')[0]
+  const mesRef = form.due_date ? form.due_date.slice(0, 7) : currentMonthAR()
+  const { primerDia: primerDiaMes, ultimoDia: ultimoDiaMes } = monthBounds(mesRef)
 
   useEffect(() => {
     const sb = createClient()

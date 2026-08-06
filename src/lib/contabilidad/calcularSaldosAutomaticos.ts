@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { lastDayOfMonth, ymd } from '@/lib/utils/date'
 
 // Cuentas de "Gastos operativos" cuyo nombre en el Plan de cuentas no coincide 1:1
 // con el nombre cargado en Tipos de gasto (ej: typo histórico en la base).
@@ -11,8 +12,7 @@ function inicioDeMes(periodo: string) {
 }
 function finDeMes(periodo: string) {
   const [y, m] = periodo.split('-').map(Number)
-  const d = new Date(y, m, 0)
-  return d.toISOString().split('T')[0]
+  return ymd(y, m, lastDayOfMonth(y, m))
 }
 function mesAnterior(periodo: string) {
   const [y, m] = periodo.split('-').map(Number)

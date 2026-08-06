@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import MisTareasClient from './MisTareasClient'
 import { applyNickname } from '@/lib/utils/displayName'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 export default async function MisTareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -10,11 +11,9 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const { priority, proyecto, cliente, todas } = sp
   const status = sp.status // comma-separated statuses, or undefined = default (exclude terminado)
 
-  const mesActual = new Date().toISOString().slice(0, 7)
+  const mesActual = currentMonthAR()
   const mes = sp.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+  const { primerDia, ultimoDia } = monthBounds(mes)
 
   const { data: profile } = await supabase
     .from('users').select('role, custom_role_id, nickname').eq('id', user?.id ?? '').single()

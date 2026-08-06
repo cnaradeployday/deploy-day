@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Pencil, Trash2, ChevronUp, ChevronDown, ShoppingCart, Paperclip } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import { formatDateAR } from '@/lib/utils/date'
 
 type FacturaCompra = {
   id: string
@@ -121,11 +122,11 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
   }
 
   const exportData = sorted.map(f => ({
-    'Fecha factura': new Date(f.fecha_factura).toLocaleDateString('es-AR'),
+    'Fecha factura': formatDateAR(f.fecha_factura),
     'Número': f.numero_factura,
     'CUIT': f.cuit,
     'Razón social proveedor': f.razon_social_proveedor,
-    'Fecha de pago': f.fecha_pago ? new Date(f.fecha_pago).toLocaleDateString('es-AR') : '',
+    'Fecha de pago': formatDateAR(f.fecha_pago),
     'Monto neto': Number(f.monto_neto),
     'IVA': Number(f.iva),
     'IIBB': Number(f.iibb),
@@ -258,7 +259,7 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
             <tbody>
               {sorted.map(f => (
                 <tr key={f.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(f.fecha_factura).toLocaleDateString('es-AR')}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDateAR(f.fecha_factura)}</td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{f.numero_factura}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{f.razon_social_proveedor}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{f.cuit}</td>

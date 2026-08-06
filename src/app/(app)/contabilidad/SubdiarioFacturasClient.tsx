@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ChevronDown, ChevronUp, X, FileText, Pencil } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import { formatDateAR } from '@/lib/utils/date'
 
 export type SubdiarioFactura = {
   id: string
@@ -154,7 +155,7 @@ export default function SubdiarioFacturasClient({
   const total = sorted.reduce((s, f) => s + (Number(f[montoKey]) || 0), 0)
 
   const exportData = sorted.map(f => ({
-    'Fecha factura': new Date(f.fecha_emision).toLocaleDateString('es-AR'),
+    'Fecha factura': formatDateAR(f.fecha_emision),
     'Número': f.numero,
     'CUIT': f.cuit,
     'Razón social': f.razon_social,
@@ -244,7 +245,7 @@ export default function SubdiarioFacturasClient({
             <tbody>
               {sorted.map(f => (
                 <tr key={f.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(f.fecha_emision).toLocaleDateString('es-AR')}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDateAR(f.fecha_emision)}</td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{f.numero}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{f.cuit || '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{f.razon_social || '—'}</td>

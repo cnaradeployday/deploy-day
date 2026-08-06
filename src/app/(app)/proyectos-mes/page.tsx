@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProyectosMesClient from './ProyectosMesClient'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 export default async function ProyectosMesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -21,11 +22,9 @@ export default async function ProyectosMesPage({ searchParams }: { searchParams:
   if (!canAccess) redirect('/dashboard')
 
   const sp = await searchParams
-  const mesActual = new Date().toISOString().slice(0, 7)
+  const mesActual = currentMonthAR()
   const mes = sp.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+  const { primerDia, ultimoDia } = monthBounds(mes)
 
   // Proyectos que tienen segmentos en el mes
   const { data: segmentos } = await supabase
@@ -90,13 +89,21 @@ export default async function ProyectosMesPage({ searchParams }: { searchParams:
     .eq('is_active', true)
 
   ;(proyFechas ?? []).forEach((p: any) => {
-    if (p.start_date) {
-      let d = new Date(p.start_date.slice(0, 7) + '-01')
-      const fin = p.end_date ? new Date(p.end_date.slice(0, 7) + '-01') : new Date(new Date().getFullYear(), new Date().getMonth() + 6, 1)
-      while (d <= fin) {
-        mesesSet.add(d.toISOString().slice(0, 7))
-        d = new Date(d.getFullYear(), d.getMonth() + 1, 1)
-      }
+    if (!p.start_date) return
+    let [y, m] = p.start_date.slice(0, 7).split('-').map(Number)
+    let finY: number, finM: number
+    if (p.end_date) {
+      ;[finY, finM] = p.end_date.slice(0, 7).split('-').map(Number)
+    } else {
+      const [hoyY, hoyM] = currentMonthAR().split('-').map(Number)
+      const total = hoyM + 6
+      finY = hoyY + Math.floor((total - 1) / 12)
+      finM = ((total - 1) % 12) + 1
+    }
+    while (y < finY || (y === finY && m <= finM)) {
+      mesesSet.add(`${y}-${String(m).padStart(2, '0')}`)
+      m++
+      if (m > 12) { m = 1; y++ }
     }
   })
 

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, DollarSign, History, Calendar, Plus, Trash2, KeyRound, Loader2, Check, Eye, EyeOff, MessageCircle } from 'lucide-react'
 import { CURRENCIES, Currency } from '@/lib/utils/currency'
+import { formatDateAR, todayISO } from '@/lib/utils/date'
 
 const WHATSAPP_EVENT_LABELS: { value: string; label: string }[] = [
   { value: 'revision_disponible', label: 'Nuevas tareas disponibles para revisión' },
@@ -80,7 +81,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
     if (!rateForm.hourly_cost) return
     setLoading(true)
     const sb = createClient()
-    const hoy = new Date().toISOString().split('T')[0]
+    const hoy = todayISO()
     await sb.from('users').update({ hourly_cost: parseFloat(rateForm.hourly_cost), currency: rateForm.currency }).eq('id', miembro.id)
     await sb.from('user_rate_history').insert({
       user_id: miembro.id, hourly_cost: parseFloat(rateForm.hourly_cost),
@@ -360,7 +361,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
                 {historial.map(h => (
                   <div key={h.id} className="flex items-center justify-between text-xs">
                     <span className="text-gray-600">{h.currency === 'USD' ? 'USD ' : '$'}{h.hourly_cost}/h</span>
-                    <span className="text-gray-400">{h.mes} · desde {new Date(h.valid_from).toLocaleDateString('es-AR')}</span>
+                    <span className="text-gray-400">{h.mes} · desde {formatDateAR(h.valid_from)}</span>
                   </div>
                 ))}
               </div>
@@ -406,7 +407,7 @@ export default function EditarUsuarioClient({ miembro, historial, adminId, avail
                   <div>
                     <p className="text-xs font-medium text-gray-700">{a.horas}h disponibles</p>
                     <p className="text-xs text-gray-400">
-                      {new Date(a.desde).toLocaleDateString('es-AR')} → {new Date(a.hasta).toLocaleDateString('es-AR')}
+                      {formatDateAR(a.desde)} → {formatDateAR(a.hasta)}
                       {a.notas && ' · ' + a.notas}
                     </p>
                   </div>

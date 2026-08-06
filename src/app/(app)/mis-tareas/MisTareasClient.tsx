@@ -6,6 +6,7 @@ import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { Download, CheckCircle, X, Plus, ChevronUp, ChevronDown, Pencil, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { formatDateAR, formatDateShortAR, isPastDate, monthBounds } from '@/lib/utils/date'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -119,9 +120,7 @@ export default function MisTareasClient({
   }
 
   const mes = filters.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+  const { primerDia, ultimoDia } = monthBounds(mes)
 
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -181,7 +180,7 @@ export default function MisTareasClient({
       Estado: statusLabels[t.status] ?? t.status, Prioridad: t.priority,
       ...(canSeeEstimatedHours ? { 'Mis horas': t.my_assigned_hours ?? '—' } : {}),
       'Horas usadas': t.hours_logged ?? 0,
-      Vence: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—',
+      Vence: t.due_date ? formatDateAR(t.due_date) : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
@@ -332,7 +331,7 @@ export default function MisTareasClient({
             {!sorted.length ? (
               <tr><td colSpan={canSeeEstimatedHours ? 11 : 10} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
-              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
+              const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado','finalizado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               const isLoading = loading === t.id
@@ -366,7 +365,7 @@ export default function MisTareasClient({
                     </div>
                   </td>
                   <td className={'px-3 py-3 text-xs ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>
-                    {t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' }) : '—'}
+                    {t.due_date ? formatDateShortAR(t.due_date) : '—'}
                   </td>
                   <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
                   <td className="px-3 py-3"><span className={'text-xs px-1.5 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
@@ -394,7 +393,7 @@ export default function MisTareasClient({
       {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
-          const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+          const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado'].includes(t.status)
           const myHours = t.my_assigned_hours ?? 0
           const isLoading = loading === t.id
           const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
@@ -416,7 +415,7 @@ export default function MisTareasClient({
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
-                  {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
+                  {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{formatDateShortAR(t.due_date)}</span>}
                   <span>{t.hours_logged ?? 0}h{canSeeEstimatedHours && myHours > 0 ? '/' + myHours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">

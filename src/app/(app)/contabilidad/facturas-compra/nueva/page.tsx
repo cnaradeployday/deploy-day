@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, Paperclip, Sparkles } from 'lucide-react'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
+import { todayISO } from '@/lib/utils/date'
 
 function normalizar(s: string) {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
@@ -21,7 +22,7 @@ export default function NuevaFacturaCompraPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     cuit: '', numero_factura: '',
-    fecha_factura: new Date().toISOString().split('T')[0],
+    fecha_factura: todayISO(),
     razon_social_proveedor: '', fecha_pago: '',
     monto_neto: '0', iva: '0', iibb: '0', otros_impuestos: '0',
     tipo_gasto_id: '', estado: 'pendiente', notas: '',

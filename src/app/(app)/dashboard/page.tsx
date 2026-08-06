@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { CheckSquare, Clock, AlertCircle, FolderKanban, ArrowRight } from 'lucide-react'
+import { formatDateShortAR } from '@/lib/utils/date'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -82,7 +83,7 @@ export default async function DashboardPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{(t.project as any)?.client?.name} · {(t.project as any)?.name}</p>
                 </div>
                 <div className="flex items-center gap-2 ml-4 shrink-0">
-                  {t.due_date && <span className="text-xs text-gray-400">{new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}</span>}
+                  {t.due_date && <span className="text-xs text-gray-400">{formatDateShortAR(t.due_date)}</span>}
                   <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[t.status]}`}>{statusLabels[t.status]}</span>
                 </div>
               </Link>

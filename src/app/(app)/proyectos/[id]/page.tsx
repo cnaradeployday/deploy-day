@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Clock, CheckSquare, Pencil } from 'lucide-react'
 import ProyectoSegmentos from './ProyectoSegmentos'
+import { formatDateShortAR } from '@/lib/utils/date'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -140,7 +141,7 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
               <p className="text-sm font-medium text-gray-900">{t.title}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {(t.direct_responsible as any)?.full_name}
-                {t.due_date && ' · ' + new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}
+                {t.due_date && ' · ' + formatDateShortAR(t.due_date)}
               </p>
             </div>
             <div className="flex items-center gap-2">

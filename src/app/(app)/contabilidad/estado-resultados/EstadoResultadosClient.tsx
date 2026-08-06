@@ -5,11 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, TrendingUp, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
 import { calcularSaldosResultadoAutoRango } from '@/lib/contabilidad/calcularSaldosAutomaticos'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import { currentMonthAR } from '@/lib/utils/date'
 
 type Cuenta = { id: string; categoria: 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
 const fmt = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
-const mesActual = () => new Date().toISOString().slice(0, 7)
+const mesActual = () => currentMonthAR()
 const SUBCATEGORIA_ORDEN = ['Ventas', 'Gastos operativos', 'Otros resultados']
 
 export default function EstadoResultadosClient({ cuentas }: { cuentas: Cuenta[] }) {

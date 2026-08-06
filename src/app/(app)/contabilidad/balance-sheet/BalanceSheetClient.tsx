@@ -5,11 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Scale, Pencil, Check, X, Info, Sparkles } from 'lucide-react'
 import { calcularSaldosBalanceAuto, calcularResultadoYTD } from '@/lib/contabilidad/calcularSaldosAutomaticos'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
+import { currentMonthAR } from '@/lib/utils/date'
 
 type Cuenta = { id: string; categoria: 'activo' | 'pasivo' | 'patrimonio_neto' | 'resultado'; subcategoria: string | null; nombre: string; orden: number; origen: 'manual' | 'auto' }
 
 const fmt = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
-const mesActual = () => new Date().toISOString().slice(0, 7)
+const mesActual = () => currentMonthAR()
 
 export default function BalanceSheetClient({ cuentas }: { cuentas: Cuenta[] }) {
   const [periodo, setPeriodo] = useState(mesActual())

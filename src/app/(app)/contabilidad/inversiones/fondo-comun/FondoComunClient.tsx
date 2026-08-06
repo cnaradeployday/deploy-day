@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Pencil, Trash2, LineChart, X, Check, Sparkles, Papercl
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
+import { todayISO } from '@/lib/utils/date'
 
 type Movimiento = {
   id: string
@@ -43,14 +44,14 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
   const [montoTouched, setMontoTouched] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
-    fecha: new Date().toISOString().split('T')[0], operacion: 'SUSCRIPCION' as 'SUSCRIPCION' | 'RESCATE',
+    fecha: todayISO(), operacion: 'SUSCRIPCION' as 'SUSCRIPCION' | 'RESCATE',
     cantidad_cuotas: '', tc_fondo: '', monto: '',
   })
 
   function openNew() {
     setEditingId(null)
     setMontoTouched(false)
-    setForm({ fecha: new Date().toISOString().split('T')[0], operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
+    setForm({ fecha: todayISO(), operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
     setShowForm(true)
   }
 
@@ -92,7 +93,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
       : await sb.from('inversiones_fci_movimientos').insert({ ...payload, created_by: (await sb.auth.getUser()).data.user?.id })
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
-    setForm({ fecha: new Date().toISOString().split('T')[0], operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
+    setForm({ fecha: todayISO(), operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
     setMontoTouched(false)
     setEditingId(null)
     setShowForm(false)
@@ -132,7 +133,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
       const rows: ImportRow[] = (data.movimientos ?? []).map((m: any) => ({
-        fecha: m.fecha || new Date().toISOString().split('T')[0],
+        fecha: m.fecha || todayISO(),
         operacion: m.operacion === 'RESCATE' ? 'RESCATE' : 'SUSCRIPCION',
         cantidad_cuotas: m.cantidad_cuotas || 0,
         tc_fondo: m.tc_fondo || 0,

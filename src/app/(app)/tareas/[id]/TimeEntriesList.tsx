@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
+import { formatDateAR } from '@/lib/utils/date'
 
 interface Entry {
   id: string
@@ -124,7 +125,7 @@ export default function TimeEntriesList({
                   <div className="flex items-center gap-1 ml-3 shrink-0">
                     <div className="text-right mr-1">
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
-                      <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
+                      <p className="text-xs text-gray-400">{formatDateAR(e.entry_date)}</p>
                     </div>
                     {(isAdmin || (e.user_id ?? e.user?.id) === currentUserId) && (
                       <>

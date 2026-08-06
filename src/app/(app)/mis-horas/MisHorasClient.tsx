@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { Download, Clock } from 'lucide-react'
+import { formatMonthShortAR } from '@/lib/utils/date'
 
 const estadoLiqLabels: Record<string, string> = {
   borrador: 'Realizadas',
@@ -150,7 +151,7 @@ export default function MisHorasClient({ entries, mes, mesActual, estadoLiquidac
           {filtered.map(e => (
             <div key={e.id} className="grid grid-cols-6 px-5 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
               <span className="text-xs text-gray-400 capitalize">
-                {new Date(e.entry_date).toLocaleString('es-AR', { month: 'short', year: '2-digit' })}
+                {formatMonthShortAR(e.entry_date)}
               </span>
               <div className="col-span-2">
                 <p className="text-sm text-gray-900 truncate">{e.task?.title ?? '—'}</p>

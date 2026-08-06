@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import MisHorasClient from './MisHorasClient'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 export default async function MisHorasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -8,21 +9,19 @@ export default async function MisHorasPage({ searchParams }: { searchParams: Pro
   if (!user) redirect('/login')
 
   const sp = await searchParams
-  const mesActual = new Date().toISOString().slice(0, 7)
+  const mesActual = currentMonthAR()
   const mes = sp.mes ?? mesActual
   const filterTarea = sp.tarea ?? ''
   const filterCliente = sp.cliente ?? ''
 
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const desde = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const hasta = new Date(anio, mesNum, 1).toISOString().split('T')[0]
+  const { primerDia: desde, ultimoDia: hasta } = monthBounds(mes)
 
   const { data: entries } = await supabase
     .from('time_entries')
     .select('id, hours_logged, entry_date, notes, task:tasks(id, title, status, project:projects(name, client:clients(name)))')
     .eq('user_id', user.id)
     .gte('entry_date', desde)
-    .lt('entry_date', hasta)
+    .lte('entry_date', hasta)
     .order('entry_date', { ascending: false })
 
   const { data: liquidacion } = await supabase

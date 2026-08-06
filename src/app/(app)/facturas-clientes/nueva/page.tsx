@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Paperclip, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Currency, CURRENCIES } from '@/lib/utils/currency'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
+import { currentMonthAR, todayISO } from '@/lib/utils/date'
 
 const SOCIEDADES = ['SAS', 'LLC', 'MONO']
 const empresaCobraToSociedad = (v: string | null | undefined) => v === 'SAS' ? 'SAS' : v === 'LLC' ? 'LLC' : 'MONO'
@@ -30,11 +31,11 @@ export default function NuevaFacturaClientePage() {
   const [clientes, setClientes] = useState<any[]>([])
   const [proyectos, setProyectos] = useState<any[]>([])
   const meses = generarMeses()
-  const mesActual = new Date().toISOString().slice(0, 7)
+  const mesActual = currentMonthAR()
 
   const [form, setForm] = useState({
     client_id: '', project_id: '', numero: '',
-    fecha_emision: new Date().toISOString().split('T')[0],
+    fecha_emision: todayISO(),
     fecha_vencimiento: '', importe: '',
     currency: 'ARS' as Currency, notas: '',
     mes_servicio: mesActual,

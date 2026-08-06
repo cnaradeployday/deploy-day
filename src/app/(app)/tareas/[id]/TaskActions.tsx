@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import { Loader2, UserCheck, Clock, AlertTriangle } from 'lucide-react'
 import { logActivity } from '@/lib/logActivity'
+import { todayISO } from '@/lib/utils/date'
 
 export default function TaskActions({
   task, userId, userRole, timeEntries, isDirectResponsible, isCollaborator, canCargarHorasOtros = false,
@@ -24,7 +25,7 @@ export default function TaskActions({
   const router = useRouter()
   const [hours, setHours] = useState('')
   const [unit, setUnit] = useState<'horas' | 'minutos'>('horas')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(todayISO())
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -148,7 +149,7 @@ export default function TaskActions({
         task_id: task.id,
         user_id: userId,
         hours_logged: timerHours,
-        entry_date: new Date().toISOString().split('T')[0],
+        entry_date: todayISO(),
         notes: 'Registrado con cronómetro',
       })
       if (!timeError) {

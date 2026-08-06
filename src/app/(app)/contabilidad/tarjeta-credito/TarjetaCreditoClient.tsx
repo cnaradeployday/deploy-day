@@ -8,6 +8,7 @@ import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import MultiSelectFilter from '@/components/shared/MultiSelectFilter'
 import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
+import { formatDateAR, todayISO } from '@/lib/utils/date'
 
 type Tipo = { id: string; numero: string; nombre: string }
 type Movimiento = {
@@ -46,13 +47,13 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState({
-    fecha: new Date().toISOString().split('T')[0], proveedor: '', cuota: '',
+    fecha: todayISO(), proveedor: '', cuota: '',
     tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos',
   })
 
   function openNew() {
     setEditingId(null)
-    setForm({ fecha: new Date().toISOString().split('T')[0], proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos' })
+    setForm({ fecha: todayISO(), proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos' })
     setShowForm(true)
   }
 
@@ -91,7 +92,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
       const rows: ImportRow[] = (data.movimientos ?? []).map((m: any) => ({
-        fecha: m.fecha || new Date().toISOString().split('T')[0],
+        fecha: m.fecha || todayISO(),
         proveedor: m.proveedor || '',
         cuota: m.cuota || '',
         pesos: m.pesos || 0,
@@ -255,7 +256,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
   const totalDolares = filtered.reduce((s, m) => s + (Number(m.dolares) || 0), 0)
 
   const exportData = useMemo(() => filtered.map(m => ({
-    FECHA: new Date(m.fecha).toLocaleDateString('es-AR'),
+    FECHA: formatDateAR(m.fecha),
     PROVEEDOR: m.proveedor,
     CUOTA: m.cuota ?? '',
     Clasificacion: m.clasificacion ?? '',
@@ -521,7 +522,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
             <tbody>
               {sorted.map(m => (
                 <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDateAR(m.fecha)}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{m.proveedor}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.cuota ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{m.clasificacion ?? '—'}</td>

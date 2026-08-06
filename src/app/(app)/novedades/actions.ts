@@ -2,6 +2,7 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { sendQueuedWhatsapp } from '@/lib/whatsapp'
+import { addDaysISO, currentMonthAR, monthBounds, todayISO } from '@/lib/utils/date'
 
 function getAdmin() {
   return createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -114,7 +115,7 @@ export async function dismissStaleHoursNotifs(): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = todayISO()
   const { data: todayEntry } = await getAdmin()
     .from('time_entries').select('id').eq('user_id', user.id).eq('entry_date', todayStr).limit(1).maybeSingle()
   if (!todayEntry) return
@@ -163,11 +164,10 @@ function getBusinessDaysSince(last: Date, today: Date): number {
 
 async function runComputedChecksForUser(userId: string): Promise<void> {
   const admin = getAdmin()
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
-  const mesActual = todayStr.slice(0, 7)
-  const primerDia = `${mesActual}-01`
-  const ultimoDia = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
+  const todayStr = todayISO()
+  const today = new Date(todayStr + 'T00:00:00')
+  const mesActual = currentMonthAR()
+  const { primerDia, ultimoDia } = monthBounds(mesActual)
 
   async function upsert(n: Omit<Parameters<typeof createNotification>[0], 'user_id'>) {
     if (n.dedup_key) {
@@ -245,9 +245,7 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
   }
 
   // ── 2. Tareas próximas a vencer (no terminadas) ───────────────────────────
-  const in7Days = new Date(today)
-  in7Days.setDate(today.getDate() + 7)
-  const in7DaysStr = in7Days.toISOString().split('T')[0]
+  const in7DaysStr = addDaysISO(todayStr, 7)
   const weekKey = getWeekKey(today)
 
   const notStartedStatuses = ['creado', 'estimado']

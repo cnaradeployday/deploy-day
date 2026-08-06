@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Pencil } from 'lucide-react'
 import { applyNickname } from '@/lib/utils/displayName'
+import { formatDateAR, isPastDate } from '@/lib/utils/date'
 import TaskActions from './TaskActions'
 import TaskTimer from './TaskTimer'
 import TaskAttachments from './TaskAttachments'
@@ -58,7 +59,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
 
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
-  const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
+  const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado','finalizado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
   // Permiso editar tareas / ver la tarea via el listado general de Tareas
@@ -177,7 +178,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
           ...(canSeeEstimatedHours ? [{ label: 'Horas estimadas', value: t.estimated_hours ? t.estimated_hours + 'h' : '—' }] : []),
           { label: 'Horas cargadas', value: Math.round(totalLogged * 100) / 100 + 'h' },
           { label: 'Responsable', value: (tWithNick.direct_responsible as any)?.full_name ?? '—' },
-          { label: 'Vence', value: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', alert: isOverdue },
+          { label: 'Vence', value: t.due_date ? formatDateAR(t.due_date) : '—', alert: isOverdue },
         ].map(({ label, value, alert }) => (
           <div key={label} className={'bg-white rounded-2xl border px-4 py-3 ' + (alert ? 'border-red-200' : 'border-gray-100')}>
             <p className="text-xs text-gray-400">{label}</p>

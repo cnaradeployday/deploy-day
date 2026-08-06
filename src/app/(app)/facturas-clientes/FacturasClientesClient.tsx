@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, FileText, Trash2, ChevronUp, ChevronDown, X, AlertTriangle, Pencil, CheckCircle } from 'lucide-react'
+import { formatDateAR, isPastDate, todayISO } from '@/lib/utils/date'
 
 function formatMes(mes: string | null) {
   if (!mes) return '—'
@@ -21,7 +22,7 @@ function toUSD(importe: number, currency: string, tc: number | null): number {
 function getEstadoEfectivo(f: any): string {
   if (f.estado === 'cobrada') return 'cobrada'
   if (f.estado === 'vencida') return 'vencida'
-  if (f.fecha_vencimiento && new Date(f.fecha_vencimiento) < new Date()) return 'vencida'
+  if (f.fecha_vencimiento && isPastDate(f.fecha_vencimiento)) return 'vencida'
   return 'pendiente'
 }
 
@@ -110,7 +111,7 @@ export default function FacturasClientesClient({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [cobrandoId, setCobrandoId] = useState<string | null>(null)
-  const [fechaCobro, setFechaCobro] = useState(new Date().toISOString().split('T')[0])
+  const [fechaCobro, setFechaCobro] = useState(todayISO())
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -301,10 +302,10 @@ export default function FacturasClientesClient({
                     <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{(f.client as any)?.name}</td>
                     <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{formatMes(f.mes_servicio)}</td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                      {new Date(f.fecha_emision).toLocaleDateString('es-AR')}
+                      {formatDateAR(f.fecha_emision)}
                     </td>
                     <td className={'px-4 py-3 text-xs font-medium whitespace-nowrap ' + (est === 'vencida' ? 'text-red-500' : 'text-gray-500')}>
-                      {new Date(f.fecha_vencimiento).toLocaleDateString('es-AR')}
+                      {formatDateAR(f.fecha_vencimiento)}
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900 whitespace-nowrap">
                       {(f.currency === 'USD' ? 'USD ' : '$') + Number(f.importe).toLocaleString('es-AR')}
@@ -315,7 +316,7 @@ export default function FacturasClientesClient({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                      {f.fecha_cobro ? new Date(f.fecha_cobro).toLocaleDateString('es-AR') : '—'}
+                      {f.fecha_cobro ? formatDateAR(f.fecha_cobro) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <Link href={'/facturas-clientes/' + f.id + '/editar'}

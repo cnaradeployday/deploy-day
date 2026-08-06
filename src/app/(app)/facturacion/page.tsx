@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import FacturacionClient from './FacturacionClient'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 export default async function FacturacionPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -12,11 +13,9 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const sp = await searchParams
-  const mesActual = new Date().toISOString().slice(0, 7)
+  const mesActual = currentMonthAR()
   const mes = sp.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+  const { primerDia, ultimoDia } = monthBounds(mes)
 
   const { data: proyectos } = await supabase
     .from('projects')

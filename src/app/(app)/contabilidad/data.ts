@@ -1,9 +1,10 @@
 import { SubdiarioFactura } from './SubdiarioFacturasClient'
+import { isPastDate } from '@/lib/utils/date'
 
 function getEstadoEfectivo(f: any): string {
   if (f.estado === 'cobrada') return 'cobrada'
   if (f.estado === 'vencida') return 'vencida'
-  if (f.fecha_vencimiento && new Date(f.fecha_vencimiento) < new Date()) return 'vencida'
+  if (f.fecha_vencimiento && isPastDate(f.fecha_vencimiento)) return 'vencida'
   return 'pendiente'
 }
 
