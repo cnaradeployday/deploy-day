@@ -21,9 +21,10 @@ type Movimiento = {
   dolares: number | null
   comprobante: string | null
   solapa: string | null
+  fecha_cierre: string | null
   tipo_gasto: { numero: string; nombre: string } | null
 }
-type SortKey = 'fecha' | 'proveedor' | 'cuota' | 'clasificacion' | 'pesos' | 'dolares' | 'comprobante' | 'solapa'
+type SortKey = 'fecha' | 'proveedor' | 'cuota' | 'clasificacion' | 'pesos' | 'dolares' | 'comprobante' | 'solapa' | 'fecha_cierre'
 type ImportRow = {
   fecha: string; proveedor: string; cuota: string; pesos: number; dolares: number
   comprobante: string; tipo_gasto_id: string; solapa: string; selected: boolean
@@ -48,12 +49,12 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     fecha: todayISO(), proveedor: '', cuota: '',
-    tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos',
+    tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos', fecha_cierre: '',
   })
 
   function openNew() {
     setEditingId(null)
-    setForm({ fecha: todayISO(), proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos' })
+    setForm({ fecha: todayISO(), proveedor: '', cuota: '', tipo_gasto_id: '', pesos: '', dolares: '', comprobante: '', solapa: 'Ctas de gastos', fecha_cierre: '' })
     setShowForm(true)
   }
 
@@ -63,7 +64,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
       fecha: m.fecha, proveedor: m.proveedor, cuota: m.cuota ?? '',
       tipo_gasto_id: tipos.find(t => t.nombre === m.clasificacion)?.id ?? '',
       pesos: m.pesos != null ? String(m.pesos) : '', dolares: m.dolares != null ? String(m.dolares) : '',
-      comprobante: m.comprobante ?? '', solapa: m.solapa ?? 'Ctas de gastos',
+      comprobante: m.comprobante ?? '', solapa: m.solapa ?? 'Ctas de gastos', fecha_cierre: m.fecha_cierre ?? '',
     })
     setShowForm(true)
   }
@@ -75,10 +76,11 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [importRows, setImportRows] = useState<ImportRow[] | null>(null)
+  const [importFechaCierre, setImportFechaCierre] = useState('')
   const [savingImport, setSavingImport] = useState(false)
 
   function closeImport() {
-    setShowImport(false); setImportFile(null); setImportRows(null); setImportError(null)
+    setShowImport(false); setImportFile(null); setImportRows(null); setImportError(null); setImportFechaCierre('')
   }
 
   async function handleAnalyzeImport() {
@@ -106,6 +108,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
         selected: true,
       }))
       setImportRows(rows)
+      setImportFechaCierre(data.fecha_cierre || '')
     } catch (e: any) {
       setImportError(e.message ?? 'Error al procesar el documento')
     } finally {
@@ -134,6 +137,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
       dolares: r.dolares || null,
       comprobante: r.comprobante || null,
       solapa: r.solapa || null,
+      fecha_cierre: importFechaCierre || null,
       created_by: user?.id,
     })))
     if (error) { setSavingImport(false); alert('Error: ' + error.message); return }
@@ -159,6 +163,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
       dolares: form.dolares ? parseFloat(form.dolares) : null,
       comprobante: form.comprobante || null,
       solapa: form.solapa || null,
+      fecha_cierre: form.fecha_cierre || null,
     }
     const { error } = editingId
       ? await sb.from('tarjeta_credito').update(payload).eq('id', editingId)
@@ -264,6 +269,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
     DÓLARES: m.dolares ?? '',
     Comprobante: m.comprobante ?? '',
     Solapa: m.solapa ?? '',
+    'Fecha cierre': m.fecha_cierre ? formatDateAR(m.fecha_cierre) : '',
   })), [filtered])
 
   return (
@@ -284,6 +290,11 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Cuota</label>
                 <input type="text" value={form.cuota} onChange={e => setForm(f => ({ ...f, cuota: e.target.value }))} placeholder="1/6"
+                  className={filterInputClass}/>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1.5">Fecha de cierre del resumen</label>
+                <input type="date" value={form.fecha_cierre} onChange={e => setForm(f => ({ ...f, fecha_cierre: e.target.value }))}
                   className={filterInputClass}/>
               </div>
               <div className="col-span-2">
@@ -367,6 +378,11 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
                 <p className="text-sm text-gray-500 mb-3">
                   Encontramos {importRows.length} movimiento{importRows.length !== 1 ? 's' : ''}. Revisá, ajustá clasificación/solapa y desmarcá lo que no quieras cargar.
                 </p>
+                <div className="mb-4 max-w-xs">
+                  <label className="block text-xs text-gray-400 mb-1.5">Fecha de cierre del resumen</label>
+                  <input type="date" value={importFechaCierre} onChange={e => setImportFechaCierre(e.target.value)} className={filterInputClass}/>
+                  <p className="text-[11px] text-gray-400 mt-1">La toma la IA del documento; se aplica a todos los movimientos de esta importación.</p>
+                </div>
                 <div className="border border-gray-100 rounded-xl overflow-x-auto mb-4">
                   <table className="w-full">
                     <thead>
@@ -509,7 +525,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
                 {([
                   ['fecha', 'Fecha', 'left'], ['proveedor', 'Proveedor', 'left'], ['cuota', 'Cuota', 'left'],
                   ['clasificacion', 'Clasificación', 'left'], ['pesos', 'Pesos', 'right'], ['dolares', 'Dólares', 'right'],
-                  ['comprobante', 'Comprobante', 'left'], ['solapa', 'Solapa', 'left'],
+                  ['comprobante', 'Comprobante', 'left'], ['solapa', 'Solapa', 'left'], ['fecha_cierre', 'Fecha cierre', 'left'],
                 ] as [SortKey, string, 'left' | 'right'][]).map(([key, label, align]) => (
                   <th key={key} onClick={() => toggleSort(key)}
                     className={`px-4 py-3 text-${align} text-xs font-medium text-gray-400 whitespace-nowrap cursor-pointer hover:text-gray-600 select-none`}>
@@ -530,6 +546,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
                   <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmt(m.dolares)}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.comprobante ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.solapa ?? '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{m.fecha_cierre ? formatDateAR(m.fecha_cierre) : '—'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <button onClick={() => openEdit(m)}
                       className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
@@ -548,7 +565,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
                 <td className="px-4 py-3" colSpan={4}>Total</td>
                 <td className="px-4 py-3 text-right">{fmt(totalPesos)}</td>
                 <td className="px-4 py-3 text-right">{fmt(totalDolares)}</td>
-                <td className="px-4 py-3" colSpan={3}/>
+                <td className="px-4 py-3" colSpan={4}/>
               </tr>
             </tfoot>
           </table>

@@ -6,6 +6,7 @@ import { extractFromDocument } from '@/lib/anthropic/extract'
 const SCHEMA = {
   type: 'object',
   properties: {
+    fecha_cierre: { type: 'string', description: 'Fecha de cierre del resumen tal como figura impresa en el documento (encabezado o pie del resumen), en formato YYYY-MM-DD. Cadena vacía si no figura.' },
     movimientos: {
       type: 'array',
       description: 'Todos los consumos/movimientos individuales que aparecen en el resumen de tarjeta de crédito, en el mismo orden que en el documento.',
@@ -25,11 +26,11 @@ const SCHEMA = {
       },
     },
   },
-  required: ['movimientos'],
+  required: ['fecha_cierre', 'movimientos'],
   additionalProperties: false,
 }
 
-const SYSTEM = `Sos un asistente contable que extrae la lista completa de movimientos/consumos de un resumen de tarjeta de crédito bancario argentino (PDF), incluyendo TODAS las filas del período, no solo un resumen. Cada fila del resumen es un movimiento independiente. Si un consumo está en dólares, poné el monto en "dolares" y 0 en "pesos"; si está en pesos, al revés. Las fechas van en formato YYYY-MM-DD. No incluyas totales, subtotales, saldos ni líneas de intereses financieros del resumen como si fueran consumos, solo los consumos/compras individuales.`
+const SYSTEM = `Sos un asistente contable que extrae datos de un resumen de tarjeta de crédito bancario argentino (PDF). Extraé la fecha de cierre del resumen (fecha_cierre) y la lista completa de movimientos/consumos, incluyendo TODAS las filas del período, no solo un resumen. Cada fila del resumen es un movimiento independiente. Si un consumo está en dólares, poné el monto en "dolares" y 0 en "pesos"; si está en pesos, al revés. Las fechas van en formato YYYY-MM-DD. No incluyas totales, subtotales, saldos ni líneas de intereses financieros del resumen como si fueran consumos, solo los consumos/compras individuales.`
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
