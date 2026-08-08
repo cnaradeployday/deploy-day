@@ -224,7 +224,9 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
   const cuotasSuscriptas = movimientos.filter(m => m.operacion === 'SUSCRIPCION').reduce((s, m) => s + Number(m.cantidad_cuotas), 0)
   const cuotasRescatadas = movimientos.filter(m => m.operacion === 'RESCATE').reduce((s, m) => s + Number(m.cantidad_cuotas), 0)
   const cuotasEnCartera = cuotasSuscriptas - cuotasRescatadas
-  const ultimoTc = movimientos.length ? Number(movimientos[movimientos.length - 1].tc_fondo) : 0
+  const ultimoTc = cierres.length
+    ? Number(cierres[0].tc_fondo)
+    : movimientos.length ? Number(movimientos[movimientos.length - 1].tc_fondo) : 0
   const valorEstimado = cuotasEnCartera * ultimoTc
 
   const [sortKey, setSortKey] = useState<SortKey>('fecha')
