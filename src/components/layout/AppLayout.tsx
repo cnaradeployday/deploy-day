@@ -6,7 +6,7 @@ import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
 import FloatingChat from './FloatingChat'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell, Landmark } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -33,6 +33,7 @@ const navItems = [
   { href: '/liquidaciones',     label: 'Liquidaciones',      icon: Receipt,         roles: ['admin','gerente_operaciones','colaborador'] },
   { href: '/facturas-clientes', label: 'Facturas clientes',  icon: FileText,        roles: ['admin'] },
   { href: '/resumen-facturas',  label: 'Resumen facturas',   icon: FileText,        roles: ['admin'] },
+  { href: '/contabilidad',      label: 'Contabilidad',       icon: Landmark,        roles: ['admin'] },
   { href: '/cotizaciones',      label: 'Cotizaciones USD',   icon: TrendingUp,      roles: ['admin'] },
   { href: '/roles',             label: 'Roles y permisos',   icon: Shield,          roles: ['admin'] },
   { href: '/logs',              label: 'Logs',               icon: Activity,        roles: ['admin'] },
@@ -208,7 +209,7 @@ export default function AppLayout({
       >
         <div className="px-4 py-4 border-b border-gray-50 shrink-0">
           <div className="flex items-center justify-between">
-            {!isCollapsed && <Image src="/logo.jpeg" alt="DDS" width={100} height={30} className="object-contain rounded-md"/>}
+            {!isCollapsed && <Image src="/logo.png" alt="Deploy Day" width={110} height={20} className="object-contain"/>}
             <button onClick={toggleCollapsed}
               className={`p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all ${isCollapsed ? 'mx-auto' : 'ml-auto'}`}>
               {isCollapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
@@ -275,7 +276,7 @@ export default function AppLayout({
 
       {/* Header mobile — SIN OnlineUsers para evitar doble canal */}
       <header style={{ top: newsPx }} className="md:hidden fixed inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30">
-        <Image src="/logo.jpeg" alt="DDS" width={90} height={28} className="object-contain rounded-md"/>
+        <Image src="/logo.png" alt="Deploy Day" width={100} height={19} className="object-contain"/>
         <div className="flex items-center gap-2">
           <button onClick={() => setOpen(!open)} className="p-1.5 text-gray-500 relative">
             {open ? <X size={20}/> : <Menu size={20}/>}
@@ -289,7 +290,7 @@ export default function AppLayout({
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"/>
           <div className="absolute left-0 top-0 h-full w-72 bg-white shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-5 border-b border-gray-50">
-              <Image src="/logo.jpeg" alt="DDS" width={100} height={30} className="object-contain rounded-md"/>
+              <Image src="/logo.png" alt="Deploy Day" width={110} height={20} className="object-contain"/>
               <div className="flex items-center gap-3 mt-4">
                 <Avatar url={avatarUrl ?? null} name={userName} size={10}/>
                 <div>

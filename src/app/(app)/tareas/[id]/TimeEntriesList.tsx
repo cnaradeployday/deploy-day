@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
+import { formatDateAR } from '@/lib/utils/date'
 
 interface Entry {
   id: string
@@ -24,19 +25,30 @@ export default function TimeEntriesList({
   const router = useRouter()
   const [editId, setEditId] = useState<string | null>(null)
   const [editHours, setEditHours] = useState('')
+  const [editUnit, setEditUnit] = useState<'horas' | 'minutos'>('horas')
   const [editNotes, setEditNotes] = useState('')
   const [editDate, setEditDate] = useState('')
   const [loading, setLoading] = useState(false)
 
   function startEdit(e: Entry) {
-    setEditId(e.id); setEditHours(String(e.hours_logged))
+    setEditId(e.id); setEditHours(String(e.hours_logged)); setEditUnit('horas')
     setEditNotes(e.notes ?? ''); setEditDate(e.entry_date)
   }
   function cancelEdit() { setEditId(null) }
 
+  function switchEditUnit(next: 'horas' | 'minutos') {
+    if (next === editUnit) return
+    const current = parseFloat(editHours)
+    if (!isNaN(current)) {
+      setEditHours(next === 'minutos' ? String(Math.round(current * 60)) : String(Math.round((current / 60) * 100) / 100))
+    }
+    setEditUnit(next)
+  }
+
   async function saveEdit(id: string) {
-    const h = parseFloat(editHours)
-    if (!h || h <= 0) return
+    const raw = parseFloat(editHours)
+    if (!raw || raw <= 0) return
+    const h = editUnit === 'minutos' ? Math.round((raw / 60) * 100) / 100 : raw
     setLoading(true)
     const { error } = await createClient()
       .from('time_entries')
@@ -70,8 +82,16 @@ export default function TimeEntriesList({
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Horas</label>
-                      <input type="number" min="0.5" step="0.5" value={editHours}
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs text-gray-400">{editUnit === 'minutos' ? 'Minutos' : 'Horas'}</label>
+                        <div className="flex rounded-md border border-gray-200 overflow-hidden text-[10px] font-medium">
+                          <button type="button" onClick={() => switchEditUnit('horas')}
+                            className={`px-1.5 py-0.5 transition-all ${editUnit === 'horas' ? 'bg-[#1B9BF0] text-white' : 'text-gray-400 hover:bg-gray-50'}`}>hs</button>
+                          <button type="button" onClick={() => switchEditUnit('minutos')}
+                            className={`px-1.5 py-0.5 transition-all ${editUnit === 'minutos' ? 'bg-[#1B9BF0] text-white' : 'text-gray-400 hover:bg-gray-50'}`}>min</button>
+                        </div>
+                      </div>
+                      <input type="number" min={editUnit === 'minutos' ? '1' : '0.5'} step={editUnit === 'minutos' ? '1' : '0.5'} value={editHours}
                         onChange={ev => setEditHours(ev.target.value)}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
                     </div>
@@ -105,7 +125,7 @@ export default function TimeEntriesList({
                   <div className="flex items-center gap-1 ml-3 shrink-0">
                     <div className="text-right mr-1">
                       <p className="text-xs font-semibold text-gray-900">{e.hours_logged}h</p>
-                      <p className="text-xs text-gray-400">{new Date(e.entry_date).toLocaleDateString('es-AR')}</p>
+                      <p className="text-xs text-gray-400">{formatDateAR(e.entry_date)}</p>
                     </div>
                     {(isAdmin || (e.user_id ?? e.user?.id) === currentUserId) && (
                       <>

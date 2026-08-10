@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Clock, CheckSquare, Pencil } from 'lucide-react'
 import ProyectoSegmentos from './ProyectoSegmentos'
+import { formatDateShortAR } from '@/lib/utils/date'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -25,6 +26,21 @@ const priorityColors: Record<string, string> = {
 export default async function ProyectoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role, custom_role_id').eq('id', user.id).single()
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'proyectos').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
 
   const { data: proyecto } = await supabase
     .from('projects')
@@ -50,11 +66,6 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
     ? await supabase.from('time_entries').select('task_id, hours_logged, entry_date').in('task_id', taskIds)
     : { data: [] }
   const totalConsumido = Math.round(((timeEntries ?? []).reduce((s, e) => s + e.hours_logged, 0)) * 10) / 10
-
-  const { data: profile } = await supabase.auth.getUser()
-    .then(({ data }) => supabase.from('users').select('role').eq('id', data.user?.id ?? '').single())
-
-  const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
   const totalEstimado = tareas?.reduce((sum, t) => sum + (t.estimated_hours ?? 0), 0) ?? 0
   const totalSegmentos = segmentos?.reduce((s, seg) => s + seg.horas, 0) ?? 0
@@ -130,7 +141,7 @@ export default async function ProyectoDetailPage({ params }: { params: Promise<{
               <p className="text-sm font-medium text-gray-900">{t.title}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {(t.direct_responsible as any)?.full_name}
-                {t.due_date && ' · ' + new Date(t.due_date).toLocaleDateString('es-AR', { day:'numeric', month:'short' })}
+                {t.due_date && ' · ' + formatDateShortAR(t.due_date)}
               </p>
             </div>
             <div className="flex items-center gap-2">

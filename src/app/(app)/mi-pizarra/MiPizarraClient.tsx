@@ -3,6 +3,7 @@ import { useState, useRef, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, Loader2, StickyNote, Check, X, Send, Search, ImageIcon, Pencil, Calendar, Building2 } from 'lucide-react'
 import Image from 'next/image'
+import { isPastDate, todayISO } from '@/lib/utils/date'
 
 const COLORS: Record<string, { bg: string; border: string; label: string }> = {
   yellow: { bg: '#FEF9C3', border: '#FDE68A', label: 'Amarillo' },
@@ -28,8 +29,7 @@ function renderMentions(text: string): React.ReactNode {
 }
 
 function isExpired(due_date: string | null | undefined): boolean {
-  if (!due_date) return false
-  return due_date < new Date().toISOString().split('T')[0]
+  return isPastDate(due_date)
 }
 
 interface Client { id: string; name: string }
@@ -636,7 +636,7 @@ export default function MiPizarraClient({ userId, userName, initialPostits, team
   const [filterExpired, setFilterExpired] = useState<'all' | 'expired' | 'active'>('all')
   const [sortBy, setSortBy] = useState<'due_date' | 'created_at' | 'client'>('due_date')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayISO()
 
   const processed = useMemo(() => {
     let items = [...postits]

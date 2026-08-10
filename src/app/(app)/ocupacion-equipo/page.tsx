@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import OcupacionEquipoClient from './OcupacionEquipoClient'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 export default async function OcupacionEquipoPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -23,11 +24,9 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   if (!canAccess) redirect('/dashboard')
 
   const sp = await searchParams
-  const mesActual = new Date().toISOString().slice(0, 7)
+  const mesActual = currentMonthAR()
   const mes = sp.mes ?? mesActual
-  const [anio, mesNum] = mes.split('-').map(Number)
-  const primerDia = new Date(anio, mesNum - 1, 1).toISOString().split('T')[0]
-  const ultimoDia = new Date(anio, mesNum, 0).toISOString().split('T')[0]
+  const { primerDia, ultimoDia } = monthBounds(mes)
 
   const { data: usuarios } = await supabase
     .from('users').select('id, full_name').eq('is_active', true).order('full_name')

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import LiquidacionesColaborador from './LiquidacionesColaborador'
 import LiquidacionesAdmin from './LiquidacionesAdmin'
+import { currentMonthAR } from '@/lib/utils/date'
 
 export default async function LiquidacionesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
@@ -21,7 +22,7 @@ export default async function LiquidacionesPage({ searchParams }: { searchParams
   const sp = await searchParams
   const isColaborador = profile.role === 'colaborador'
   const tab = sp.tab ?? (isColaborador ? 'mis-liquidaciones' : 'resumen')
-  const selectedMes = sp.mes ?? new Date().toISOString().slice(0, 7)
+  const selectedMes = sp.mes ?? currentMonthAR()
 
   if (isColaborador) {
     const { data: liquidaciones } = await supabase

@@ -3,11 +3,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CheckCircle, XCircle } from 'lucide-react'
+import { todayISO } from '@/lib/utils/date'
 
 export default function FacturaClienteActions({ facturaId, estado }: { facturaId: string; estado: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [fechaCobro, setFechaCobro] = useState(new Date().toISOString().split('T')[0])
+  const [fechaCobro, setFechaCobro] = useState(todayISO())
 
   async function marcarCobrada() {
     if (!confirm('Marcar como cobrada?')) return

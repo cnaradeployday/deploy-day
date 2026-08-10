@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Play, Square, Clock } from 'lucide-react'
+import { todayISO } from '@/lib/utils/date'
 
 export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { taskId: string; userId: string; taskTitle?: string; taskStatus?: string }) {
   const [running, setRunning] = useState(false)
@@ -114,7 +115,7 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
       task_id: taskId,
       user_id: userId,
       hours_logged: hoursLogged,
-      entry_date: new Date().toISOString().split('T')[0],
+      entry_date: todayISO(),
       notes: 'Registrado con cronómetro'
     })
 

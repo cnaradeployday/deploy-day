@@ -1,11 +1,26 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Mail, Phone, FileText, FolderKanban } from 'lucide-react'
 
 export default async function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('users').select('role, custom_role_id').eq('id', user.id).single()
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'clientes').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
 
   const { data: cliente } = await supabase.from('clients').select('*').eq('id', id).single()
   if (!cliente) notFound()

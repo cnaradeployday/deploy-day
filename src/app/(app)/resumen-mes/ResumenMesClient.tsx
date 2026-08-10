@@ -1,8 +1,65 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
-import { Download, BarChart3, TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, ChevronDown, Check, AlertTriangle, CornerDownRight, type LucideIcon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Download, BarChart3, TrendingUp, TrendingDown, Minus, RefreshCw, ChevronRight, ChevronDown, Check, AlertTriangle, CornerDownRight, ArrowUp, ArrowDown, ArrowUpDown, Filter, type LucideIcon } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { createClient } from '@/lib/supabase/client'
+
+type Mood = 'muy_feliz' | 'feliz' | 'neutral' | 'enojado' | 'muy_enojado'
+
+const MOOD_EMOJI: Record<Mood, string> = {
+  muy_feliz: '😄', feliz: '🙂', neutral: '😐', enojado: '🙁', muy_enojado: '😡',
+}
+const MOOD_LABEL: Record<Mood, string> = {
+  muy_feliz: 'Muy feliz', feliz: 'Feliz', neutral: 'Neutral', enojado: 'Enojado', muy_enojado: 'Muy enojado',
+}
+const MOOD_ORDER: Mood[] = ['muy_feliz', 'feliz', 'neutral', 'enojado', 'muy_enojado']
+
+function MoodPicker({ clienteId, mood, onChange }: { clienteId: string; mood: Mood | null; onChange: (m: Mood) => void }) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  async function pick(m: Mood) {
+    setOpen(false)
+    setSaving(true)
+    const { error } = await createClient().from('clients').update({ mood: m }).eq('id', clienteId)
+    setSaving(false)
+    if (error) { alert('Error al guardar el humor: ' + error.message); return }
+    onChange(m)
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block" onClick={e => e.stopPropagation()}>
+      <button type="button" onClick={() => setOpen(o => !o)} disabled={saving}
+        title={mood ? MOOD_LABEL[mood] : 'Sin definir — click para cargar'}
+        className={`w-7 h-7 rounded-lg flex items-center justify-center text-base transition-all hover:bg-gray-100 ${saving ? 'opacity-40' : ''}`}>
+        {mood ? MOOD_EMOJI[mood] : <span className="text-gray-300 text-xs">—</span>}
+      </button>
+      {open && (
+        <div className="absolute z-20 top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-1.5 flex items-center gap-1">
+          {MOOD_ORDER.map(m => (
+            <button key={m} type="button" onClick={() => pick(m)} title={MOOD_LABEL[m]}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg hover:bg-gray-100 transition-all ${m === mood ? 'bg-blue-50 ring-1 ring-[#1B9BF0]' : ''}`}>
+              {MOOD_EMOJI[m]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const ESTADO_LABELS = ['Sin horas vendidas', 'Subejecutando', 'Sobreejecutando', 'En ritmo', 'Pocas hs. programadas', 'Muchas hs. programadas'] as const
+type SortKey = 'cliente' | 'vendidas' | 'estimadas' | 'usadas' | 'pct'
 
 function nombreMes(m: string) {
   return new Date(m + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })
@@ -45,9 +102,65 @@ function EstadoCell({ vendidas, estimadas, usadas, pctTiempo }: { vendidas: numb
   )
 }
 
+function SortHeader({ label, sortKey, colSpan, align = 'right', activeSort, onSort, title }: {
+  label: string; sortKey: SortKey; colSpan: number; align?: 'left' | 'right'
+  activeSort: { key: SortKey; dir: 'asc' | 'desc' }
+  onSort: (k: SortKey) => void
+  title?: string
+}) {
+  const isActive = activeSort.key === sortKey
+  const Icon = isActive ? (activeSort.dir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown
+  return (
+    <button onClick={() => onSort(sortKey)} title={title}
+      className={`col-span-${colSpan} flex items-center gap-1 hover:text-gray-600 transition-colors whitespace-nowrap ${align === 'right' ? 'justify-end' : ''} ${isActive ? 'text-gray-600' : ''}`}>
+      {label}<Icon size={11} className={isActive ? 'opacity-100' : 'opacity-30'}/>
+    </button>
+  )
+}
+
+function EstadoFilterDropdown({ selected, onChange }: { selected: Set<string>; onChange: (s: Set<string>) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function toggle(label: string) {
+    const next = new Set(selected)
+    if (next.has(label)) next.delete(label); else next.add(label)
+    onChange(next)
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-1 hover:text-gray-600 transition-colors ${selected.size > 0 ? 'text-[#1B9BF0] font-semibold' : ''}`}>
+        Estado <Filter size={11}/>{selected.size > 0 && <span className="text-[10px]">({selected.size})</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 min-w-[210px] p-2">
+          <div className="flex items-center justify-between px-2 pb-1 mb-1 border-b border-gray-50">
+            <span className="text-[11px] font-medium text-gray-400">Filtrar por estado</span>
+            {selected.size > 0 && <button onClick={() => onChange(new Set())} className="text-[10px] text-[#1B9BF0] hover:underline">Limpiar</button>}
+          </div>
+          {ESTADO_LABELS.map(label => (
+            <label key={label} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer text-left">
+              <input type="checkbox" checked={selected.has(label)} onChange={() => toggle(label)} className="accent-[#1B9BF0]"/>
+              <span className="text-xs text-gray-700">{label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ResumenMesClient({ filas, mes, mesActual, clientes, filterCliente, mesesDisponibles = [] }: {
   filas: {
-    id: string; nombre: string; cliente: string; clienteId: string
+    id: string; nombre: string; cliente: string; clienteId: string; clienteMood: Mood | null
     horasVendidas: number; horasEstimadas: number; horasConsumidas: number
   }[]
   mes: string
@@ -57,6 +170,13 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
   mesesDisponibles?: string[]
 }) {
   const router = useRouter()
+
+  // Humor por cliente: estado local para reflejar cambios al instante al elegir un emoji
+  const [moods, setMoods] = useState<Record<string, Mood | null>>(() => {
+    const m: Record<string, Mood | null> = {}
+    filas.forEach(f => { if (f.clienteId) m[f.clienteId] = f.clienteMood })
+    return m
+  })
 
   // Usar meses del server (basados en segmentos reales) o fallback a 6 meses
   const meses: string[] = mesesDisponibles.length > 0 ? mesesDisponibles : (() => {
@@ -77,12 +197,6 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
     router.push('/resumen-mes?' + p.toString())
   }
 
-  const filtered = filterCliente ? filas.filter(f => f.clienteId === filterCliente) : filas
-
-  const totalVendidas = filtered.reduce((s, f) => s + f.horasVendidas, 0)
-  const totalEstimadas = filtered.reduce((s, f) => s + f.horasEstimadas, 0)
-  const totalConsumidas = filtered.reduce((s, f) => s + f.horasConsumidas, 0)
-
   // % del mes ya transcurrido: mes pasado = 100%, mes futuro = 0%, mes actual = dia de hoy / dias del mes
   const pctTiempo = useMemo(() => {
     const [y, mm] = mes.split('-').map(Number)
@@ -90,6 +204,28 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
     const diaRef = mes === mesActual ? new Date().getDate() : mes < mesActual ? totalDias : 0
     return diaRef / totalDias
   }, [mes, mesActual])
+
+  const [estadoFilter, setEstadoFilter] = useState<Set<string>>(new Set())
+
+  const filteredByCliente = filterCliente ? filas.filter(f => f.clienteId === filterCliente) : filas
+
+  const filtered = useMemo(() => {
+    if (estadoFilter.size === 0) return filteredByCliente
+    return filteredByCliente.filter(f => {
+      const labels = estadoBadges(f.horasVendidas, f.horasEstimadas, f.horasConsumidas, pctTiempo).map(b => b.label)
+      return labels.some(l => estadoFilter.has(l))
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredByCliente, estadoFilter, pctTiempo])
+
+  const totalVendidas = filtered.reduce((s, f) => s + f.horasVendidas, 0)
+  const totalEstimadas = filtered.reduce((s, f) => s + f.horasEstimadas, 0)
+  const totalConsumidas = filtered.reduce((s, f) => s + f.horasConsumidas, 0)
+
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'cliente', dir: 'asc' })
+  function onSort(key: SortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
+  }
 
   const grupos = useMemo(() => {
     const map = new Map<string, { clienteId: string; cliente: string; proyectos: typeof filtered; vendidas: number; estimadas: number; usadas: number }>()
@@ -104,8 +240,19 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
     })
     const arr = [...map.values()]
     arr.forEach(g => g.proyectos.sort((a, b) => a.nombre.localeCompare(b.nombre)))
-    return arr.sort((a, b) => a.cliente.localeCompare(b.cliente))
-  }, [filtered])
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const pctOf = (g: { vendidas: number; usadas: number }) => g.vendidas > 0 ? g.usadas / g.vendidas : -1
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'vendidas': return dir * (a.vendidas - b.vendidas)
+        case 'estimadas': return dir * (a.estimadas - b.estimadas)
+        case 'usadas': return dir * (a.usadas - b.usadas)
+        case 'pct': return dir * (pctOf(a) - pctOf(b))
+        default: return dir * a.cliente.localeCompare(b.cliente)
+      }
+    })
+    return arr
+  }, [filtered, sort])
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   function toggleExpand(clienteId: string) {
@@ -125,7 +272,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
       'Horas estimadas': f.horasEstimadas,
       'Horas usadas': f.horasConsumidas,
       'Diferencia': f.horasVendidas - f.horasEstimadas,
-      '% consumido': f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) + '%' : '—',
+      '% Usado/Vendido': f.horasVendidas > 0 ? Math.round((f.horasConsumidas / f.horasVendidas) * 100) + '%' : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
@@ -200,29 +347,39 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
+          <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50 items-center">
             <span className="col-span-1">Mes</span>
-            <span className="col-span-3">Cliente</span>
-            <span className="text-right col-span-2">Vendidas</span>
-            <span className="text-right col-span-1">Estimadas</span>
-            <span className="text-right col-span-1">Usadas</span>
-            <span className="text-right col-span-1">%</span>
-            <span className="text-right col-span-3">Estado</span>
+            <SortHeader label="Cliente" sortKey="cliente" colSpan={2} align="left" activeSort={sort} onSort={onSort}/>
+            <span className="col-span-1" title="Humor del cliente — se carga y actualiza a mano">Humor</span>
+            <SortHeader label="Vendidas" sortKey="vendidas" colSpan={2} activeSort={sort} onSort={onSort}/>
+            <SortHeader label="Estimadas" sortKey="estimadas" colSpan={1} activeSort={sort} onSort={onSort}/>
+            <SortHeader label="Usadas" sortKey="usadas" colSpan={1} activeSort={sort} onSort={onSort}/>
+            <SortHeader label="% U/V" sortKey="pct" colSpan={1} activeSort={sort} onSort={onSort}
+              title="% de horas usadas sobre las horas vendidas"/>
+            <div className="col-span-3 flex justify-end">
+              <EstadoFilterDropdown selected={estadoFilter} onChange={setEstadoFilter}/>
+            </div>
           </div>
           {grupos.map(g => {
             const isOpen = expanded.has(g.clienteId)
-            const pctG = g.estimadas > 0 ? Math.round((g.usadas / g.estimadas) * 100) : null
+            const pctG = g.vendidas > 0 ? Math.round((g.usadas / g.vendidas) * 100) : null
             const overEstimadoG = g.estimadas > g.vendidas
             const pctColorG = pctG === null ? 'text-gray-300' : pctG >= 100 ? 'text-red-500 font-bold' : pctG >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
             return (
               <div key={g.clienteId || g.cliente}>
                 <div onClick={() => toggleExpand(g.clienteId)} className="grid grid-cols-12 px-5 py-3.5 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center cursor-pointer">
                   <span className="col-span-1 text-xs text-gray-400 capitalize">{nombreMesCorto(mes)}</span>
-                  <span className="col-span-3 text-sm text-gray-900 font-semibold flex items-center gap-1.5 min-w-0">
+                  <span className="col-span-2 text-sm text-gray-900 font-semibold flex items-center gap-1.5 min-w-0">
                     {isOpen ? <ChevronDown size={14} className="text-gray-400 shrink-0"/> : <ChevronRight size={14} className="text-gray-400 shrink-0"/>}
                     <span className="truncate">{g.cliente}</span>
                     <span className="text-[10px] text-gray-300 font-normal shrink-0">({g.proyectos.length})</span>
                   </span>
+                  <div className="col-span-1">
+                    {g.clienteId && (
+                      <MoodPicker clienteId={g.clienteId} mood={moods[g.clienteId] ?? null}
+                        onChange={m => setMoods(prev => ({ ...prev, [g.clienteId]: m }))}/>
+                    )}
+                  </div>
                   <span className="col-span-2 text-sm font-semibold text-gray-900 text-right">{Math.round(g.vendidas * 10) / 10}h</span>
                   <div className="col-span-1 text-right flex items-center justify-end gap-1">
                     <span className={'text-sm ' + (overEstimadoG ? 'text-red-500 font-semibold' : 'text-gray-700')}>{Math.round(g.estimadas * 10) / 10}h</span>
@@ -234,13 +391,14 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
                   </div>
                 </div>
                 {isOpen && g.proyectos.map(f => {
-                  const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
+                  const pct = f.horasVendidas > 0 ? Math.round((f.horasConsumidas / f.horasVendidas) * 100) : null
                   const overEstimado = f.horasEstimadas > f.horasVendidas
                   const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
                   return (
                     <div key={f.id} className="grid grid-cols-12 px-5 py-2.5 border-b border-gray-50 last:border-0 bg-gray-50/60 hover:bg-gray-50 items-center">
                       <span className="col-span-1"/>
-                      <span className="col-span-3 text-xs text-gray-500 truncate pl-5 flex items-center gap-1.5 min-w-0"><CornerDownRight size={11} className="text-gray-300 shrink-0"/><span className="truncate">{f.nombre}</span></span>
+                      <span className="col-span-2 text-xs text-gray-500 truncate pl-5 flex items-center gap-1.5 min-w-0"><CornerDownRight size={11} className="text-gray-300 shrink-0"/><span className="truncate">{f.nombre}</span></span>
+                      <span className="col-span-1"/>
                       <span className="col-span-2 text-sm text-gray-700 text-right">{f.horasVendidas}h</span>
                       <div className="col-span-1 text-right flex items-center justify-end gap-1">
                         <TrendIcon vendidas={f.horasVendidas} estimadas={f.horasEstimadas}/>

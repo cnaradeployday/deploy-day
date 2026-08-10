@@ -1,15 +1,29 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import TareasTable from './TareasTable'
 import { applyNickname } from '@/lib/utils/displayName'
+import { currentMonthAR, monthBounds } from '@/lib/utils/date'
 
 export default async function TareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profileNick } = await supabase.from('users').select('nickname').eq('id', user?.id ?? '').single()
+  if (!user) redirect('/login')
+
+  const { data: profileNick } = await supabase.from('users').select('nickname, role, custom_role_id').eq('id', user.id).single()
   const nickname = profileNick?.nickname ?? null
+
+  const isAdmin = ['admin', 'gerente_operaciones'].includes(profileNick?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profileNick?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profileNick.custom_role_id).eq('module', 'tareas').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
   const sp = await searchParams
   const { status, priority, cliente, proyecto, responsable, mes } = sp
 
@@ -34,19 +48,14 @@ export default async function TareasPage({ searchParams }: { searchParams: Promi
     if (ids.length) query = query.in('project_id', ids)
   }
   if (mes) {
-    const [y, m] = mes.split('-').map(Number)
-    const desde = new Date(y, m - 1, 1).toISOString().split('T')[0]
-    const hasta = new Date(y, m, 0).toISOString().split('T')[0]
+    const { primerDia: desde, ultimoDia: hasta } = monthBounds(mes)
     query = query.gte('due_date', desde).lte('due_date', hasta)
   }
 
   const { data: tareas } = await query
 
   // Horas vendidas del mes (segmentos que intersectan el mes)
-  const mesParaHoras = mes
-  const [hy, hm] = (mesParaHoras ?? new Date().toISOString().slice(0,7)).split('-').map(Number)
-  const hDesde = new Date(hy, hm - 1, 1).toISOString().split('T')[0]
-  const hHasta = new Date(hy, hm, 0).toISOString().split('T')[0]
+  const { primerDia: hDesde, ultimoDia: hHasta } = monthBounds(mes ?? currentMonthAR())
   const { data: segmentosMes } = await supabase
     .from('project_hour_segments')
     .select('horas')

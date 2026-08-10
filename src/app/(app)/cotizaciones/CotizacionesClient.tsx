@@ -3,12 +3,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, TrendingUp, Trash2 } from 'lucide-react'
+import { formatDateAR, todayISO } from '@/lib/utils/date'
 
 export default function CotizacionesClient({ cotizaciones }: { cotizaciones: any[] }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: todayISO(),
     usd_ars: ''
   })
 
@@ -90,7 +91,7 @@ export default function CotizacionesClient({ cotizaciones }: { cotizaciones: any
               {items.map(c => (
                 <div key={c.id} className="flex items-center justify-between px-5 py-3">
                   <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-700">{new Date(c.fecha).toLocaleDateString('es-AR')}</span>
+                    <span className="text-sm text-gray-700">{formatDateAR(c.fecha)}</span>
                     <span className="text-sm font-semibold text-gray-900">$ARS {Number(c.usd_ars).toLocaleString()}</span>
                     <span className="text-xs text-gray-400">por 1 USD</span>
                   </div>

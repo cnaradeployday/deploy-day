@@ -3,12 +3,13 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Calendar, Check, Trash2, Plus } from 'lucide-react'
+import { lastDayOfMonth, ymd } from '@/lib/utils/date'
 
 function primerDia(anio: number, mes: number) {
   return `${anio}-${String(mes).padStart(2, '0')}-01`
 }
 function ultimoDia(anio: number, mes: number) {
-  return new Date(anio, mes, 0).toISOString().split('T')[0]
+  return ymd(anio, mes, lastDayOfMonth(anio, mes))
 }
 function labelMes(yyyy_mm: string) {
   return new Date(yyyy_mm + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' })

@@ -26,7 +26,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-white">
       {/* Left panel — branding */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-[#0a0a0a] p-12">
-        <Image src="/logo.jpeg" alt="Deploy Day" width={160} height={48} className="object-contain rounded-lg" />
+        <div className="bg-white rounded-xl px-4 py-3 self-start">
+          <Image src="/logo.png" alt="Deploy Day" width={160} height={30} className="object-contain" />
+        </div>
         <div className="flex flex-col items-center justify-center flex-1 py-12">
           <Image src="/mascota.jpeg" alt="Deploy Day mascot" width={280} height={280} className="object-contain rounded-2xl" />
         </div>
@@ -38,7 +40,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <Image src="/logo.jpeg" alt="Deploy Day" width={140} height={42} className="object-contain rounded-lg" />
+            <Image src="/logo.png" alt="Deploy Day" width={140} height={26} className="object-contain" />
           </div>
 
           <div className="mb-8">

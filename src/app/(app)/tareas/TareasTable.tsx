@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { deleteTaskAction } from './actions'
 import { X, ChevronUp, ChevronDown, RefreshCw, CheckCircle, Trash2, Pencil, Search, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { formatDateAR, formatDateShortAR, isPastDate } from '@/lib/utils/date'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
@@ -135,7 +136,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
   }
 
   function exportToExcel() {
-    const rows = sorted.map(t => ({ Mes: mesDeDate(t.due_date) ? new Date(mesDeDate(t.due_date) + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' }) : '—', Tarea: t.title, Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—', Responsable: t.direct_responsible?.full_name ?? '—', Colaboradores: (t.task_collaborators ?? []).map((c: any) => c.user?.full_name ?? '').filter(Boolean).join(', ') || '—', 'Horas estimadas': t.estimated_hours ?? '', 'Horas usadas': t.hours_logged, Vencimiento: t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR') : '—', Prioridad: t.priority, Estado: statusLabels[t.status] ?? t.status }))
+    const rows = sorted.map(t => ({ Mes: mesDeDate(t.due_date) ? new Date(mesDeDate(t.due_date) + '-15').toLocaleString('es-AR', { month: 'long', year: 'numeric' }) : '—', Tarea: t.title, Cliente: t.project?.client?.name ?? '—', Proyecto: t.project?.name ?? '—', Responsable: t.direct_responsible?.full_name ?? '—', Colaboradores: (t.task_collaborators ?? []).map((c: any) => c.user?.full_name ?? '').filter(Boolean).join(', ') || '—', 'Horas estimadas': t.estimated_hours ?? '', 'Horas usadas': t.hours_logged, Vencimiento: formatDateAR(t.due_date) || '—', Prioridad: t.priority, Estado: statusLabels[t.status] ?? t.status }))
     const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Tareas'); XLSX.writeFile(wb, 'tareas.xlsx')
   }
 
@@ -187,7 +188,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
           <tbody>
             {!sorted.length ? <tr><td colSpan={12} className="text-center py-12 text-sm text-gray-400">Sin tareas</td></tr>
             : sorted.map(t => {
-              const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado','finalizado'].includes(t.status)
+              const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado','finalizado'].includes(t.status)
               const pct = t.estimated_hours ? Math.round((t.hours_logged / t.estimated_hours) * 100) : null
               const mes = mesDeDate(t.due_date); const collabs = t.task_collaborators ?? []
               return (
@@ -200,7 +201,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
                   <td className="px-3 py-2.5">{collabs.length === 0 ? <span className="text-gray-300 text-xs">—</span> : <div className="flex flex-wrap gap-1">{collabs.map((col: any) => col.user ? <PersonChip key={col.id} name={col.user.full_name} assignedHours={col.assigned_hours} usedHours={t.hours_logged}/> : null)}</div>}</td>
                   <td className="px-3 py-2.5 text-xs text-gray-500">{t.estimated_hours ? t.estimated_hours + 'h' : '—'}</td>
                   <td className="px-3 py-2.5"><div className="flex items-center gap-1.5"><span className={'text-xs font-medium ' + (pct && pct > 90 ? 'text-red-500' : 'text-gray-500')}>{t.hours_logged}h</span>{pct !== null && <div className="w-10 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')} style={{ width: Math.min(100, pct) + '%' }}/></div>}</div></td>
-                  <td className={'px-3 py-2.5 text-xs whitespace-nowrap ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>{t.due_date ? new Date(t.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }) : '—'}</td>
+                  <td className={'px-3 py-2.5 text-xs whitespace-nowrap ' + (isOverdue ? 'text-red-500 font-medium' : 'text-gray-500')}>{t.due_date ? formatDateShortAR(t.due_date) : '—'}</td>
                   <td className="px-3 py-2.5"><span className={'text-xs px-2 py-0.5 rounded-full ' + priorityColors[t.priority]}>{t.priority}</span></td>
                   <td className="px-3 py-2.5"><span className={'text-xs px-2 py-0.5 rounded-full ' + statusColors[t.status]}>{statusLabels[t.status]}</span></td>
                   <td className="px-3 py-2.5"><div className="flex items-center gap-0.5">
@@ -216,7 +217,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
       </div>
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
-          const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !['terminado','presentado'].includes(t.status)
+          const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado'].includes(t.status)
           const collabs = t.task_collaborators ?? []
           return (
             <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
@@ -225,7 +226,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
               {collabs.length > 0 && <p className="text-xs text-gray-400 mb-2">Colaboradores: {collabs.map((c: any) => c.user?.full_name?.split(' ')[0]).filter(Boolean).join(', ')}</p>}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 text-xs text-gray-400">
-                  {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{new Date(t.due_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}</span>}
+                  {t.due_date && <span className={isOverdue ? 'text-red-500' : ''}>{formatDateShortAR(t.due_date)}</span>}
                   <span>{t.hours_logged}h{t.estimated_hours ? '/' + t.estimated_hours + 'h' : ''}</span>
                 </div>
                 <div className="flex items-center gap-1">

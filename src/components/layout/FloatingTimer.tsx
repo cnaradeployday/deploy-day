@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Square, GripHorizontal, ChevronUp, Clock } from 'lucide-react'
 import Link from 'next/link'
+import { todayISO } from '@/lib/utils/date'
 
 interface TimerEntry {
   taskId: string
@@ -168,7 +169,7 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
       await createClient().from('time_entries').insert({
         task_id: taskId, user_id: userId,
         hours_logged: hours,
-        entry_date: new Date().toISOString().split('T')[0],
+        entry_date: todayISO(),
         notes: 'Registrado con cronómetro',
       })
     }

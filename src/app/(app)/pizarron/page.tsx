@@ -15,7 +15,7 @@ export default async function PizarronPage() {
       .limit(100),
     supabase
       .from('users')
-      .select('full_name, avatar_url, role')
+      .select('full_name, avatar_url, role, custom_role_id')
       .eq('id', user.id)
       .single(),
     supabase
@@ -26,6 +26,14 @@ export default async function PizarronPage() {
   ])
 
   const isAdmin = ['admin', 'gerente_operaciones'].includes(profile?.role ?? '')
+  let canAccess = isAdmin
+  if (!canAccess && profile?.custom_role_id) {
+    const { data: perm } = await supabase
+      .from('role_permissions').select('can_read')
+      .eq('role_id', profile.custom_role_id).eq('module', 'pizarron').single()
+    canAccess = perm?.can_read ?? false
+  }
+  if (!canAccess) redirect('/dashboard')
 
   return (
     <PizarronClient

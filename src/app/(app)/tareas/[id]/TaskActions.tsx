@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actions'
 import { Loader2, UserCheck, Clock, AlertTriangle } from 'lucide-react'
 import { logActivity } from '@/lib/logActivity'
+import { todayISO } from '@/lib/utils/date'
 
 export default function TaskActions({
   task, userId, userRole, timeEntries, isDirectResponsible, isCollaborator, canCargarHorasOtros = false,
@@ -23,7 +24,8 @@ export default function TaskActions({
 }) {
   const router = useRouter()
   const [hours, setHours] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [unit, setUnit] = useState<'horas' | 'minutos'>('horas')
+  const [date, setDate] = useState(todayISO())
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -147,7 +149,7 @@ export default function TaskActions({
         task_id: task.id,
         user_id: userId,
         hours_logged: timerHours,
-        entry_date: new Date().toISOString().split('T')[0],
+        entry_date: todayISO(),
         notes: 'Registrado con cronómetro',
       })
       if (!timeError) {
@@ -198,11 +200,12 @@ export default function TaskActions({
     const finalUserId = showUserSelector ? targetUserId : userId
     const targetUser = usuarios.find(u => u.id === finalUserId)
     const isLoadingForOther = finalUserId !== userId
+    const hoursLogged = unit === 'minutos' ? Math.round((parseFloat(hours) / 60) * 100) / 100 : parseFloat(hours)
 
     const { error } = await createClient().from('time_entries').insert({
       task_id: task.id,
       user_id: finalUserId,
-      hours_logged: parseFloat(hours),
+      hours_logged: hoursLogged,
       entry_date: date,
       notes: notes || null
     })
@@ -212,7 +215,7 @@ export default function TaskActions({
       action: 'cargar horas',
       section: 'horas',
       entityId: task.id,
-      detail: hours + 'h' + (isLoadingForOther ? ' para ' + (targetUser?.full_name ?? finalUserId) : '')
+      detail: (unit === 'minutos' ? hours + 'min' : hours + 'h') + (isLoadingForOther ? ' para ' + (targetUser?.full_name ?? finalUserId) : '')
     })
 
     setHours(''); setNotes('')
@@ -359,10 +362,23 @@ export default function TaskActions({
 
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Horas *</label>
-              <input type="number" min="0.5" step="0.5" value={hours}
-                onChange={e => setHours(e.target.value)} placeholder="2"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs text-gray-500">{unit === 'minutos' ? 'Minutos *' : 'Horas *'}</label>
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[10px] font-medium">
+                  <button type="button" onClick={() => { setUnit('horas'); setHours('') }}
+                    className={`px-1.5 py-0.5 transition-all ${unit === 'horas' ? 'bg-[#1B9BF0] text-white' : 'text-gray-400 hover:bg-gray-50'}`}>hs</button>
+                  <button type="button" onClick={() => { setUnit('minutos'); setHours('') }}
+                    className={`px-1.5 py-0.5 transition-all ${unit === 'minutos' ? 'bg-[#1B9BF0] text-white' : 'text-gray-400 hover:bg-gray-50'}`}>min</button>
+                </div>
+              </div>
+              {unit === 'minutos'
+                ? <input type="number" min="1" step="1" value={hours}
+                    onChange={e => setHours(e.target.value)} placeholder="30"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+                : <input type="number" min="0.5" step="0.5" value={hours}
+                    onChange={e => setHours(e.target.value)} placeholder="2"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+              }
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Fecha</label>
