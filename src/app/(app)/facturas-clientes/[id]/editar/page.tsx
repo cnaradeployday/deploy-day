@@ -8,7 +8,7 @@ import { ArrowLeft } from 'lucide-react'
 function generarMeses() {
   const meses: { value: string; label: string }[] = []
   const now = new Date()
-  for (let i = -6; i <= 6; i++) {
+  for (let i = -12; i <= 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     const label = d.toLocaleString('es-AR', { month: 'long', year: 'numeric' })
