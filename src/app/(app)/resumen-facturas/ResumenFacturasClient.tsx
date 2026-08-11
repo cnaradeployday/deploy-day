@@ -26,6 +26,19 @@ function formatImporte(f: any): string {
   return (f.currency === 'USD' ? 'USD ' : '$ ') + Number(f.importe).toLocaleString('es-AR')
 }
 
+// Agrupa las facturas de una celda por estado + moneda, sumando el importe de cada grupo
+function agruparPorEstado(list: any[]): { estado: 'cobrada' | 'vencida' | 'pendiente'; currency: string; importe: number }[] {
+  const groups: Record<string, { estado: 'cobrada' | 'vencida' | 'pendiente'; currency: string; importe: number }> = {}
+  list.forEach(f => {
+    const estado = getEstadoEfectivo(f)
+    const currency = f.currency === 'USD' ? 'USD' : 'ARS'
+    const key = estado + '|' + currency
+    if (!groups[key]) groups[key] = { estado, currency, importe: 0 }
+    groups[key].importe += Number(f.importe)
+  })
+  return Object.values(groups)
+}
+
 function fmtUSD(n: number): string {
   return 'USD ' + Math.round(n).toLocaleString('es-AR')
 }
@@ -464,15 +477,12 @@ export default function ResumenFacturasClient({
                   return (
                     <td key={m} className="px-2 py-2.5 text-center">
                       <div className="flex flex-col items-center gap-1">
-                        {list.map((f, i) => {
-                          const estado = getEstadoEfectivo(f)
-                          return (
-                            <span key={f.id ?? i} className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${estadoStyle[estado]}`}>
-                              <span>{estadoLabel[estado]}</span>
-                              <span className="text-[11px] font-medium opacity-90">{formatImporte(f)}</span>
-                            </span>
-                          )
-                        })}
+                        {agruparPorEstado(list).map((g, i) => (
+                          <span key={i} className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${estadoStyle[g.estado]}`}>
+                            <span>{estadoLabel[g.estado]}</span>
+                            <span className="text-[11px] font-medium opacity-90">{formatImporte(g)}</span>
+                          </span>
+                        ))}
                       </div>
                     </td>
                   )
