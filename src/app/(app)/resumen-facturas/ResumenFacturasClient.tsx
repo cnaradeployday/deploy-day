@@ -308,13 +308,14 @@ export default function ResumenFacturasClient({
 
   const { clientList, facturaMap } = useMemo(() => {
     const clientMap: Record<string, string> = {}
-    const fMap: Record<string, Record<string, any>> = {}
+    const fMap: Record<string, Record<string, any[]>> = {}
     facturas.forEach(f => {
       const cId = f.client_id
       const cName = (f.client as any)?.name ?? '—'
       if (!clientMap[cId]) clientMap[cId] = cName
       if (!fMap[cId]) fMap[cId] = {}
-      fMap[cId][f.mes_servicio] = f
+      if (!fMap[cId][f.mes_servicio]) fMap[cId][f.mes_servicio] = []
+      fMap[cId][f.mes_servicio].push(f)
     })
     const clientList = Object.entries(clientMap)
       .sort((a, b) => a[1].localeCompare(b[1]))
@@ -426,8 +427,8 @@ export default function ResumenFacturasClient({
                   {name}
                 </td>
                 {shownMonths.map(m => {
-                  const f = facturaMap[id]?.[m]
-                  if (!f) {
+                  const list = facturaMap[id]?.[m]
+                  if (!list || list.length === 0) {
                     return (
                       <td key={m} className="px-2 py-2.5 text-center">
                         <span className="inline-block border border-gray-200 text-gray-400 text-[11px] px-3 py-1 rounded-lg whitespace-nowrap">
@@ -436,13 +437,19 @@ export default function ResumenFacturasClient({
                       </td>
                     )
                   }
-                  const estado = getEstadoEfectivo(f)
                   return (
                     <td key={m} className="px-2 py-2.5 text-center">
-                      <span className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${estadoStyle[estado]}`}>
-                        <span>{estadoLabel[estado]}</span>
-                        <span className="text-[11px] font-medium opacity-90">{formatImporte(f)}</span>
-                      </span>
+                      <div className="flex flex-col items-center gap-1">
+                        {list.map((f, i) => {
+                          const estado = getEstadoEfectivo(f)
+                          return (
+                            <span key={f.id ?? i} className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${estadoStyle[estado]}`}>
+                              <span>{estadoLabel[estado]}</span>
+                              <span className="text-[11px] font-medium opacity-90">{formatImporte(f)}</span>
+                            </span>
+                          )
+                        })}
+                      </div>
                     </td>
                   )
                 })}
