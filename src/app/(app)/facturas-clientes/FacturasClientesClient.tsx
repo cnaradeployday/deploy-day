@@ -38,14 +38,16 @@ const ESTADOS = ['pendiente', 'cobrada', 'vencida']
 const estadoDropdownLabel: Record<string, string> = { pendiente: 'Pendiente', cobrada: 'Cobrada', vencida: 'Vencida' }
 
 function CheckDropdown({
-  label, options, selected, onChange,
+  label, options, selected, onChange, searchable,
 }: {
   label: string
   options: { value: string; label: string }[]
   selected: Set<string>
   onChange: (next: Set<string>) => void
+  searchable?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -56,6 +58,10 @@ function CheckDropdown({
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
+  useEffect(() => {
+    if (!open) setSearch('')
+  }, [open])
+
   function toggle(v: string) {
     const next = new Set(selected)
     if (next.has(v)) next.delete(v)
@@ -65,6 +71,10 @@ function CheckDropdown({
 
   const allSelected = selected.size === options.length
   const summary = allSelected ? 'Todos' : selected.size === 0 ? 'Ninguno' : `${selected.size} de ${options.length}`
+
+  const filteredOptions = searchable && search.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : options
 
   return (
     <div ref={ref} className="relative">
@@ -77,9 +87,33 @@ function CheckDropdown({
         <ChevronDown size={13} className="text-gray-400"/>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute z-20 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {searchable && (
+            <div className="px-2 pt-2">
+              <input
+                type="text"
+                autoFocus
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar cliente..."
+                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"
+              />
+            </div>
+          )}
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 mt-1">
+            <button type="button" onClick={() => onChange(new Set(options.map(o => o.value)))}
+              className="text-xs text-[#1B9BF0] hover:underline">
+              Seleccionar todos
+            </button>
+            <button type="button" onClick={() => onChange(new Set())}
+              className="text-xs text-gray-400 hover:underline">
+              Deseleccionar todos
+            </button>
+          </div>
           <div className="max-h-64 overflow-y-auto py-1">
-            {options.map(o => (
+            {filteredOptions.length === 0 ? (
+              <p className="px-3 py-3 text-sm text-gray-400 text-center">Sin resultados</p>
+            ) : filteredOptions.map(o => (
               <label key={o.value} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
                 <input type="checkbox" checked={selected.has(o.value)} onChange={() => toggle(o.value)}
                   className="rounded accent-[#1B9BF0]"/>
@@ -255,7 +289,7 @@ export default function FacturasClientesClient({
         <CheckDropdown label="Estados" options={ESTADOS.map(e => ({ value: e, label: estadoDropdownLabel[e] }))}
           selected={checkedEstados} onChange={setCheckedEstados}/>
         <CheckDropdown label="Clientes" options={clientes.map(c => ({ value: c, label: c }))}
-          selected={checkedClientes} onChange={setCheckedClientes}/>
+          selected={checkedClientes} onChange={setCheckedClientes} searchable/>
         <CheckDropdown label="Meses" options={meses.map(m => ({ value: m, label: formatMes(m) }))}
           selected={checkedMeses} onChange={setCheckedMeses}/>
         {hasFilters && (

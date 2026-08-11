@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ResumenFacturasClient from './ResumenFacturasClient'
+import { findClosestCotizacion } from '@/lib/utils/currency'
 
 function getMonthsOfYear(year: number): string[] {
   return Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
@@ -47,6 +48,15 @@ export default async function ResumenFacturasPage({
     .limit(1)
   const tipoCambio = cotiz?.[0]?.usd_ars ?? null
 
+  // Tipo de cambio más cercano a cada mes, para el total en USD del resumen
+  const { data: cotizacionesAll } = await supabase
+    .from('cotizaciones')
+    .select('fecha, usd_ars')
+  const tipoCambioPorMes: Record<string, number | null> = {}
+  months.forEach(m => {
+    tipoCambioPorMes[m] = findClosestCotizacion(m, cotizacionesAll ?? [])
+  })
+
   return (
     <ResumenFacturasClient
       facturas={facturas ?? []}
@@ -55,6 +65,7 @@ export default async function ResumenFacturasPage({
       availableYears={availableYears}
       clientesAll={clientesAll ?? []}
       tipoCambio={tipoCambio}
+      tipoCambioPorMes={tipoCambioPorMes}
     />
   )
 }

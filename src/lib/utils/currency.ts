@@ -22,3 +22,19 @@ export function convertToUSD(amount: number, currency: Currency, cotizacion: num
   if (cotizacion === 0) return 0
   return amount / cotizacion
 }
+
+// Busca, entre una lista de cotizaciones, la más cercana al mes dado (formato 'YYYY-MM')
+export function findClosestCotizacion(
+  mes: string,
+  cotizaciones: { fecha: string; usd_ars: number }[]
+): number | null {
+  if (cotizaciones.length === 0) return null
+  const target = new Date(`${mes}-15T00:00:00`).getTime()
+  let best = cotizaciones[0]
+  let bestDiff = Math.abs(new Date(best.fecha).getTime() - target)
+  for (const c of cotizaciones) {
+    const diff = Math.abs(new Date(c.fecha).getTime() - target)
+    if (diff < bestDiff) { bestDiff = diff; best = c }
+  }
+  return best.usd_ars
+}

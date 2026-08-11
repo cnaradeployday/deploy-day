@@ -252,7 +252,7 @@ function RankingModal({
 }
 
 export default function ResumenFacturasClient({
-  facturas, months, year, availableYears, clientesAll, tipoCambio,
+  facturas, months, year, availableYears, clientesAll, tipoCambio, tipoCambioPorMes,
 }: {
   facturas: any[]
   months: string[]
@@ -260,6 +260,7 @@ export default function ResumenFacturasClient({
   availableYears: number[]
   clientesAll: { id: string; name: string }[]
   tipoCambio: number | null
+  tipoCambioPorMes: Record<string, number | null>
 }) {
   const router = useRouter()
   const [visibleMonths, setVisibleMonths] = useState<Set<string>>(new Set(months))
@@ -324,6 +325,29 @@ export default function ResumenFacturasClient({
   }, [facturas])
 
   const shownClientList = clientList.filter(c => checkedClients.has(c.id))
+
+  // Total en USD por mes, convirtiendo cada factura con la cotización más cercana a ese mes
+  const monthTotals = useMemo(() => {
+    const totals: Record<string, number | null> = {}
+    shownMonths.forEach(m => {
+      const rate = tipoCambioPorMes[m]
+      let sum = 0
+      let faltaTC = false
+      let count = 0
+      shownClientList.forEach(({ id }) => {
+        const list = facturaMap[id]?.[m]
+        if (!list) return
+        list.forEach(f => {
+          count++
+          const currency = (f.currency ?? 'ARS') as Currency
+          if (currency === 'ARS' && !rate) { faltaTC = true; return }
+          sum += convertToUSD(Number(f.importe), currency, rate ?? 0)
+        })
+      })
+      totals[m] = count === 0 || faltaTC ? null : sum
+    })
+    return totals
+  }, [shownMonths, shownClientList, facturaMap, tipoCambioPorMes])
 
   const [rankingOpen, setRankingOpen] = useState(false)
 
@@ -456,6 +480,20 @@ export default function ResumenFacturasClient({
               </tr>
             ))}
           </tbody>
+          {shownClientList.length > 0 && (
+            <tfoot>
+              <tr className="border-t border-gray-200 bg-gray-50/70">
+                <td className="px-4 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50/70 z-10">
+                  Total USD
+                </td>
+                {shownMonths.map(m => (
+                  <td key={m} className="px-2 py-2.5 text-center text-sm font-bold text-gray-900 whitespace-nowrap">
+                    {monthTotals[m] === null ? '—' : fmtUSD(monthTotals[m] as number)}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
