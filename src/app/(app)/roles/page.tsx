@@ -5,6 +5,7 @@ import RolesClient from './RolesClient'
 const MODULES = [
   { key: 'dashboard',             label: 'Dashboard' },
   { key: 'clientes',              label: 'Clientes' },
+  { key: 'crm',                   label: 'CRM / Prospectación' },
   { key: 'proyectos',             label: 'Proyectos' },
   { key: 'proyectos_mes',         label: 'Proyectos del mes' },
   { key: 'tareas',                label: 'Tareas' },
