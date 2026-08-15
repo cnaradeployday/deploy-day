@@ -108,7 +108,7 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <p className="font-semibold text-gray-900">{isEdit ? 'Editar prospecto' : 'Nuevo prospecto'}</p>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
@@ -134,8 +134,8 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
               </button>
             </div>
             {clientMode === 'new' ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
                   <label className={labelClass}>Nombre / empresa *</label>
                   <input type="text" value={form.prospect_name} onChange={e => set('prospect_name', e.target.value)}
                     placeholder="Ej: Estudio Fernández" className={inputClass}/>
@@ -161,7 +161,7 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
           </div>
 
           {/* Pipeline */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Etapa</label>
               <select value={form.stage} onChange={e => handleStageChange(e.target.value as Stage)} className={inputClass + ' bg-white'}>
@@ -219,7 +219,7 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
           {/* Valor del deal */}
           <div className="border-t border-gray-100 pt-4">
             <p className="text-xs font-medium text-gray-500 mb-2">Valor del deal</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>Moneda</label>
                 <select value={form.currency} onChange={e => set('currency', e.target.value)} className={inputClass + ' bg-white'}>
@@ -262,7 +262,7 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
           {/* Costo de cotizar */}
           <div className="border-t border-gray-100 pt-4">
             <p className="text-xs font-medium text-gray-500 mb-2">Costo de armar esta cotización (para ROI)</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>Horas invertidas en cotizar</label>
                 <input type="number" min="0" step="0.5" value={form.quoting_hours} onChange={e => set('quoting_hours', e.target.value)} className={inputClass}/>

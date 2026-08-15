@@ -66,7 +66,7 @@ export default function StageChangeModal({ prospect, newStage, clientes, current
   if (newStage === 'perdido') {
     return (
       <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 max-w-sm w-full">
           <div className="flex items-center justify-between mb-4">
             <p className="font-semibold text-gray-900 flex items-center gap-2"><Frown size={16} className="text-gray-400"/> Marcar como perdido</p>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>

@@ -18,6 +18,10 @@ const STAGE_COLORS: Record<Stage, string> = {
   perdido: 'bg-red-50 text-red-500',
 }
 
+function isOverdue(p: Prospect): boolean {
+  return isPastDate(p.next_action_date) && !['ganado', 'perdido'].includes(p.stage)
+}
+
 function dealSummary(p: Prospect): string {
   const parts: string[] = []
   if (p.one_shot_amount) parts.push(formatMoney(p.one_shot_amount, p.currency) + ' one-shot')
@@ -55,6 +59,9 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
   const [filterServicio, setFilterServicio] = useState('')
   const [filterFuente, setFilterFuente] = useState('')
   const [filterBusqueda, setFilterBusqueda] = useState('')
+  const [filterFechaDesde, setFilterFechaDesde] = useState('')
+  const [filterFechaHasta, setFilterFechaHasta] = useState('')
+  const [filterVencidas, setFilterVencidas] = useState(false)
 
   function refresh() {
     setShowModal(false); setEditing(null); setStageChange(null)
@@ -92,9 +99,19 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       if (filterServicio && p.service_type !== filterServicio) return false
       if (filterFuente && (p.source ?? '') !== filterFuente) return false
       if (filterBusqueda && !(p.project_name + ' ' + p.prospect_name).toLowerCase().includes(filterBusqueda.toLowerCase())) return false
+      if (filterVencidas && !isOverdue(p)) return false
+      if (filterFechaDesde && (!p.next_action_date || p.next_action_date < filterFechaDesde)) return false
+      if (filterFechaHasta && (!p.next_action_date || p.next_action_date > filterFechaHasta)) return false
       return true
     })
-  }, [prospects, filterResponsable, filterServicio, filterFuente, filterBusqueda])
+  }, [prospects, filterResponsable, filterServicio, filterFuente, filterBusqueda, filterFechaDesde, filterFechaHasta, filterVencidas])
+
+  const hasFilters = !!(filterResponsable || filterServicio || filterFuente || filterBusqueda || filterFechaDesde || filterFechaHasta || filterVencidas)
+  function clearFilters() {
+    setFilterResponsable(''); setFilterServicio(''); setFilterFuente(''); setFilterBusqueda('')
+    setFilterFechaDesde(''); setFilterFechaHasta(''); setFilterVencidas(false)
+  }
+  const overdueCount = prospects.filter(isOverdue).length
 
   const fuentesDisponibles = useMemo(() => [...new Set(prospects.map(p => p.source).filter((s): s is string => !!s))].sort(), [prospects])
 
@@ -117,7 +134,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
   }, [filtered])
 
   function ProspectCard({ p }: { p: Prospect }) {
-    const overdue = isPastDate(p.next_action_date) && !['ganado', 'perdido'].includes(p.stage)
+    const overdue = isOverdue(p)
     return (
       <div
         draggable={canWrite}
@@ -146,7 +163,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
           {p.expected_close_date && <span className="text-[11px] text-gray-400">{formatDateAR(p.expected_close_date)}</span>}
         </div>
         {p.next_action && (
-          <div className={`flex items-center gap-1 mt-2 text-[11px] px-2 py-1 rounded-lg ${overdue ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-500'}`}>
+          <div className={`flex items-center gap-1 mt-2 text-[11px] px-2 py-1 rounded-lg ${overdue ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-50 text-gray-500'}`}>
             {overdue ? <AlertTriangle size={11}/> : <Clock size={11}/>}
             <span className="truncate">{p.next_action}{p.next_action_date ? ` — ${formatDateAR(p.next_action_date)}` : ''}</span>
           </div>
@@ -156,7 +173,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-full">
       {showModal && (
         <ProspectModal prospect={editing} clientes={clientes} usuarios={usuarios} currentUserId={currentUserId}
           onClose={() => { setShowModal(false); setEditing(null) }} onSaved={refresh}/>
@@ -192,7 +209,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       </div>
 
       {/* Dashboard */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}
           sub="One-shots + fee mensual × meses, sin ponderar por probabilidad"/>
         <StatCard label="Probabilidad alta" ars={metrics.altaArs} usd={metrics.altaUsd}/>
@@ -202,8 +219,8 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs text-gray-400 mb-1">Buscar</label>
             <input type="text" value={filterBusqueda} onChange={e => setFilterBusqueda(e.target.value)}
               placeholder="Proyecto o prospecto..."
@@ -233,6 +250,26 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
               {fuentesDisponibles.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Seguimiento desde</label>
+            <input type="date" value={filterFechaDesde} onChange={e => setFilterFechaDesde(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Seguimiento hasta</label>
+            <input type="date" value={filterFechaHasta} onChange={e => setFilterFechaHasta(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          </div>
+        </div>
+        <div className="flex items-center justify-between flex-wrap gap-2 mt-3">
+          <button onClick={() => setFilterVencidas(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              filterVencidas ? 'bg-red-500 text-white' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}>
+            <AlertTriangle size={12}/> {overdueCount} vencida{overdueCount !== 1 ? 's' : ''}
+          </button>
+          {hasFilters && (
+            <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600">Limpiar filtros</button>
+          )}
         </div>
       </div>
 
@@ -242,7 +279,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
           <p className="text-sm">Sin prospectos{prospects.length ? ' para estos filtros' : ''}</p>
         </div>
       ) : view === 'kanban' ? (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory md:snap-none -mx-4 px-4 md:mx-0 md:px-0">
           {STAGES.map(stage => {
             const items = filtered.filter(p => p.stage === stage.key)
             return (
@@ -256,7 +293,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
                   const p = prospects.find(pr => pr.id === id)
                   if (p && canWrite) changeStage(p, stage.key)
                 }}
-                className={`w-72 shrink-0 rounded-2xl p-2.5 transition-colors ${dragOverStage === stage.key ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                className={`w-[85vw] sm:w-72 shrink-0 snap-start rounded-2xl p-2.5 transition-colors ${dragOverStage === stage.key ? 'bg-blue-50' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between px-1.5 py-1 mb-2">
                   <span className={`text-xs font-medium px-2 py-1 rounded-full ${STAGE_COLORS[stage.key]}`}>{stage.label}</span>
                   <span className="text-xs text-gray-400">{items.length}</span>
@@ -287,7 +324,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
             </thead>
             <tbody>
               {filtered.map(p => {
-                const overdue = isPastDate(p.next_action_date) && !['ganado', 'perdido'].includes(p.stage)
+                const overdue = isOverdue(p)
                 const responsable = usuarios.find(u => u.id === p.responsible_id)?.full_name
                 return (
                   <tr key={p.id} onClick={() => openEdit(p)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer transition-colors">
@@ -307,7 +344,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{p.expected_close_date ? formatDateAR(p.expected_close_date) : '—'}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {p.next_action ? (
-                        <span className={`text-xs flex items-center gap-1 ${overdue ? 'text-red-500' : 'text-gray-500'}`}>
+                        <span className={`text-xs flex items-center gap-1 px-2 py-0.5 rounded-full ${overdue ? 'bg-red-100 text-red-600 animate-pulse' : 'text-gray-500'}`}>
                           {overdue ? <AlertTriangle size={11}/> : <Clock size={11}/>}
                           {p.next_action_date ? formatDateAR(p.next_action_date) : p.next_action}
                         </span>
