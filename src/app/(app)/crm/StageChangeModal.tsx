@@ -71,7 +71,7 @@ export default function StageChangeModal({ prospect, newStage, clientes, current
             <p className="font-semibold text-gray-900 flex items-center gap-2"><Frown size={16} className="text-gray-400"/> Marcar como perdido</p>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
           </div>
-          <p className="text-sm text-gray-500 mb-3">{prospect.prospect_name}</p>
+          <p className="text-sm text-gray-500 mb-3">{prospect.project_name} — {prospect.prospect_name}</p>
           <label className="block text-xs text-gray-400 mb-1.5">Motivo (opcional)</label>
           <input type="text" value={lostReason} onChange={e => setLostReason(e.target.value)}
             placeholder="Precio, timing, eligió otro proveedor..." className={inputClass}/>
@@ -95,7 +95,7 @@ export default function StageChangeModal({ prospect, newStage, clientes, current
           <p className="font-semibold text-gray-900 flex items-center gap-2"><PartyPopper size={16} className="text-[#1B9BF0]"/> ¡Prospecto ganado!</p>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
         </div>
-        <p className="text-sm text-gray-500 mb-3">{prospect.prospect_name}</p>
+        <p className="text-sm text-gray-500 mb-3">{prospect.project_name} — {prospect.prospect_name}</p>
 
         {prospect.client_id ? (
           <p className="text-sm text-gray-600">Ya está vinculado a <span className="font-medium text-gray-900">{prospect.client?.name}</span>. Confirmá para marcarlo ganado.</p>

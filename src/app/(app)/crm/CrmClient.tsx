@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Plus, Pencil, Trash2, Target, LayoutGrid, List, Clock, AlertTriangle } from 'lucide-react'
 import { formatMoney } from '@/lib/utils/currency'
 import { formatDateAR, isPastDate } from '@/lib/utils/date'
-import { STAGES, STAGE_LABELS, OPEN_STAGES, SERVICE_LABELS, Prospect, Stage, dealTotal } from './constants'
+import { STAGES, STAGE_LABELS, OPEN_STAGES, SERVICE_LABELS, Prospect, Stage, dealTotal, PROBABILITY_LABELS, PROBABILITY_COLORS, classifyProbability } from './constants'
 import ProspectModal from './ProspectModal'
 import StageChangeModal from './StageChangeModal'
 
@@ -65,7 +65,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
   function openEdit(p: Prospect) { setEditing(p); setShowModal(true) }
 
   async function handleDelete(p: Prospect) {
-    if (!confirm(`¿Eliminar el prospecto "${p.prospect_name}"?`)) return
+    if (!confirm(`¿Eliminar "${p.project_name}" (${p.prospect_name})?`)) return
     setDeletingId(p.id)
     const { error } = await createClient().from('prospects').delete().eq('id', p.id)
     setDeletingId(null)
@@ -91,7 +91,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       if (filterResponsable && p.responsible_id !== filterResponsable) return false
       if (filterServicio && p.service_type !== filterServicio) return false
       if (filterFuente && (p.source ?? '') !== filterFuente) return false
-      if (filterBusqueda && !p.prospect_name.toLowerCase().includes(filterBusqueda.toLowerCase())) return false
+      if (filterBusqueda && !(p.project_name + ' ' + p.prospect_name).toLowerCase().includes(filterBusqueda.toLowerCase())) return false
       return true
     })
   }, [prospects, filterResponsable, filterServicio, filterFuente, filterBusqueda])
@@ -100,28 +100,21 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
 
   const metrics = useMemo(() => {
     const open = filtered.filter(p => OPEN_STAGES.includes(p.stage))
-    const won = filtered.filter(p => p.stage === 'ganado')
     const sum = (list: Prospect[], currency: 'ARS' | 'USD', fn: (p: Prospect) => number) =>
       list.filter(p => p.currency === currency).reduce((s, p) => s + fn(p), 0)
+    const byLevel = (level: 'alta' | 'media' | 'baja') => open.filter(p => classifyProbability(p.probability) === level)
 
     return {
       pipelineArs: sum(open, 'ARS', p => dealTotal(p)),
       pipelineUsd: sum(open, 'USD', p => dealTotal(p)),
-      mrrArs: sum(open, 'ARS', p => (p.monthly_fee ?? 0) * (p.probability / 100)),
-      mrrUsd: sum(open, 'USD', p => (p.monthly_fee ?? 0) * (p.probability / 100)),
-      costoArs: sum(filtered, 'ARS', p => (p.quoting_hours ?? 0) * (p.quoting_hourly_rate ?? 0)),
-      costoUsd: sum(filtered, 'USD', p => (p.quoting_hours ?? 0) * (p.quoting_hourly_rate ?? 0)),
-      ganadoArs: sum(won, 'ARS', p => dealTotal(p)),
-      ganadoUsd: sum(won, 'USD', p => dealTotal(p)),
+      altaArs: sum(byLevel('alta'), 'ARS', dealTotal),
+      altaUsd: sum(byLevel('alta'), 'USD', dealTotal),
+      mediaArs: sum(byLevel('media'), 'ARS', dealTotal),
+      mediaUsd: sum(byLevel('media'), 'USD', dealTotal),
+      bajaArs: sum(byLevel('baja'), 'ARS', dealTotal),
+      bajaUsd: sum(byLevel('baja'), 'USD', dealTotal),
     }
   }, [filtered])
-
-  const roiArs = metrics.costoArs > 0 ? metrics.ganadoArs / metrics.costoArs : null
-  const roiUsd = metrics.costoUsd > 0 ? metrics.ganadoUsd / metrics.costoUsd : null
-  const roiSub = [
-    roiArs !== null ? `${roiArs.toFixed(1)}x en ARS` : null,
-    roiUsd !== null ? `${roiUsd.toFixed(1)}x en USD` : null,
-  ].filter(Boolean).join(' · ') || 'Sin datos de costo aún'
 
   function ProspectCard({ p }: { p: Prospect }) {
     const overdue = isPastDate(p.next_action_date) && !['ganado', 'perdido'].includes(p.stage)
@@ -133,7 +126,10 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
         className="bg-white rounded-xl border border-gray-100 p-3 cursor-pointer hover:border-[#1B9BF0] hover:shadow-sm transition-all group"
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium text-gray-900 leading-snug">{p.prospect_name}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 leading-snug truncate">{p.project_name}</p>
+            <p className="text-xs text-gray-400 truncate">{p.prospect_name}</p>
+          </div>
           {canWrite && (
             <button onClick={e => { e.stopPropagation(); handleDelete(p) }} disabled={deletingId === p.id}
               className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all shrink-0">
@@ -144,7 +140,9 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
         <p className="text-xs text-gray-400 mt-0.5">{SERVICE_LABELS[p.service_type] ?? p.service_type}</p>
         <p className="text-xs text-gray-600 mt-1.5 font-medium">{dealSummary(p)}</p>
         <div className="flex items-center justify-between mt-2">
-          <span className="text-xs font-semibold text-[#1B9BF0]">{p.probability}%</span>
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${PROBABILITY_COLORS[classifyProbability(p.probability)]}`}>
+            {PROBABILITY_LABELS[classifyProbability(p.probability)]}
+          </span>
           {p.expected_close_date && <span className="text-[11px] text-gray-400">{formatDateAR(p.expected_close_date)}</span>}
         </div>
         {p.next_action && (
@@ -197,9 +195,9 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}
           sub="One-shots + fee mensual × meses, sin ponderar por probabilidad"/>
-        <StatCard label="Recurrente mensual ponderado" ars={metrics.mrrArs} usd={metrics.mrrUsd}/>
-        <StatCard label="Costo de cotizar" ars={metrics.costoArs} usd={metrics.costoUsd}/>
-        <StatCard label="ROI horas cotizando" ars={metrics.ganadoArs} usd={metrics.ganadoUsd} sub={roiSub}/>
+        <StatCard label="Probabilidad alta" ars={metrics.altaArs} usd={metrics.altaUsd}/>
+        <StatCard label="Probabilidad media" ars={metrics.mediaArs} usd={metrics.mediaUsd}/>
+        <StatCard label="Probabilidad baja" ars={metrics.bajaArs} usd={metrics.bajaUsd}/>
       </div>
 
       {/* Filtros */}
@@ -208,7 +206,7 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
           <div>
             <label className="block text-xs text-gray-400 mb-1">Buscar</label>
             <input type="text" value={filterBusqueda} onChange={e => setFilterBusqueda(e.target.value)}
-              placeholder="Nombre del prospecto..."
+              placeholder="Proyecto o prospecto..."
               className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
           <div>
@@ -275,9 +273,10 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-50 bg-gray-50">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Proyecto</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Prospecto</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Etapa</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 whitespace-nowrap">Prob.</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Prob.</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Servicio</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Responsable</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 whitespace-nowrap">Importe</th>
@@ -292,11 +291,16 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
                 const responsable = usuarios.find(u => u.id === p.responsible_id)?.full_name
                 return (
                   <tr key={p.id} onClick={() => openEdit(p)} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{p.prospect_name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{p.project_name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{p.prospect_name}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${STAGE_COLORS[p.stage]}`}>{STAGE_LABELS[p.stage]}</span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 text-right whitespace-nowrap">{p.probability}%</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${PROBABILITY_COLORS[classifyProbability(p.probability)]}`}>
+                        {PROBABILITY_LABELS[classifyProbability(p.probability)]}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{SERVICE_LABELS[p.service_type] ?? p.service_type}</td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{responsable ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{dealSummary(p)}</td>

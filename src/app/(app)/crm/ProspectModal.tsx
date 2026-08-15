@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Currency, CURRENCIES } from '@/lib/utils/currency'
-import { STAGES, STAGE_PROBABILITY, SERVICE_LABELS, SOURCES, Prospect, Stage } from './constants'
+import { STAGES, STAGE_PROBABILITY, SERVICE_LABELS, SOURCES, Prospect, Stage, PROBABILITY_LEVELS, classifyProbability } from './constants'
 
 const inputClass = 'w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]'
 const labelClass = 'block text-xs text-gray-400 mb-1.5'
@@ -23,6 +23,7 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
   const [form, setForm] = useState({
     client_id: prospect?.client_id ?? '',
     prospect_name: prospect?.prospect_name ?? '',
+    project_name: prospect?.project_name ?? '',
     contact_email: prospect?.contact_email ?? '',
     contact_phone: prospect?.contact_phone ?? '',
     stage: (prospect?.stage ?? 'contacto_inicial') as Stage,
@@ -56,6 +57,10 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!form.project_name.trim()) {
+      setError('Ingresá el nombre del proyecto')
+      return
+    }
     if (clientMode === 'new' && !form.prospect_name.trim()) {
       setError('Ingresá el nombre del prospecto')
       return
@@ -71,6 +76,7 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
     const payload = {
       client_id: clientMode === 'existing' ? form.client_id : null,
       prospect_name: clientMode === 'existing' ? (selectedClient?.name ?? '') : form.prospect_name.trim(),
+      project_name: form.project_name.trim(),
       contact_email: form.contact_email || null,
       contact_phone: form.contact_phone || null,
       stage: form.stage,
@@ -109,6 +115,12 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className={labelClass}>Nombre del proyecto *</label>
+            <input type="text" value={form.project_name} onChange={e => set('project_name', e.target.value)}
+              placeholder="Ej: Migración a AWS" className={inputClass}/>
+          </div>
+
           {/* Cliente */}
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -157,8 +169,12 @@ export default function ProspectModal({ prospect, clientes, usuarios, currentUse
               </select>
             </div>
             <div>
-              <label className={labelClass}>Probabilidad (%)</label>
-              <input type="number" min="0" max="100" value={form.probability} onChange={e => set('probability', e.target.value)} className={inputClass}/>
+              <label className={labelClass}>Probabilidad de cierre</label>
+              <select value={classifyProbability(parseInt(form.probability, 10) || 0)}
+                onChange={e => set('probability', String(PROBABILITY_LEVELS.find(l => l.key === e.target.value)!.value))}
+                className={inputClass + ' bg-white'}>
+                {PROBABILITY_LEVELS.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Cierre estimado</label>
