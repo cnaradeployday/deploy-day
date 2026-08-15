@@ -105,8 +105,8 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       list.filter(p => p.currency === currency).reduce((s, p) => s + fn(p), 0)
 
     return {
-      pipelineArs: sum(open, 'ARS', p => dealTotal(p) * (p.probability / 100)),
-      pipelineUsd: sum(open, 'USD', p => dealTotal(p) * (p.probability / 100)),
+      pipelineArs: sum(open, 'ARS', p => dealTotal(p)),
+      pipelineUsd: sum(open, 'USD', p => dealTotal(p)),
       mrrArs: sum(open, 'ARS', p => (p.monthly_fee ?? 0) * (p.probability / 100)),
       mrrUsd: sum(open, 'USD', p => (p.monthly_fee ?? 0) * (p.probability / 100)),
       costoArs: sum(filtered, 'ARS', p => (p.quoting_hours ?? 0) * (p.quoting_hourly_rate ?? 0)),
@@ -195,7 +195,8 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
 
       {/* Dashboard */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <StatCard label="Pipeline ponderado (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}/>
+        <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}
+          sub="One-shots + fee mensual × meses, sin ponderar por probabilidad"/>
         <StatCard label="Recurrente mensual ponderado" ars={metrics.mrrArs} usd={metrics.mrrUsd}/>
         <StatCard label="Costo de cotizar" ars={metrics.costoArs} usd={metrics.costoUsd}/>
         <StatCard label="ROI horas cotizando" ars={metrics.ganadoArs} usd={metrics.ganadoUsd} sub={roiSub}/>
