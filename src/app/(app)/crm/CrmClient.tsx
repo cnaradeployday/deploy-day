@@ -117,9 +117,12 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
 
   const metrics = useMemo(() => {
     const open = filtered.filter(p => OPEN_STAGES.includes(p.stage))
+    const won = filtered.filter(p => p.stage === 'ganado')
+    const lost = filtered.filter(p => p.stage === 'perdido')
     const sum = (list: Prospect[], currency: 'ARS' | 'USD', fn: (p: Prospect) => number) =>
       list.filter(p => p.currency === currency).reduce((s, p) => s + fn(p), 0)
     const byLevel = (level: 'alta' | 'media' | 'baja') => open.filter(p => classifyProbability(p.probability) === level)
+    const cerrados = won.length + lost.length
 
     return {
       pipelineArs: sum(open, 'ARS', p => dealTotal(p)),
@@ -130,6 +133,13 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       mediaUsd: sum(byLevel('media'), 'USD', dealTotal),
       bajaArs: sum(byLevel('baja'), 'ARS', dealTotal),
       bajaUsd: sum(byLevel('baja'), 'USD', dealTotal),
+      wonCount: won.length,
+      wonArs: sum(won, 'ARS', dealTotal),
+      wonUsd: sum(won, 'USD', dealTotal),
+      lostCount: lost.length,
+      lostArs: sum(lost, 'ARS', dealTotal),
+      lostUsd: sum(lost, 'USD', dealTotal),
+      winRatePct: cerrados > 0 ? (won.length / cerrados) * 100 : 0,
     }
   }, [filtered])
 
@@ -209,12 +219,24 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       </div>
 
       {/* Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}
           sub="One-shots + fee mensual × meses, sin ponderar por probabilidad"/>
         <StatCard label="Probabilidad alta" ars={metrics.altaArs} usd={metrics.altaUsd}/>
         <StatCard label="Probabilidad media" ars={metrics.mediaArs} usd={metrics.mediaUsd}/>
         <StatCard label="Probabilidad baja" ars={metrics.bajaArs} usd={metrics.bajaUsd}/>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <StatCard label="Ganados" ars={metrics.wonArs} usd={metrics.wonUsd}
+          sub={`${metrics.wonCount} prospecto${metrics.wonCount !== 1 ? 's' : ''}`}/>
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col items-center justify-center text-center">
+          <p className="text-xs text-gray-400 mb-1.5">% Ganados</p>
+          <p className="text-2xl font-bold text-green-600">{Math.round(metrics.winRatePct)}%</p>
+          <p className="text-xs text-gray-400 mt-1">sobre prospectos ganados + perdidos</p>
+        </div>
+        <StatCard label="Perdidos" ars={metrics.lostArs} usd={metrics.lostUsd}
+          sub={`${metrics.lostCount} prospecto${metrics.lostCount !== 1 ? 's' : ''}`}/>
       </div>
 
       {/* Filtros */}
