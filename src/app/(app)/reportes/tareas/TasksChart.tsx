@@ -23,7 +23,7 @@ export default function TasksChart({ byStatus, byPriority, byClient, total }: {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
           <p className="text-xs text-gray-400">Terminadas</p>
-          <p className="text-2xl font-bold text-green-500">{byStatus.find(s => s.name === 'Terminado')?.value ?? 0}</p>
+          <p className="text-2xl font-bold text-green-500">{byStatus.find(s => s.name === 'Presentado')?.value ?? 0}</p>
         </div>
       </div>
 

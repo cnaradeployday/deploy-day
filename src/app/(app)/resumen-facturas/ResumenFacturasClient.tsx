@@ -43,6 +43,14 @@ function fmtUSD(n: number): string {
   return 'USD ' + Math.round(n).toLocaleString('es-AR')
 }
 
+// Clientes que se muestran sumados como una sola fila en el Ranking de facturación.
+const RANKING_MERGE_GROUPS: Record<string, string> = {
+  'PREFOP': 'PREFOP / MOBEATS ARG',
+  'MOBEATS ARG': 'PREFOP / MOBEATS ARG',
+  'MINISTERIO': 'MINISTERIO / DARDO COM',
+  'DARDO COM': 'MINISTERIO / DARDO COM',
+}
+
 const estadoStyle = {
   cobrada:  'bg-green-500 text-white',
   pendiente:'bg-amber-400 text-white',
@@ -167,11 +175,12 @@ function RankingModal({
   const ranking = useMemo(() => {
     const totals: Record<string, { name: string; usd: number }> = {}
     facturas.forEach(f => {
-      const cId = f.client_id
       const cName = (f.client as any)?.name ?? '—'
+      const mergedName = RANKING_MERGE_GROUPS[cName] ?? cName
+      const key = RANKING_MERGE_GROUPS[cName] ?? f.client_id
       const usd = convertToUSD(Number(f.importe), (f.currency ?? 'ARS') as Currency, tipoCambio ?? 0)
-      if (!totals[cId]) totals[cId] = { name: cName, usd: 0 }
-      totals[cId].usd += usd
+      if (!totals[key]) totals[key] = { name: mergedName, usd: 0 }
+      totals[key].usd += usd
     })
     const totalGeneral = Object.values(totals).reduce((s, t) => s + t.usd, 0)
     return Object.values(totals)

@@ -33,7 +33,7 @@ export default function FloatingChat({ userId }: { userId: string }) {
 
     Promise.all([
       sb.from('users').select('id, full_name').order('full_name'),
-      sb.from('tasks').select('id, title').not('status', 'in', '("presentado","finalizado")').order('title').limit(50),
+      sb.from('tasks').select('id, title').not('status', 'in', '("finalizado")').order('title').limit(50),
       sb.from('projects').select('id, name').eq('is_active', true).order('name'),
       sb.from('messages')
         .select('id, content, created_at, mentions, task_id, project_id, is_global, user:users(id, full_name), task:tasks(id, title), project:projects(id, name)')

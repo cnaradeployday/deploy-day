@@ -218,7 +218,8 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredByCliente, estadoFilter, pctTiempo])
 
-  const totalVendidas = filtered.reduce((s, f) => s + f.horasVendidas, 0)
+  // DEPLOY DAY es gestión interna: sus horas no se venden, así que no suman al total de horas vendidas.
+  const totalVendidas = filtered.reduce((s, f) => s + (f.cliente === 'DEPLOY DAY' ? 0 : f.horasVendidas), 0)
   const totalEstimadas = filtered.reduce((s, f) => s + f.horasEstimadas, 0)
   const totalConsumidas = filtered.reduce((s, f) => s + f.horasConsumidas, 0)
 
@@ -435,6 +436,9 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
         <span className="flex items-center gap-1.5"><Check size={12} className="text-green-600"/> Ritmo de uso vs. % del mes transcurrido (tolerancia ±20 puntos)</span>
         <span className="flex items-center gap-1.5"><AlertTriangle size={12} className="text-orange-500"/> Horas programadas vs. vendidas (tolerancia ±20%)</span>
       </div>
+      <p className="mt-1.5 text-[11px] text-gray-300">
+        El total de horas vendidas no incluye a DEPLOY DAY (gestión interna, no son horas que se vendan).
+      </p>
     </div>
   )
 }

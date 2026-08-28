@@ -10,14 +10,14 @@ import { formatDateAR, formatDateShortAR, isPastDate } from '@/lib/utils/date'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
-  en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
+  en_proceso: 'bg-amber-50 text-amber-600',
   presentado: 'bg-purple-50 text-purple-600',
   en_revision: 'bg-indigo-50 text-indigo-600', listo_para_entregar: 'bg-teal-50 text-teal-600',
   enviado_cliente: 'bg-pink-50 text-pink-600', finalizado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
   creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado',
+  presentado: 'Presentado',
   en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
   enviado_cliente: 'Enviado al cliente', finalizado: 'Finalizado',
 }
@@ -26,10 +26,10 @@ const priorityColors: Record<string, string> = {
   alta: 'bg-amber-50 text-amber-600', critica: 'bg-red-50 text-red-600'
 }
 const nextStatus: Record<string, string> = {
-  creado: 'estimado', estimado: 'en_proceso', en_proceso: 'terminado', terminado: 'presentado'
+  creado: 'estimado', estimado: 'en_proceso', en_proceso: 'presentado', presentado: 'finalizado'
 }
 const nextStatusLabel: Record<string, string> = {
-  creado: 'Estimar', estimado: 'Iniciar', en_proceso: 'Terminar', terminado: 'Presentar'
+  creado: 'Estimar', estimado: 'Iniciar', en_proceso: 'Presentar', presentado: 'Finalizar'
 }
 
 function mesDeDate(d: string | null) { if (!d) return ''; return d.slice(0, 7) }
@@ -188,7 +188,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
           <tbody>
             {!sorted.length ? <tr><td colSpan={12} className="text-center py-12 text-sm text-gray-400">Sin tareas</td></tr>
             : sorted.map(t => {
-              const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado','finalizado'].includes(t.status)
+              const isOverdue = t.due_date && isPastDate(t.due_date) && !['presentado','finalizado'].includes(t.status)
               const pct = t.estimated_hours ? Math.round((t.hours_logged / t.estimated_hours) * 100) : null
               const mes = mesDeDate(t.due_date); const collabs = t.task_collaborators ?? []
               return (
@@ -217,7 +217,7 @@ export default function TareasTable({ tareas, clientes, proyectos, usuarios, fil
       </div>
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
-          const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado'].includes(t.status)
+          const isOverdue = t.due_date && isPastDate(t.due_date) && !['presentado','finalizado'].includes(t.status)
           const collabs = t.task_collaborators ?? []
           return (
             <div key={t.id} className="bg-white rounded-2xl border border-gray-100 p-4">
