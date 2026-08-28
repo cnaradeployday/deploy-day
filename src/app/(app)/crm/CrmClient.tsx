@@ -31,11 +31,11 @@ function dealSummary(p: Prospect): string {
 
 function StatCard({ label, ars, usd, sub }: { label: string; ars: number; usd: number; sub?: string }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4">
-      <p className="text-xs text-gray-400 mb-1.5">{label}</p>
-      <p className="text-lg font-semibold text-gray-900">{formatMoney(ars, 'ARS')}</p>
-      {usd > 0 && <p className="text-sm text-gray-500">{formatMoney(usd, 'USD')}</p>}
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    <div className="bg-white rounded-xl border border-gray-100 px-3 py-2.5">
+      <p className="text-[11px] text-gray-400 truncate">{label}</p>
+      <p className="text-base font-bold text-gray-900">{formatMoney(usd, 'USD')}</p>
+      {ars > 0 && <p className="text-[11px] text-gray-400">{formatMoney(ars, 'ARS')}</p>}
+      {sub && <p className="text-[11px] text-gray-400 truncate">{sub}</p>}
     </div>
   )
 }
@@ -219,25 +219,23 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       </div>
 
       {/* Dashboard */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-        <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}
-          sub="One-shots + fee mensual × meses, sin ponderar por probabilidad"/>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
+        <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}/>
         <StatCard label="Probabilidad alta" ars={metrics.altaArs} usd={metrics.altaUsd}/>
         <StatCard label="Probabilidad media" ars={metrics.mediaArs} usd={metrics.mediaUsd}/>
         <StatCard label="Probabilidad baja" ars={metrics.bajaArs} usd={metrics.bajaUsd}/>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <StatCard label="Ganados" ars={metrics.wonArs} usd={metrics.wonUsd}
           sub={`${metrics.wonCount} prospecto${metrics.wonCount !== 1 ? 's' : ''}`}/>
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col items-center justify-center text-center">
-          <p className="text-xs text-gray-400 mb-1.5">% Ganados</p>
-          <p className="text-2xl font-bold text-green-600">{Math.round(metrics.winRatePct)}%</p>
-          <p className="text-xs text-gray-400 mt-1">sobre prospectos ganados + perdidos</p>
+        <div className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 flex flex-col items-center justify-center text-center">
+          <p className="text-[11px] text-gray-400">% Ganados</p>
+          <p className="text-base font-bold text-green-600">{Math.round(metrics.winRatePct)}%</p>
         </div>
         <StatCard label="Perdidos" ars={metrics.lostArs} usd={metrics.lostUsd}
           sub={`${metrics.lostCount} prospecto${metrics.lostCount !== 1 ? 's' : ''}`}/>
       </div>
+      <p className="text-[11px] text-gray-300 -mt-3 mb-4">
+        Pipeline: one-shots + fee mensual × meses, sin ponderar por probabilidad. % Ganados: sobre prospectos ganados + perdidos.
+      </p>
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-4">
