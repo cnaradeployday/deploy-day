@@ -75,8 +75,8 @@ export default function TaskActions({
   const transitions: Record<string, { next: string; label: string; who: 'all' | 'manage' | 'responsible' }> = {
     creado:    { next: 'estimado',   label: 'Iniciar tarea',          who: 'all' },
     estimado:  { next: 'en_proceso', label: 'Marcar en proceso',      who: 'all' },
-    en_proceso:{ next: 'terminado',  label: 'Marcar como terminado',  who: 'all' },
-    terminado: { next: 'presentado', label: 'Marcar como presentado', who: 'responsible' },
+    en_proceso:{ next: 'presentado', label: 'Marcar como presentado', who: 'all' },
+    presentado:{ next: 'finalizado', label: 'Marcar como finalizado', who: 'responsible' },
   }
 
   const reviewTransitions: Record<string, { next: string; label: string } | undefined> = {
@@ -234,9 +234,9 @@ export default function TaskActions({
       {!requiresReview && canTransition && t && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-sm font-medium text-gray-700 mb-3">Cambiar estado</p>
-          {task.status === 'terminado' && !isDirectResponsible && !canManage && (
+          {task.status === 'presentado' && !isDirectResponsible && !canManage && (
             <p className="text-xs text-amber-600 mb-3 bg-amber-50 px-3 py-2 rounded-xl">
-              Solo el responsable directo puede marcar como Presentado
+              Solo el responsable directo puede marcar como Finalizado
             </p>
           )}
           {hasActiveTimer && (

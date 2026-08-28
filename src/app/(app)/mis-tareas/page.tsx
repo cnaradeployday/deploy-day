@@ -9,7 +9,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
   const { data: { user } } = await supabase.auth.getUser()
   const sp = await searchParams
   const { priority, proyecto, cliente, todas } = sp
-  const status = sp.status // comma-separated statuses, or undefined = default (exclude terminado)
+  const status = sp.status // comma-separated statuses, or undefined = default (exclude presentado/finalizado)
 
   const mesActual = currentMonthAR()
   const mes = sp.mes ?? mesActual
@@ -47,7 +47,7 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
       direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)
     `)
     .eq('direct_responsible_id', user?.id)
-    .not('status', 'in', '(presentado,finalizado)')
+    .not('status', 'in', '(finalizado)')
     .order('due_date', { ascending: true, nullsFirst: false })
 
   // Paso 1 (anon): leer task_collaborators propios — RLS permite leer filas propias
@@ -72,12 +72,12 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
           direct_responsible:users!tasks_direct_responsible_id_fkey(id, full_name)
         `)
         .in('id', colabTaskIds)
-        .not('status', 'in', '(presentado,finalizado)')
+        .not('status', 'in', '(finalizado)')
     : { data: [] }
 
   const colabTasks = (colabTasksData ?? [])
     .map((t: any) => ({ ...t, my_assigned_hours: horasPorTask[t.id] ?? null, es_colaborador: true }))
-    .filter((t: any) => !['presentado','finalizado'].includes(t.status))
+    .filter((t: any) => !['finalizado'].includes(t.status))
 
   const directasMapped = (directas ?? []).map((t: any) => ({
     ...t,
@@ -112,13 +112,13 @@ export default async function MisTareasPage({ searchParams }: { searchParams: Pr
     .map((t: any) => ({ ...t, desde_segmento: false }))
     .filter((t: any) => mostrarTodas || (t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia))
 
-  const selectedStatuses = status ? status.split(',') : null // null = default (exclude terminado)
+  const selectedStatuses = status ? status.split(',') : null // null = default (exclude presentado/finalizado)
 
   let tareasFiltered = [...allTasks]
   if (selectedStatuses) {
     tareasFiltered = tareasFiltered.filter((t: any) => selectedStatuses.includes(t.status))
   } else {
-    tareasFiltered = tareasFiltered.filter((t: any) => !['terminado','finalizado'].includes(t.status))
+    tareasFiltered = tareasFiltered.filter((t: any) => !['presentado','finalizado'].includes(t.status))
   }
   if (priority) tareasFiltered = tareasFiltered.filter((t: any) => t.priority === priority)
   if (proyecto) tareasFiltered = tareasFiltered.filter((t: any) => t.project?.id === proyecto)

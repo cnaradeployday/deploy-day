@@ -7,7 +7,7 @@ import ReportFilters from '@/components/reportes/ReportFilters'
 
 const STATUS_LABELS: Record<string, string> = {
   creado: 'Creado', estimado: 'Estimado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado'
+  presentado: 'Presentado'
 }
 
 export default async function ReporteTareasPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {

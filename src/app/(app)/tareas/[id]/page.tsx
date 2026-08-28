@@ -13,14 +13,14 @@ import TaskVersions from './TaskVersions'
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
-  en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
+  en_proceso: 'bg-amber-50 text-amber-600',
   presentado: 'bg-purple-50 text-purple-600',
   en_revision: 'bg-indigo-50 text-indigo-600', listo_para_entregar: 'bg-teal-50 text-teal-600',
   enviado_cliente: 'bg-pink-50 text-pink-600', finalizado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
   creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado',
+  presentado: 'Presentado',
   en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
   enviado_cliente: 'Enviado al cliente', finalizado: 'Finalizado',
 }
@@ -59,7 +59,7 @@ export default async function TareaDetailPage({ params, searchParams }: { params
 
   const totalLogged = (t.time_entries as any[])?.reduce((s: number, e: any) => s + e.hours_logged, 0) ?? 0
   const pct = t.estimated_hours ? Math.min(100, (totalLogged / t.estimated_hours) * 100) : 0
-  const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado','finalizado'].includes(t.status)
+  const isOverdue = t.due_date && isPastDate(t.due_date) && !['presentado','finalizado'].includes(t.status)
   const isAdmin = ['admin','gerente_operaciones'].includes(profile?.role ?? '')
 
   // Permiso editar tareas / ver la tarea via el listado general de Tareas

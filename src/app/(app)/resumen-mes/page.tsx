@@ -83,7 +83,7 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
   const horasEstimadasPorProyecto: Record<string, number> = {}
   const tareasConDueEnMes = (todasTareas ?? []).filter(t =>
     t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia &&
-    !['presentado', 'finalizado'].includes(t.status)
+    !['finalizado'].includes(t.status)
   )
   tareasConDueEnMes.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)

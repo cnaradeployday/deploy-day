@@ -143,7 +143,6 @@ export default function EditarTareaPage() {
               <option value="creado">Creado</option>
               <option value="estimado">Iniciado</option>
               <option value="en_proceso">En proceso</option>
-              <option value="terminado">Terminado</option>
               <option value="presentado">Presentado</option>
               <option value="en_revision">En revisión</option>
               <option value="listo_para_entregar">Listo para entregar</option>

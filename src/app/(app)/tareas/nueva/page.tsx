@@ -92,7 +92,7 @@ export default function NuevaTareaPage() {
         .from('tasks')
         .select('id, direct_hours, task_collaborators(assigned_hours)')
         .eq('project_id', form.project_id)
-        .not('status', 'in', '(presentado,finalizado)')
+        .not('status', 'in', '(finalizado)')
         .gte('due_date', primerDiaMes)
         .lte('due_date', ultimoDiaMes)
       const horasAsignadas = (tareasProy ?? []).reduce((s: number, t: any) => {
@@ -131,7 +131,7 @@ export default function NuevaTareaPage() {
       .from('tasks')
       .select('direct_hours')
       .eq('direct_responsible_id', uid)
-      .not('status', 'in', '(presentado,finalizado)')
+      .not('status', 'in', '(finalizado)')
       .gte('due_date', primerDiaMes)
       .lte('due_date', ultimoDiaMes)
     const horasResp = (tareasResp ?? []).reduce((s: number, t: any) => s + (t.direct_hours ?? 0), 0)
@@ -143,7 +143,7 @@ export default function NuevaTareaPage() {
     const horasColab = (tareasColab ?? [])
       .filter((c: any) => {
         const dd = c.task?.due_date
-        return dd && dd >= primerDiaMes && dd <= ultimoDiaMes && !['presentado','finalizado'].includes(c.task?.status)
+        return dd && dd >= primerDiaMes && dd <= ultimoDiaMes && !['finalizado'].includes(c.task?.status)
       })
       .reduce((s: number, c: any) => s + (c.assigned_hours ?? 0), 0)
 

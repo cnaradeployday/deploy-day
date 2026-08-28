@@ -17,7 +17,7 @@ export default async function ChatPage() {
   const { data: tasks } = await supabase
     .from('tasks')
     .select('id, title')
-    .not('status', 'in', '("presentado","finalizado")')
+    .not('status', 'in', '("finalizado")')
     .order('title')
     .limit(50)
 

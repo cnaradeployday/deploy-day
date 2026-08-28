@@ -10,14 +10,14 @@ import { formatDateAR, formatDateShortAR, isPastDate, monthBounds } from '@/lib/
 
 const statusColors: Record<string, string> = {
   creado: 'bg-gray-100 text-gray-500', estimado: 'bg-blue-50 text-blue-600',
-  en_proceso: 'bg-amber-50 text-amber-600', terminado: 'bg-green-50 text-green-600',
+  en_proceso: 'bg-amber-50 text-amber-600',
   presentado: 'bg-purple-50 text-purple-600',
   en_revision: 'bg-indigo-50 text-indigo-600', listo_para_entregar: 'bg-teal-50 text-teal-600',
   enviado_cliente: 'bg-pink-50 text-pink-600', finalizado: 'bg-green-50 text-green-600',
 }
 const statusLabels: Record<string, string> = {
   creado: 'Creado', estimado: 'Iniciado', en_proceso: 'En proceso',
-  terminado: 'Terminado', presentado: 'Presentado',
+  presentado: 'Presentado',
   en_revision: 'En revisión', listo_para_entregar: 'Listo para entregar',
   enviado_cliente: 'Enviado al cliente', finalizado: 'Finalizado',
 }
@@ -26,7 +26,7 @@ const priorityColors: Record<string, string> = {
   alta: 'bg-amber-50 text-amber-600', critica: 'bg-red-50 text-red-600'
 }
 const nextStatus: Record<string, string> = {
-  creado: 'estimado', estimado: 'en_proceso', en_proceso: 'terminado', terminado: 'presentado'
+  creado: 'estimado', estimado: 'en_proceso', en_proceso: 'presentado', presentado: 'finalizado'
 }
 
 interface Props {
@@ -62,9 +62,9 @@ export default function MisTareasClient({
     router.push(pathname + '?' + p.toString())
   }, [params, pathname, router])
 
-  // Status multi-select: null = default (all except terminado/finalizado)
+  // Status multi-select: null = default (all except presentado/finalizado)
   const ALL_STATUSES = Object.keys(statusLabels)
-  const DEFAULT_STATUSES = ALL_STATUSES.filter(s => s !== 'terminado' && s !== 'finalizado')
+  const DEFAULT_STATUSES = ALL_STATUSES.filter(s => s !== 'presentado' && s !== 'finalizado')
   const selectedStatuses: string[] = filters.status
     ? filters.status.split(',')
     : DEFAULT_STATUSES
@@ -95,7 +95,7 @@ export default function MisTareasClient({
   const statusLabel = (() => {
     if (selectedStatuses.length === ALL_STATUSES.length) return 'Todos'
     if (selectedStatuses.length === 0) return 'Ninguno'
-    if (selectedStatuses.length === DEFAULT_STATUSES.length && DEFAULT_STATUSES.every(s => selectedStatuses.includes(s))) return 'Todos menos Terminado'
+    if (selectedStatuses.length === DEFAULT_STATUSES.length && DEFAULT_STATUSES.every(s => selectedStatuses.includes(s))) return 'Todos menos Presentado'
     if (selectedStatuses.length === 1) return statusLabels[selectedStatuses[0]]
     return selectedStatuses.length + ' estados'
   })()
@@ -331,7 +331,7 @@ export default function MisTareasClient({
             {!sorted.length ? (
               <tr><td colSpan={canSeeEstimatedHours ? 11 : 10} className="text-center py-12 text-sm text-gray-400">Sin tareas asignadas</td></tr>
             ) : sorted.map(t => {
-              const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado','finalizado'].includes(t.status)
+              const isOverdue = t.due_date && isPastDate(t.due_date) && !['presentado','finalizado'].includes(t.status)
               const myHours = t.my_assigned_hours ?? 0
               const pct = myHours > 0 ? Math.min(100, Math.round(((t.hours_logged ?? 0) / myHours) * 100)) : null
               const isLoading = loading === t.id
@@ -393,7 +393,7 @@ export default function MisTareasClient({
       {/* Mobile */}
       <div className="md:hidden space-y-2">
         {sorted.map(t => {
-          const isOverdue = t.due_date && isPastDate(t.due_date) && !['terminado','presentado'].includes(t.status)
+          const isOverdue = t.due_date && isPastDate(t.due_date) && !['presentado','finalizado'].includes(t.status)
           const myHours = t.my_assigned_hours ?? 0
           const isLoading = loading === t.id
           const esOtroMes = t.due_date && (t.due_date < primerDia || t.due_date > ultimoDia)
