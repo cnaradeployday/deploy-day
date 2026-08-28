@@ -30,7 +30,7 @@ export default function LoginPage() {
           <Image src="/logo.png" alt="Deploy Day" width={160} height={30} className="object-contain" />
         </div>
         <div className="flex flex-col items-center justify-center flex-1 py-12">
-          <Image src="/mascota.jpeg" alt="Deploy Day mascot" width={280} height={280} className="object-contain rounded-2xl" />
+          <Image src="/mascota.png" alt="Deploy Day mascot" width={280} height={280} className="object-contain" />
         </div>
         <p className="text-gray-600 text-sm">Sistema de gestión de proyectos y tareas</p>
       </div>

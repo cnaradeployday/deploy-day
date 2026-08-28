@@ -315,6 +315,25 @@ async function runComputedChecksForUser(userId: string): Promise<void> {
     })
   }
 
+  // ── 2b. Prospectos (CRM) con seguimiento vencido ──────────────────────────
+  const { data: overdueProspects } = await admin.from('prospects')
+    .select('id, project_name, prospect_name, next_action, next_action_date')
+    .eq('responsible_id', userId)
+    .not('stage', 'in', '(ganado,perdido)')
+    .lt('next_action_date', todayStr)
+
+  for (const p of overdueProspects ?? []) {
+    const fechaStr = new Date(p.next_action_date + 'T12:00:00').toLocaleDateString('es-AR')
+    await upsert({
+      type: 'prospect_follow_up_overdue',
+      title: `Seguimiento vencido: "${p.project_name}"`,
+      body: `${p.prospect_name} — venció el ${fechaStr}${p.next_action ? `: ${p.next_action}` : ''}.`,
+      link: '/crm',
+      dedup_key: `prospect_overdue_${p.id}_${weekKey}`,
+      metadata: { client_name: p.prospect_name, project_name: p.project_name },
+    })
+  }
+
   // ── 3. Sin cargar horas hace más de 1 día hábil ───────────────────────────
   const { data: lastEntry } = await admin
     .from('time_entries').select('entry_date').eq('user_id', userId)

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Bell, CheckCheck, Clock, AlertTriangle, StickyNote, LayoutGrid, CheckSquare, Timer, Check } from 'lucide-react'
+import { Bell, CheckCheck, Clock, AlertTriangle, StickyNote, LayoutGrid, CheckSquare, Timer, Check, Target } from 'lucide-react'
 import { markNotificationRead, markAllNotificationsRead, markTaskDone } from './actions'
 import Link from 'next/link'
 
@@ -16,6 +16,7 @@ const TYPE_META: Record<string, { icon: React.ElementType; color: string; bg: st
   hours_overuse_assigned:    { icon: Timer,         color: 'text-red-600',    bg: 'bg-red-100',    label: 'Horas asignadas' },
   hours_overuse_availability:{ icon: Timer,         color: 'text-orange-600', bg: 'bg-orange-100', label: 'Disponibilidad' },
   no_hours_logged:           { icon: Clock,         color: 'text-purple-600', bg: 'bg-purple-100', label: 'Sin horas' },
+  prospect_follow_up_overdue:{ icon: Target,        color: 'text-red-600',    bg: 'bg-red-100',    label: 'Seguimiento CRM' },
   postit_shared:             { icon: StickyNote,    color: 'text-yellow-600', bg: 'bg-yellow-100', label: 'Post-it compartido' },
   note_received:             { icon: StickyNote,    color: 'text-green-600',  bg: 'bg-green-100',  label: 'Nota recibida' },
   pizarron_new_post:         { icon: LayoutGrid,    color: 'text-indigo-600', bg: 'bg-indigo-100', label: 'Pizarrón' },

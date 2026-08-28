@@ -26,6 +26,19 @@ function formatImporte(f: any): string {
   return (f.currency === 'USD' ? 'USD ' : '$ ') + Number(f.importe).toLocaleString('es-AR')
 }
 
+// Agrupa las facturas de una celda por estado + moneda, sumando el importe de cada grupo
+function agruparPorEstado(list: any[]): { estado: 'cobrada' | 'vencida' | 'pendiente'; currency: string; importe: number }[] {
+  const groups: Record<string, { estado: 'cobrada' | 'vencida' | 'pendiente'; currency: string; importe: number }> = {}
+  list.forEach(f => {
+    const estado = getEstadoEfectivo(f)
+    const currency = f.currency === 'USD' ? 'USD' : 'ARS'
+    const key = estado + '|' + currency
+    if (!groups[key]) groups[key] = { estado, currency, importe: 0 }
+    groups[key].importe += Number(f.importe)
+  })
+  return Object.values(groups)
+}
+
 function fmtUSD(n: number): string {
   return 'USD ' + Math.round(n).toLocaleString('es-AR')
 }
@@ -252,7 +265,7 @@ function RankingModal({
 }
 
 export default function ResumenFacturasClient({
-  facturas, months, year, availableYears, clientesAll, tipoCambio,
+  facturas, months, year, availableYears, clientesAll, tipoCambio, tipoCambioPorMes,
 }: {
   facturas: any[]
   months: string[]
@@ -260,6 +273,7 @@ export default function ResumenFacturasClient({
   availableYears: number[]
   clientesAll: { id: string; name: string }[]
   tipoCambio: number | null
+  tipoCambioPorMes: Record<string, number | null>
 }) {
   const router = useRouter()
   const [visibleMonths, setVisibleMonths] = useState<Set<string>>(new Set(months))
@@ -308,13 +322,14 @@ export default function ResumenFacturasClient({
 
   const { clientList, facturaMap } = useMemo(() => {
     const clientMap: Record<string, string> = {}
-    const fMap: Record<string, Record<string, any>> = {}
+    const fMap: Record<string, Record<string, any[]>> = {}
     facturas.forEach(f => {
       const cId = f.client_id
       const cName = (f.client as any)?.name ?? '—'
       if (!clientMap[cId]) clientMap[cId] = cName
       if (!fMap[cId]) fMap[cId] = {}
-      fMap[cId][f.mes_servicio] = f
+      if (!fMap[cId][f.mes_servicio]) fMap[cId][f.mes_servicio] = []
+      fMap[cId][f.mes_servicio].push(f)
     })
     const clientList = Object.entries(clientMap)
       .sort((a, b) => a[1].localeCompare(b[1]))
@@ -323,6 +338,29 @@ export default function ResumenFacturasClient({
   }, [facturas])
 
   const shownClientList = clientList.filter(c => checkedClients.has(c.id))
+
+  // Total en USD por mes, convirtiendo cada factura con la cotización más cercana a ese mes
+  const monthTotals = useMemo(() => {
+    const totals: Record<string, number | null> = {}
+    shownMonths.forEach(m => {
+      const rate = tipoCambioPorMes[m]
+      let sum = 0
+      let faltaTC = false
+      let count = 0
+      shownClientList.forEach(({ id }) => {
+        const list = facturaMap[id]?.[m]
+        if (!list) return
+        list.forEach(f => {
+          count++
+          const currency = (f.currency ?? 'ARS') as Currency
+          if (currency === 'ARS' && !rate) { faltaTC = true; return }
+          sum += convertToUSD(Number(f.importe), currency, rate ?? 0)
+        })
+      })
+      totals[m] = count === 0 || faltaTC ? null : sum
+    })
+    return totals
+  }, [shownMonths, shownClientList, facturaMap, tipoCambioPorMes])
 
   const [rankingOpen, setRankingOpen] = useState(false)
 
@@ -426,8 +464,8 @@ export default function ResumenFacturasClient({
                   {name}
                 </td>
                 {shownMonths.map(m => {
-                  const f = facturaMap[id]?.[m]
-                  if (!f) {
+                  const list = facturaMap[id]?.[m]
+                  if (!list || list.length === 0) {
                     return (
                       <td key={m} className="px-2 py-2.5 text-center">
                         <span className="inline-block border border-gray-200 text-gray-400 text-[11px] px-3 py-1 rounded-lg whitespace-nowrap">
@@ -436,19 +474,36 @@ export default function ResumenFacturasClient({
                       </td>
                     )
                   }
-                  const estado = getEstadoEfectivo(f)
                   return (
                     <td key={m} className="px-2 py-2.5 text-center">
-                      <span className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${estadoStyle[estado]}`}>
-                        <span>{estadoLabel[estado]}</span>
-                        <span className="text-[11px] font-medium opacity-90">{formatImporte(f)}</span>
-                      </span>
+                      <div className="flex flex-col items-center gap-1">
+                        {agruparPorEstado(list).map((g, i) => (
+                          <span key={i} className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${estadoStyle[g.estado]}`}>
+                            <span>{estadoLabel[g.estado]}</span>
+                            <span className="text-[11px] font-medium opacity-90">{formatImporte(g)}</span>
+                          </span>
+                        ))}
+                      </div>
                     </td>
                   )
                 })}
               </tr>
             ))}
           </tbody>
+          {shownClientList.length > 0 && (
+            <tfoot>
+              <tr className="border-t border-gray-200 bg-gray-50/70">
+                <td className="px-4 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap sticky left-0 bg-gray-50/70 z-10">
+                  Total USD
+                </td>
+                {shownMonths.map(m => (
+                  <td key={m} className="px-2 py-2.5 text-center text-sm font-bold text-gray-900 whitespace-nowrap">
+                    {monthTotals[m] === null ? '—' : fmtUSD(monthTotals[m] as number)}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
