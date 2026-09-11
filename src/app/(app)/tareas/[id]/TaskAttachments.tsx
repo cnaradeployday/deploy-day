@@ -91,7 +91,7 @@ export default function TaskAttachments({
 
   async function handleDownload(att: Attachment) {
     const sb = createClient()
-    const { data } = await sb.storage.from('task-files').createSignedUrl(att.file_path, 60)
+    const { data } = await sb.storage.from('task-files').createSignedUrl(att.file_path, 60, { download: att.file_name })
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
 

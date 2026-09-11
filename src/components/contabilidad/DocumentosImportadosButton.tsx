@@ -17,7 +17,7 @@ export default function DocumentosImportadosButton({ documentos }: { documentos:
 
   async function handleDownload(doc: DocumentoImportado) {
     setDownloadingId(doc.id)
-    const { data, error } = await createClient().storage.from('documentos-ia').createSignedUrl(doc.archivo_path, 60)
+    const { data, error } = await createClient().storage.from('documentos-ia').createSignedUrl(doc.archivo_path, 60, { download: doc.archivo_nombre })
     setDownloadingId(null)
     if (error || !data) { alert('Error al generar el link de descarga: ' + (error?.message ?? '')); return }
     window.open(data.signedUrl, '_blank')

@@ -10,7 +10,7 @@ export default async function InversionesPage() {
   if (!(await hasModuleAccess(supabase, user?.id, 'contabilidad'))) redirect('/dashboard')
 
   const disponibles = [
-    { href: '/contabilidad/inversiones/plazo-fijo', label: 'Plazo fijo', desc: 'Próximamente', icon: PiggyBank, color: 'bg-emerald-50' },
+    { href: '/contabilidad/inversiones/plazo-fijo', label: 'Plazo fijo', desc: 'Colocaciones a plazo fijo', icon: PiggyBank, color: 'bg-emerald-50' },
     { href: '/contabilidad/inversiones/fondo-comun', label: 'Fondo Común de Inversión', desc: 'Suscripciones, rescates y TC de cierre mensual', icon: LineChart, color: 'bg-sky-50' },
   ]
 

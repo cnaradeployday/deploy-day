@@ -47,7 +47,7 @@ export default function EditarFacturaCompraPage() {
   async function handleDownload() {
     if (!archivoActual) return
     const sb = createClient()
-    const { data } = await sb.storage.from('facturas-compra').createSignedUrl(archivoActual.path, 60)
+    const { data } = await sb.storage.from('facturas-compra').createSignedUrl(archivoActual.path, 60, { download: archivoActual.nombre })
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
 

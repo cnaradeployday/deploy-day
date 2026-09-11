@@ -3,9 +3,9 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, Pencil, Trash2, ChevronUp, ChevronDown, ShoppingCart, Paperclip } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, ChevronUp, ChevronDown, ShoppingCart, Paperclip, Archive, Loader2 } from 'lucide-react'
 import ExportExcelButton from '@/components/shared/ExportExcelButton'
-import { formatDateAR } from '@/lib/utils/date'
+import { formatDateAR, todayISO } from '@/lib/utils/date'
 
 type FacturaCompra = {
   id: string
@@ -103,10 +103,45 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
 
   const total = sorted.reduce((s, f) => s + Number(f.monto_total ?? 0), 0)
 
+  const [downloadingZip, setDownloadingZip] = useState(false)
+
+  async function handleDownloadZip() {
+    const conAdjunto = sorted.filter(f => f.archivo_path)
+    if (!conAdjunto.length) return
+    setDownloadingZip(true)
+    try {
+      const { default: JSZip } = await import('jszip')
+      const zip = new JSZip()
+      const sb = createClient()
+      const nombresUsados = new Set<string>()
+      for (const f of conAdjunto) {
+        const { data, error } = await sb.storage.from('facturas-compra').download(f.archivo_path!)
+        if (error || !data) continue
+        const base = f.archivo_nombre || f.archivo_path!.split('/').pop() || `${f.numero_factura}.pdf`
+        let nombre = `${f.numero_factura} - ${f.razon_social_proveedor} - ${base}`.replace(/[\\/]/g, '-')
+        let i = 2
+        while (nombresUsados.has(nombre)) { nombre = `${f.numero_factura} - ${f.razon_social_proveedor} - ${base} (${i++})`.replace(/[\\/]/g, '-') }
+        nombresUsados.add(nombre)
+        zip.file(nombre, data)
+      }
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `comprobantes_facturas_compra_${todayISO()}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloadingZip(false)
+    }
+  }
+
   async function handleDownload(f: FacturaCompra) {
     if (!f.archivo_path) return
     const sb = createClient()
-    const { data } = await sb.storage.from('facturas-compra').createSignedUrl(f.archivo_path, 60)
+    const { data } = await sb.storage.from('facturas-compra').createSignedUrl(f.archivo_path, 60, { download: f.archivo_nombre ?? undefined })
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
 
@@ -169,6 +204,12 @@ export default function FacturasCompraClient({ facturas }: { facturas: FacturaCo
         </div>
         <div className="flex items-center gap-2">
           <ExportExcelButton data={exportData} filename="facturas_compra"/>
+          <button onClick={handleDownloadZip} disabled={downloadingZip || !sorted.some(f => f.archivo_path)}
+            title="Descarga en un ZIP los comprobantes de las facturas filtradas"
+            className="flex items-center gap-2 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">
+            {downloadingZip ? <Loader2 size={15} className="animate-spin"/> : <Archive size={15}/>}
+            {downloadingZip ? 'Generando ZIP...' : 'Descargar comprobantes (ZIP)'}
+          </button>
           <Link href="/contabilidad/facturas-compra/nueva"
             className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
             <Plus size={15}/> Nueva factura
