@@ -29,13 +29,13 @@ function dealSummary(p: Prospect): string {
   return parts.length ? parts.join(' + ') : '—'
 }
 
-function StatCard({ label, ars, usd, sub }: { label: string; ars: number; usd: number; sub?: string }) {
+function BreakdownItem({ label, color, ars, usd, sub }: { label: string; color: string; ars: number; usd: number; sub?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 px-3 py-2.5">
-      <p className="text-[11px] text-gray-400 truncate">{label}</p>
-      <p className="text-base font-bold text-gray-900">{formatMoney(usd, 'USD')}</p>
+    <div className="text-center">
+      <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full mb-1.5 ${color}`}>{label}</span>
+      <p className="text-sm font-semibold text-gray-900">{formatMoney(usd, 'USD')}</p>
       {ars > 0 && <p className="text-[11px] text-gray-400">{formatMoney(ars, 'ARS')}</p>}
-      {sub && <p className="text-[11px] text-gray-400 truncate">{sub}</p>}
+      {sub && <p className="text-[11px] text-gray-400">{sub}</p>}
     </div>
   )
 }
@@ -219,21 +219,35 @@ export default function CrmClient({ prospects, clientes, usuarios, canWrite, cur
       </div>
 
       {/* Dashboard */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
-        <StatCard label="Pipeline (valor total)" ars={metrics.pipelineArs} usd={metrics.pipelineUsd}/>
-        <StatCard label="Probabilidad alta" ars={metrics.altaArs} usd={metrics.altaUsd}/>
-        <StatCard label="Probabilidad media" ars={metrics.mediaArs} usd={metrics.mediaUsd}/>
-        <StatCard label="Probabilidad baja" ars={metrics.bajaArs} usd={metrics.bajaUsd}/>
-        <StatCard label="Ganados" ars={metrics.wonArs} usd={metrics.wonUsd}
-          sub={`${metrics.wonCount} prospecto${metrics.wonCount !== 1 ? 's' : ''}`}/>
-        <div className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 flex flex-col items-center justify-center text-center">
-          <p className="text-[11px] text-gray-400">% Ganados</p>
-          <p className="text-base font-bold text-green-600">{Math.round(metrics.winRatePct)}%</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-1">
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <p className="text-xs text-gray-400 mb-1">Pipeline (valor total)</p>
+          <p className="text-2xl font-bold text-gray-900">{formatMoney(metrics.pipelineUsd, 'USD')}</p>
+          {metrics.pipelineArs > 0 && <p className="text-xs text-gray-400 mt-0.5">{formatMoney(metrics.pipelineArs, 'ARS')}</p>}
+          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-gray-50">
+            <BreakdownItem label="Alta" color={PROBABILITY_COLORS.alta} ars={metrics.altaArs} usd={metrics.altaUsd}/>
+            <BreakdownItem label="Media" color={PROBABILITY_COLORS.media} ars={metrics.mediaArs} usd={metrics.mediaUsd}/>
+            <BreakdownItem label="Baja" color={PROBABILITY_COLORS.baja} ars={metrics.bajaArs} usd={metrics.bajaUsd}/>
+          </div>
         </div>
-        <StatCard label="Perdidos" ars={metrics.lostArs} usd={metrics.lostUsd}
-          sub={`${metrics.lostCount} prospecto${metrics.lostCount !== 1 ? 's' : ''}`}/>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-gray-400 mb-1">% Ganados</p>
+              <p className="text-2xl font-bold text-green-600">{Math.round(metrics.winRatePct)}%</p>
+            </div>
+            <p className="text-xs text-gray-400">{metrics.wonCount + metrics.lostCount} prospecto{metrics.wonCount + metrics.lostCount !== 1 ? 's' : ''} cerrado{metrics.wonCount + metrics.lostCount !== 1 ? 's' : ''}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-50">
+            <BreakdownItem label="Ganados" color="bg-green-50 text-green-600" ars={metrics.wonArs} usd={metrics.wonUsd}
+              sub={`${metrics.wonCount} prospecto${metrics.wonCount !== 1 ? 's' : ''}`}/>
+            <BreakdownItem label="Perdidos" color="bg-red-50 text-red-500" ars={metrics.lostArs} usd={metrics.lostUsd}
+              sub={`${metrics.lostCount} prospecto${metrics.lostCount !== 1 ? 's' : ''}`}/>
+          </div>
+        </div>
       </div>
-      <p className="text-[11px] text-gray-300 -mt-3 mb-4">
+      <p className="text-[11px] text-gray-300 mt-2 mb-4">
         Pipeline: one-shots + fee mensual × meses, sin ponderar por probabilidad. % Ganados: sobre prospectos ganados + perdidos.
       </p>
 
