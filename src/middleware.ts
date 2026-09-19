@@ -23,13 +23,16 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/login')
+  const isLoginRoute = request.nextUrl.pathname.startsWith('/login')
+  // /p/ sirve presentaciones publicadas a clientes sin cuenta en DDS: no requiere login
+  // (y a diferencia de /login, no rebota a un usuario logueado que la esta viendo/previsualizando).
+  const isPresentacionPublica = request.nextUrl.pathname.startsWith('/p/')
 
-  if (!user && !isPublicRoute) {
+  if (!user && !isLoginRoute && !isPresentacionPublica) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  if (user && isPublicRoute) {
+  if (user && isLoginRoute) {
     return NextResponse.redirect(new URL('/novedades', request.url))
   }
 

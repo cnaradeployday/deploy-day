@@ -6,7 +6,7 @@ import OnlineUsers from './OnlineUsers'
 import NewsBanner from './NewsBanner'
 import FloatingTimer from './FloatingTimer'
 import FloatingChat from './FloatingChat'
-import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell, Landmark, Target } from 'lucide-react'
+import { LayoutDashboard, Users, FolderKanban, CheckSquare, Clock, BarChart3, UserCircle, LogOut, Menu, X, AlertCircle, Receipt, FileText, TrendingUp, Shield, Timer, ChevronLeft, ChevronRight, Megaphone, UserCog, Activity, StickyNote, LayoutGrid, AlarmClock, Bell, Landmark, Target, Presentation } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
@@ -15,6 +15,7 @@ const APP_VERSION = '1.6.0'
 const navItems = [
   { href: '/dashboard',         label: 'Dashboard',         icon: LayoutDashboard, roles: ['admin','gerente_operaciones','colaborador'], alwaysVisible: true },
   { href: '/clientes',          label: 'Clientes',           icon: Users,           roles: ['admin','gerente_operaciones'] },
+  { href: '/presentaciones',    label: 'Presentaciones',     icon: Presentation,    roles: ['admin'] },
   { href: '/crm',               label: 'CRM',                icon: Target,          roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos',         label: 'Proyectos',          icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
   { href: '/proyectos-mes',     label: 'Proyectos del mes',  icon: FolderKanban,    roles: ['admin','gerente_operaciones'] },
