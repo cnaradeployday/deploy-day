@@ -140,8 +140,8 @@ export default function PresentacionCard({
   }
 
   return (
-    <div className={`bg-white border border-gray-100 rounded-2xl overflow-hidden hover:border-gray-200 transition-colors ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
-      <div className="aspect-video bg-gray-50 relative flex items-center justify-center">
+    <div className={`bg-white border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+      <div className="aspect-video bg-gray-50 relative flex items-center justify-center rounded-t-2xl overflow-hidden">
         {p.portadaUrl ? <img src={p.portadaUrl} alt="" className="w-full h-full object-cover"/> : <PresentationIcon size={28} className="text-gray-300"/>}
         <button onClick={toggleFavorita} className="absolute top-2 right-2 p-1.5 rounded-full bg-white/90 hover:bg-white">
           <Star size={14} className={favorita ? 'fill-amber-400 text-amber-400' : 'text-gray-400'}/>
