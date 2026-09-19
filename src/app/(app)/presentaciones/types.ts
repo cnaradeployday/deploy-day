@@ -12,8 +12,16 @@ export type Presentacion = {
   linkExpiraAt: string | null
   esMia: boolean
   esFavorita: boolean
+  tieneCompartidos: boolean
   createdAt: string
   updatedAt: string
+}
+
+// PU (publica) / US (compartida con usuarios puntuales, visibilidad=privada + shares) / PR (privada, sin compartir)
+export function badgeVisibilidad(p: Pick<Presentacion, 'visibilidad' | 'tieneCompartidos'>): { label: string; title: string } {
+  if (p.visibilidad === 'publica') return { label: 'PU', title: 'Publica' }
+  if (p.tieneCompartidos) return { label: 'US', title: 'Compartida con usuarios especificos' }
+  return { label: 'PR', title: 'Privada' }
 }
 
 export type Cliente = {

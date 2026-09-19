@@ -5,7 +5,18 @@ import { createClient } from '@/lib/supabase/client'
 import {
   Star, MoreVertical, ExternalLink, Link2, Pencil, RefreshCw, Copy, EyeOff, Eye, Trash2, Lock, Clock, Presentation as PresentationIcon,
 } from 'lucide-react'
-import { type Presentacion, ESTADO_LABEL, ESTADO_COLOR, urlPublica } from './types'
+import { type Presentacion, ESTADO_LABEL, ESTADO_COLOR, urlPublica, badgeVisibilidad } from './types'
+
+const BADGE_COLOR: Record<string, string> = {
+  PU: 'bg-blue-50 text-blue-600',
+  US: 'bg-purple-50 text-purple-600',
+  PR: 'bg-gray-100 text-gray-500',
+}
+
+function BadgeVisibilidad({ p, className = '' }: { p: Presentacion; className?: string }) {
+  const b = badgeVisibilidad(p)
+  return <span title={b.title} className={`text-xs font-semibold px-1.5 py-0.5 rounded ${BADGE_COLOR[b.label]} ${className}`}>{b.label}</span>
+}
 
 export default function PresentacionCard({
   p, userId, puedeEscribir, vista = 'grid', onEditar, onReemplazar,
@@ -117,7 +128,7 @@ export default function PresentacionCard({
           <p className="text-xs text-gray-400 truncate">{p.clienteNombre} · {new Date(p.updatedAt).toLocaleDateString('es-AR')}</p>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${ESTADO_COLOR[p.estado]}`}>{ESTADO_LABEL[p.estado]}</span>
-        {p.visibilidad === 'privada' && <span className="text-xs text-gray-400 shrink-0">Privada</span>}
+        <BadgeVisibilidad p={p} className="shrink-0"/>
         {p.tieneClave && <Lock size={12} className="text-gray-400 shrink-0"/>}
         <button onClick={toggleFavorita} className="shrink-0"><Star size={16} className={favorita ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}/></button>
         <div className="relative shrink-0" ref={menuRef}>
@@ -135,6 +146,7 @@ export default function PresentacionCard({
         <button onClick={toggleFavorita} className="absolute top-2 right-2 p-1.5 rounded-full bg-white/90 hover:bg-white">
           <Star size={14} className={favorita ? 'fill-amber-400 text-amber-400' : 'text-gray-400'}/>
         </button>
+        <BadgeVisibilidad p={p} className="absolute top-2 left-2 shadow-sm"/>
         <span className={`absolute bottom-2 left-2 text-xs px-2 py-0.5 rounded-full ${ESTADO_COLOR[p.estado]}`}>{ESTADO_LABEL[p.estado]}</span>
       </div>
       <div className="p-3.5">
@@ -150,7 +162,6 @@ export default function PresentacionCard({
         </div>
         <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
           <span>{new Date(p.updatedAt).toLocaleDateString('es-AR')}</span>
-          {p.visibilidad === 'privada' && <span>· Privada</span>}
           {p.tieneClave && <Lock size={11}/>}
           {p.linkExpiraAt && <Clock size={11}/>}
         </div>
