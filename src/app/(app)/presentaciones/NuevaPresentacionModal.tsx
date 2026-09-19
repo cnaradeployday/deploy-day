@@ -2,10 +2,13 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, UploadCloud, FileArchive, Folder, FileCode, ExternalLink, Link2, Check, RotateCcw } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { slugify } from '@/lib/presentaciones/slug'
 import type { Cliente, Presentacion } from './types'
 
 type Modo = 'crear' | 'reemplazar'
+type ModoVisibilidad = 'publica' | 'privada' | 'usuarios'
+type Usuario = { id: string; full_name: string; nickname: string | null }
 
 export default function NuevaPresentacionModal({
   open, onClose, clientes, clienteIdFijo, presentacion, onDone,
@@ -21,7 +24,9 @@ export default function NuevaPresentacionModal({
   const modo: Modo = presentacion ? 'reemplazar' : 'crear'
   const [clientId, setClientId] = useState(clienteIdFijo ?? presentacion?.clientId ?? '')
   const [nombre, setNombre] = useState(presentacion?.nombre ?? '')
-  const [visibilidad, setVisibilidad] = useState<'publica' | 'privada'>(presentacion?.visibilidad ?? 'publica')
+  const [modoVisibilidad, setModoVisibilidad] = useState<ModoVisibilidad>(presentacion?.visibilidad ?? 'publica')
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [usuariosSeleccionados, setUsuariosSeleccionados] = useState<string[]>([])
   const [file, setFile] = useState<File | null>(null)
   const [htmlFile, setHtmlFile] = useState<File | null>(null)
   const [carpeta, setCarpeta] = useState<FileList | null>(null)
@@ -36,6 +41,11 @@ export default function NuevaPresentacionModal({
     if (!resultado) { setQr(null); return }
     import('qrcode').then(QRCode => QRCode.toDataURL(resultado.url, { width: 160, margin: 1 })).then(setQr).catch(() => setQr(null))
   }, [resultado])
+
+  useEffect(() => {
+    if (modoVisibilidad !== 'usuarios' || usuarios.length) return
+    createClient().from('users').select('id, full_name, nickname').order('full_name').then(({ data }) => setUsuarios(data ?? []))
+  }, [modoVisibilidad, usuarios.length])
   const zipInputRef = useRef<HTMLInputElement>(null)
   const htmlInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -51,7 +61,7 @@ export default function NuevaPresentacionModal({
 
   function reset() {
     setFile(null); setHtmlFile(null); setCarpeta(null); setError(null); setFase('form'); setProgreso(0); setResultado(null)
-    if (modo === 'crear') { setNombre(''); setClientId(clienteIdFijo ?? '') }
+    if (modo === 'crear') { setNombre(''); setClientId(clienteIdFijo ?? ''); setModoVisibilidad('publica'); setUsuariosSeleccionados([]) }
   }
 
   function cerrar() {
@@ -75,8 +85,10 @@ export default function NuevaPresentacionModal({
   async function publicar() {
     setError(null)
     if (modo === 'crear' && (!clientId || !nombre.trim())) { setError('Elegi un cliente y un nombre para la presentacion.'); return }
+    if (modo === 'crear' && modoVisibilidad === 'usuarios' && usuariosSeleccionados.length === 0) { setError('Elegi al menos un usuario para compartirla.'); return }
     if (!file && !htmlFile && !carpeta) { setError('Arrastra un ZIP, un HTML, o seleccioná los archivos de la presentacion.'); return }
 
+    const visibilidad = modoVisibilidad === 'publica' ? 'publica' : 'privada'
     const formData = new FormData()
     if (presentacion) formData.append('presentacion_id', presentacion.id)
     else formData.append('client_id', clientId)
@@ -111,7 +123,12 @@ export default function NuevaPresentacionModal({
         setFase('procesando')
         try {
           const data = JSON.parse(xhr.responseText)
-          setTimeout(() => { setResultado({ url: data.url, slug: data.slug }); setFase('exito'); onDone(); router.refresh() }, 500)
+          const compartir = modo === 'crear' && modoVisibilidad === 'usuarios' && usuariosSeleccionados.length
+            ? createClient().from('presentaciones_shares').insert(usuariosSeleccionados.map(userId => ({ presentacion_id: data.id, user_id: userId })))
+            : Promise.resolve()
+          compartir.then(() => {
+            setTimeout(() => { setResultado({ url: data.url, slug: data.slug }); setFase('exito'); onDone(); router.refresh() }, 500)
+          })
         } catch {
           setError('Respuesta inesperada del servidor.'); setFase('form')
         }
@@ -184,18 +201,38 @@ export default function NuevaPresentacionModal({
                   <div>
                     <label className="block text-xs text-gray-400 mb-1.5">Visibilidad</label>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => setVisibilidad('publica')}
-                        className={`flex-1 px-3 py-2 rounded-xl text-sm border ${visibilidad === 'publica' ? 'border-[#1B9BF0] bg-[#E8F4FE] text-[#1B9BF0]' : 'border-gray-200 text-gray-500'}`}>
+                      <button type="button" onClick={() => setModoVisibilidad('publica')}
+                        className={`flex-1 px-3 py-2 rounded-xl text-sm border ${modoVisibilidad === 'publica' ? 'border-[#1B9BF0] bg-[#E8F4FE] text-[#1B9BF0]' : 'border-gray-200 text-gray-500'}`}>
                         Publica
                       </button>
-                      <button type="button" onClick={() => setVisibilidad('privada')}
-                        className={`flex-1 px-3 py-2 rounded-xl text-sm border ${visibilidad === 'privada' ? 'border-[#1B9BF0] bg-[#E8F4FE] text-[#1B9BF0]' : 'border-gray-200 text-gray-500'}`}>
+                      <button type="button" onClick={() => setModoVisibilidad('privada')}
+                        className={`flex-1 px-3 py-2 rounded-xl text-sm border ${modoVisibilidad === 'privada' ? 'border-[#1B9BF0] bg-[#E8F4FE] text-[#1B9BF0]' : 'border-gray-200 text-gray-500'}`}>
                         Privada
+                      </button>
+                      <button type="button" onClick={() => setModoVisibilidad('usuarios')}
+                        className={`flex-1 px-3 py-2 rounded-xl text-sm border ${modoVisibilidad === 'usuarios' ? 'border-[#1B9BF0] bg-[#E8F4FE] text-[#1B9BF0]' : 'border-gray-200 text-gray-500'}`}>
+                        Usuarios
                       </button>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">
-                      {visibilidad === 'publica' ? 'La ve cualquiera con acceso a Presentaciones en DDS.' : 'Solo la ves vos dentro de DDS (el link publico funciona igual una vez publicada).'}
+                      {modoVisibilidad === 'publica' && 'La ve cualquiera con acceso a Presentaciones en DDS.'}
+                      {modoVisibilidad === 'privada' && 'Solo la ves vos dentro de DDS (el link publico funciona igual una vez publicada).'}
+                      {modoVisibilidad === 'usuarios' && 'Solo la ven vos y los usuarios que elijas (el link publico funciona igual una vez publicada).'}
                     </p>
+                    {modoVisibilidad === 'usuarios' && (
+                      <div className="mt-2 border border-gray-200 rounded-xl p-2 max-h-32 overflow-y-auto">
+                        {usuarios.length === 0 ? (
+                          <p className="text-xs text-gray-400 px-1 py-1">Cargando usuarios...</p>
+                        ) : usuarios.map(u => (
+                          <label key={u.id} className="flex items-center gap-2 text-sm text-gray-700 px-1 py-1">
+                            <input type="checkbox" checked={usuariosSeleccionados.includes(u.id)}
+                              onChange={() => setUsuariosSeleccionados(s => s.includes(u.id) ? s.filter(id => id !== u.id) : [...s, u.id])}
+                              className="rounded border-gray-300"/>
+                            {u.nickname || u.full_name}
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
