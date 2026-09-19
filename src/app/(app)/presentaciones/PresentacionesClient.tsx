@@ -13,7 +13,7 @@ type Orden = 'nombre_az' | 'nombre_za' | 'recientes' | 'antiguas'
 export default function PresentacionesClient({ presentaciones, clientes, userId, puedeEscribir }: {
   presentaciones: Presentacion[]; clientes: Cliente[]; userId: string; puedeEscribir: boolean
 }) {
-  const [tab, setTab] = useState<Tab>('clientes')
+  const [tab, setTab] = useState<Tab>('todas')
   const [busqueda, setBusqueda] = useState('')
   const [orden, setOrden] = useState<Orden>('recientes')
   const [vista, setVista] = useState<'grid' | 'list'>('grid')

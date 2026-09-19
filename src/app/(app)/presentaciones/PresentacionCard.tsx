@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -8,9 +9,9 @@ import {
 import { type Presentacion, ESTADO_LABEL, ESTADO_COLOR, urlPublica, badgeVisibilidad } from './types'
 
 const BADGE_COLOR: Record<string, string> = {
-  PU: 'bg-blue-50 text-blue-600',
-  US: 'bg-purple-50 text-purple-600',
-  PR: 'bg-gray-100 text-gray-500',
+  PU: 'bg-blue-600 text-white',
+  US: 'bg-purple-600 text-white',
+  PR: 'bg-gray-700 text-white',
 }
 
 function BadgeVisibilidad({ p, className = '' }: { p: Presentacion; className?: string }) {
@@ -30,19 +31,32 @@ export default function PresentacionCard({
 }) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const [favorita, setFavorita] = useState(p.esFavorita)
   const [busy, setBusy] = useState(false)
   const [copiado, setCopiado] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
   const puedeAdministrar = puedeEscribir && (p.esMia)
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+      const target = e.target as Node
+      if (popupRef.current?.contains(target)) return
+      if (btnRef.current?.contains(target)) return
+      setMenuOpen(false)
     }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
+
+  function toggleMenu() {
+    if (!menuOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setMenuOpen(o => !o)
+  }
 
   async function toggleFavorita() {
     const sb = createClient()
@@ -86,8 +100,9 @@ export default function PresentacionCard({
     router.refresh()
   }
 
-  const menu = (
-    <div className="absolute right-0 top-8 w-56 bg-white border border-gray-100 rounded-xl shadow-lg z-30 py-1.5 text-sm">
+  const menu = menuOpen && menuPos && typeof document !== 'undefined' && createPortal(
+    <div ref={popupRef} style={{ position: 'fixed', top: menuPos.top, right: menuPos.right }}
+      className="w-56 bg-white border border-gray-100 rounded-xl shadow-lg z-50 py-1.5 text-sm">
       {p.estado === 'publicada' && (
         <a href={urlPublica(p.slug)} target="_blank" rel="noopener" className="flex items-center gap-2.5 px-3.5 py-2 hover:bg-gray-50 text-gray-700">
           <ExternalLink size={14}/> Abrir
@@ -114,7 +129,8 @@ export default function PresentacionCard({
           <Trash2 size={14}/> Eliminar
         </button>
       </>}
-    </div>
+    </div>,
+    document.body
   )
 
   if (vista === 'list') {
@@ -131,9 +147,9 @@ export default function PresentacionCard({
         <BadgeVisibilidad p={p} className="shrink-0"/>
         {p.tieneClave && <Lock size={12} className="text-gray-400 shrink-0"/>}
         <button onClick={toggleFavorita} className="shrink-0"><Star size={16} className={favorita ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}/></button>
-        <div className="relative shrink-0" ref={menuRef}>
-          <button onClick={() => setMenuOpen(o => !o)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><MoreVertical size={16}/></button>
-          {menuOpen && menu}
+        <div className="relative shrink-0">
+          <button ref={btnRef} onClick={toggleMenu} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><MoreVertical size={16}/></button>
+          {menu}
         </div>
       </div>
     )
@@ -155,9 +171,9 @@ export default function PresentacionCard({
             <p className="text-sm font-medium text-gray-900 truncate">{p.nombre}</p>
             <p className="text-xs text-gray-400 truncate">{p.clienteNombre}</p>
           </div>
-          <div className="relative shrink-0" ref={menuRef}>
-            <button onClick={() => setMenuOpen(o => !o)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"><MoreVertical size={16}/></button>
-            {menuOpen && menu}
+          <div className="relative shrink-0">
+            <button ref={btnRef} onClick={toggleMenu} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"><MoreVertical size={16}/></button>
+            {menu}
           </div>
         </div>
         <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
