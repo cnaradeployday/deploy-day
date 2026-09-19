@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, UploadCloud, FileArchive, Folder, ExternalLink, Link2, Check, RotateCcw } from 'lucide-react'
+import { X, UploadCloud, FileArchive, Folder, FileCode, ExternalLink, Link2, Check, RotateCcw } from 'lucide-react'
 import { slugify } from '@/lib/presentaciones/slug'
 import type { Cliente, Presentacion } from './types'
 
@@ -23,6 +23,7 @@ export default function NuevaPresentacionModal({
   const [nombre, setNombre] = useState(presentacion?.nombre ?? '')
   const [visibilidad, setVisibilidad] = useState<'publica' | 'privada'>(presentacion?.visibilidad ?? 'publica')
   const [file, setFile] = useState<File | null>(null)
+  const [htmlFile, setHtmlFile] = useState<File | null>(null)
   const [carpeta, setCarpeta] = useState<FileList | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,6 +37,7 @@ export default function NuevaPresentacionModal({
     import('qrcode').then(QRCode => QRCode.toDataURL(resultado.url, { width: 160, margin: 1 })).then(setQr).catch(() => setQr(null))
   }, [resultado])
   const zipInputRef = useRef<HTMLInputElement>(null)
+  const htmlInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
   const clienteNombre = useMemo(() => clientes.find(c => c.id === clientId)?.nombre ?? '', [clientId, clientes])
@@ -48,7 +50,7 @@ export default function NuevaPresentacionModal({
   if (!open) return null
 
   function reset() {
-    setFile(null); setCarpeta(null); setError(null); setFase('form'); setProgreso(0); setResultado(null)
+    setFile(null); setHtmlFile(null); setCarpeta(null); setError(null); setFase('form'); setProgreso(0); setResultado(null)
     if (modo === 'crear') { setNombre(''); setClientId(clienteIdFijo ?? '') }
   }
 
@@ -60,17 +62,20 @@ export default function NuevaPresentacionModal({
   function onDrop(e: React.DragEvent) {
     e.preventDefault(); setDragOver(false)
     const dropped = e.dataTransfer.files
-    if (dropped.length === 1 && dropped[0].name.toLowerCase().endsWith('.zip')) {
-      setFile(dropped[0]); setCarpeta(null)
+    const nombreArchivo = dropped[0]?.name.toLowerCase() ?? ''
+    if (dropped.length === 1 && nombreArchivo.endsWith('.zip')) {
+      setFile(dropped[0]); setHtmlFile(null); setCarpeta(null)
+    } else if (dropped.length === 1 && (nombreArchivo.endsWith('.html') || nombreArchivo.endsWith('.htm'))) {
+      setHtmlFile(dropped[0]); setFile(null); setCarpeta(null)
     } else {
-      setError('Arrastra un unico archivo .zip. Para HTML con varios archivos, usa "Seleccionar carpeta".')
+      setError('Arrastra un unico archivo .zip o .html. Para una presentacion con varios archivos sueltos (css, imagenes), usa "Seleccionar carpeta".')
     }
   }
 
   async function publicar() {
     setError(null)
     if (modo === 'crear' && (!clientId || !nombre.trim())) { setError('Elegi un cliente y un nombre para la presentacion.'); return }
-    if (!file && !carpeta) { setError('Arrastra un ZIP o seleccioná los archivos de la presentacion.'); return }
+    if (!file && !htmlFile && !carpeta) { setError('Arrastra un ZIP, un HTML, o seleccioná los archivos de la presentacion.'); return }
 
     const formData = new FormData()
     if (presentacion) formData.append('presentacion_id', presentacion.id)
@@ -81,6 +86,10 @@ export default function NuevaPresentacionModal({
     if (file) {
       formData.append('mode', 'zip')
       formData.append('zip', file)
+    } else if (htmlFile) {
+      formData.append('mode', 'files')
+      formData.append('file', htmlFile)
+      formData.append('paths', JSON.stringify(['index.html']))
     } else if (carpeta) {
       formData.append('mode', 'files')
       const paths: string[] = []
@@ -200,17 +209,22 @@ export default function NuevaPresentacionModal({
                 <UploadCloud size={24} className="mx-auto mb-2 text-gray-300"/>
                 {file ? (
                   <p className="text-sm text-gray-700 flex items-center justify-center gap-1.5"><FileArchive size={14}/> {file.name}</p>
+                ) : htmlFile ? (
+                  <p className="text-sm text-gray-700 flex items-center justify-center gap-1.5"><FileCode size={14}/> {htmlFile.name}</p>
                 ) : carpeta ? (
                   <p className="text-sm text-gray-700 flex items-center justify-center gap-1.5"><Folder size={14}/> {carpeta.length} archivos seleccionados</p>
                 ) : (
-                  <p className="text-sm text-gray-400">Arrastra un archivo .zip aca</p>
+                  <p className="text-sm text-gray-400">Arrastra un archivo .zip o .html aca</p>
                 )}
-                <div className="flex items-center justify-center gap-2 mt-3">
+                <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
                   <button type="button" onClick={() => zipInputRef.current?.click()} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Seleccionar ZIP</button>
+                  <button type="button" onClick={() => htmlInputRef.current?.click()} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Seleccionar HTML</button>
                   <button type="button" onClick={() => folderInputRef.current?.click()} className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Seleccionar carpeta</button>
                 </div>
-                <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setCarpeta(null) }}/>
-                <input ref={folderInputRef} type="file" className="hidden" {...{ webkitdirectory: 'true', directory: 'true' } as any} multiple onChange={e => { setCarpeta(e.target.files); setFile(null) }}/>
+                <p className="text-xs text-gray-400 mt-2">Un HTML suelto sirve si es autocontenido (CSS/JS/imagenes inline). Si depende de otros archivos, usa ZIP o carpeta.</p>
+                <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setHtmlFile(null); setCarpeta(null) }}/>
+                <input ref={htmlInputRef} type="file" accept=".html,.htm" className="hidden" onChange={e => { setHtmlFile(e.target.files?.[0] ?? null); setFile(null); setCarpeta(null) }}/>
+                <input ref={folderInputRef} type="file" className="hidden" {...{ webkitdirectory: 'true', directory: 'true' } as any} multiple onChange={e => { setCarpeta(e.target.files); setFile(null); setHtmlFile(null) }}/>
               </div>
 
               {error && <p className="text-xs text-red-500">{error}</p>}
