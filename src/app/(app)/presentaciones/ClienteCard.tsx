@@ -3,7 +3,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Star } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { type Cliente, type Presentacion, colorAvatar } from './types'
+import { type Cliente, type Presentacion, colorAvatar, badgeVisibilidad } from './types'
+
+const BADGE_COLOR: Record<string, string> = {
+  PU: 'bg-blue-500/90 text-white',
+  US: 'bg-purple-500/90 text-white',
+  PR: 'bg-gray-700/80 text-white',
+}
 
 export default function ClienteCard({ cliente, presentaciones, userId }: {
   cliente: Cliente; presentaciones: Presentacion[]; userId: string
@@ -35,11 +41,15 @@ export default function ClienteCard({ cliente, presentaciones, userId }: {
         <button onClick={toggleFavorito} className="shrink-0"><Star size={16} className={favorito ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}/></button>
       </div>
       <div className="grid grid-cols-4 gap-1.5 mb-2">
-        {miniaturas.length ? miniaturas.map(p => (
-          <div key={p.id} className="aspect-video rounded-lg bg-gray-50 overflow-hidden">
-            {p.portadaUrl && <img src={p.portadaUrl} alt="" className="w-full h-full object-cover"/>}
-          </div>
-        )) : Array.from({ length: 1 }).map((_, i) => <div key={i} className="aspect-video rounded-lg bg-gray-50 col-span-4"/>)}
+        {miniaturas.length ? miniaturas.map(p => {
+          const b = badgeVisibilidad(p)
+          return (
+            <div key={p.id} className="aspect-video rounded-lg bg-gray-50 overflow-hidden relative">
+              {p.portadaUrl && <img src={p.portadaUrl} alt="" className="w-full h-full object-cover"/>}
+              <span title={b.title} className={`absolute top-0.5 left-0.5 text-[9px] leading-none font-semibold px-1 py-0.5 rounded ${BADGE_COLOR[b.label]}`}>{b.label}</span>
+            </div>
+          )
+        }) : Array.from({ length: 1 }).map((_, i) => <div key={i} className="aspect-video rounded-lg bg-gray-50 col-span-4"/>)}
       </div>
       {ultimaActualizacion && (
         <p className="text-xs text-gray-400">Ultima actualizacion {new Date(ultimaActualizacion).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
