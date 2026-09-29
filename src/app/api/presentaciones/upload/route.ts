@@ -9,6 +9,15 @@ export const maxDuration = 90
 
 const MAX_ZIP_BYTES = 100 * 1024 * 1024 // 100MB
 
+// Vercel rechaza bodies > ~4.5MB en funciones serverless, asi que el navegador
+// sube los archivos directo a Storage (carpeta temporal `staging/<user>/<id>`)
+// y este endpoint solo recibe metadatos y los lee desde ahi.
+async function descargarStaging(supabase: Awaited<ReturnType<typeof createClient>>, path: string) {
+  const { data, error } = await supabase.storage.from('presentaciones').download(path)
+  if (error || !data) throw new Error(`No se pudo leer ${path}: ${error?.message}`)
+  return data
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -32,33 +41,39 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cliente y nombre son obligatorios.' }, { status: 400 })
   }
 
-  // 1. Extraer/juntar archivos ------------------------------------------------
+  // 1. Extraer/juntar archivos (subidos antes por el navegador a Storage) -----
+  const stagingPrefix = formData.get('staging_prefix') as string | null
+  if (!stagingPrefix || !stagingPrefix.startsWith(`staging/${user.id}/`) || stagingPrefix.includes('..')) {
+    return NextResponse.json({ error: 'Carga temporal invalida. Intenta de nuevo.' }, { status: 400 })
+  }
+
   let archivos: ArchivoExtraido[]
   try {
     if (mode === 'zip') {
-      const zipFile = formData.get('zip') as File | null
-      if (!zipFile) return NextResponse.json({ error: 'Falta el archivo ZIP.' }, { status: 400 })
-      if (zipFile.size > MAX_ZIP_BYTES) return NextResponse.json({ error: 'El archivo es demasiado pesado (maximo 100MB).' }, { status: 400 })
-      const buffer = Buffer.from(await zipFile.arrayBuffer())
+      const blob = await descargarStaging(supabase, `${stagingPrefix}/archivo.zip`)
+      if (blob.size > MAX_ZIP_BYTES) return NextResponse.json({ error: 'El archivo es demasiado pesado (maximo 100MB).' }, { status: 400 })
+      const buffer = Buffer.from(await blob.arrayBuffer())
       archivos = await extraerZip(buffer)
       if (archivos.length === 0) return NextResponse.json({ error: 'El ZIP esta vacio o no se pudo leer. Verifica que el archivo no este corrupto.' }, { status: 400 })
     } else {
-      const files = formData.getAll('file') as File[]
       const pathsRaw = formData.get('paths') as string | null
-      if (!files.length || !pathsRaw) return NextResponse.json({ error: 'No se recibieron archivos.' }, { status: 400 })
+      if (!pathsRaw) return NextResponse.json({ error: 'No se recibieron archivos.' }, { status: 400 })
       const paths: string[] = JSON.parse(pathsRaw)
-      if (paths.length !== files.length) return NextResponse.json({ error: 'Error interno al procesar los archivos. Intenta de nuevo.' }, { status: 400 })
-      const totalBytes = files.reduce((acc, f) => acc + f.size, 0)
-      if (totalBytes > MAX_ZIP_BYTES) return NextResponse.json({ error: 'Los archivos son demasiado pesados en conjunto (maximo 100MB).' }, { status: 400 })
-      archivos = await Promise.all(files.map(async (f, i) => ({
-        path: paths[i],
-        buffer: Buffer.from(await f.arrayBuffer()),
-        contentType: contentTypeFor(paths[i]),
-      })))
+      if (!paths.length) return NextResponse.json({ error: 'No se recibieron archivos.' }, { status: 400 })
+      let totalBytes = 0
+      archivos = []
+      for (let i = 0; i < paths.length; i++) {
+        const blob = await descargarStaging(supabase, `${stagingPrefix}/f${i}`)
+        totalBytes += blob.size
+        if (totalBytes > MAX_ZIP_BYTES) return NextResponse.json({ error: 'Los archivos son demasiado pesados en conjunto (maximo 100MB).' }, { status: 400 })
+        archivos.push({ path: paths[i], buffer: Buffer.from(await blob.arrayBuffer()), contentType: contentTypeFor(paths[i]) })
+      }
     }
   } catch (err) {
     console.error('Error leyendo archivos de presentacion:', err)
-    return NextResponse.json({ error: 'El ZIP es invalido o esta corrupto.' }, { status: 400 })
+    return NextResponse.json({ error: 'No se pudieron leer los archivos subidos o el ZIP es invalido.' }, { status: 400 })
+  } finally {
+    await limpiarStaging(supabase, stagingPrefix)
   }
 
   const principal = encontrarArchivoPrincipal(archivos)
@@ -140,4 +155,13 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ id: presentacion.id, slug: presentacion.slug, url: publicUrl, estado: 'publicada' })
+}
+
+async function limpiarStaging(supabase: Awaited<ReturnType<typeof createClient>>, prefix: string) {
+  try {
+    const { data } = await supabase.storage.from('presentaciones').list(prefix, { limit: 1000 })
+    if (data?.length) await supabase.storage.from('presentaciones').remove(data.map(f => `${prefix}/${f.name}`))
+  } catch (err) {
+    console.error('No se pudo limpiar la carpeta temporal:', err)
+  }
 }

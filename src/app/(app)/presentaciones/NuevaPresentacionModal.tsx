@@ -95,50 +95,59 @@ export default function NuevaPresentacionModal({
     formData.append('nombre', nombre.trim())
     formData.append('visibilidad', visibilidad)
 
-    if (file) {
-      formData.append('mode', 'zip')
-      formData.append('zip', file)
-    } else if (htmlFile) {
-      formData.append('mode', 'files')
-      formData.append('file', htmlFile)
-      formData.append('paths', JSON.stringify(['index.html']))
-    } else if (carpeta) {
-      formData.append('mode', 'files')
-      const paths: string[] = []
-      Array.from(carpeta).forEach(f => {
-        paths.push((f as any).webkitRelativePath || f.name)
-        formData.append('file', f)
-      })
-      formData.append('paths', JSON.stringify(paths))
-    }
-
     setFase('subiendo')
     setProgreso(0)
 
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/presentaciones/upload')
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) setProgreso(Math.round((e.loaded / e.total) * 100)) }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setFase('procesando')
-        try {
-          const data = JSON.parse(xhr.responseText)
-          const compartir = modo === 'crear' && modoVisibilidad === 'usuarios' && usuariosSeleccionados.length
-            ? createClient().from('presentaciones_shares').insert(usuariosSeleccionados.map(userId => ({ presentacion_id: data.id, user_id: userId })))
-            : Promise.resolve()
-          compartir.then(() => {
-            setTimeout(() => { setResultado({ url: data.url, slug: data.slug }); setFase('exito'); onDone(); router.refresh() }, 500)
-          })
-        } catch {
-          setError('Respuesta inesperada del servidor.'); setFase('form')
-        }
-      } else {
-        try { setError(JSON.parse(xhr.responseText).error ?? 'Error durante la carga.') } catch { setError('Error durante la carga.') }
-        setFase('form')
-      }
+    // Subida directa a Storage (evita el limite de ~4.5MB de las funciones de Vercel).
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError('Sesion expirada. Volve a iniciar sesion.'); setFase('form'); return }
+    const stagingPrefix = `staging/${user.id}/${crypto.randomUUID()}`
+    const subir = async (path: string, f: File) => {
+      const { error: upErr } = await supabase.storage.from('presentaciones').upload(`${stagingPrefix}/${path}`, f, { contentType: 'application/octet-stream', upsert: true })
+      if (upErr) throw new Error(upErr.message)
     }
-    xhr.onerror = () => { setError('Error de conexion durante la carga. Podes reintentar.'); setFase('form') }
-    xhr.send(formData)
+
+    try {
+      if (file) {
+        formData.append('mode', 'zip')
+        await subir('archivo.zip', file)
+      } else if (htmlFile) {
+        formData.append('mode', 'files')
+        await subir('f0', htmlFile)
+        formData.append('paths', JSON.stringify(['index.html']))
+      } else if (carpeta) {
+        formData.append('mode', 'files')
+        const lista = Array.from(carpeta)
+        const paths = lista.map(f => (f as any).webkitRelativePath || f.name)
+        for (let i = 0; i < lista.length; i++) {
+          await subir(`f${i}`, lista[i])
+          setProgreso(Math.round(((i + 1) / lista.length) * 100))
+        }
+        formData.append('paths', JSON.stringify(paths))
+      }
+      formData.append('staging_prefix', stagingPrefix)
+    } catch (err) {
+      console.error('Error subiendo a Storage:', err)
+      setError('Error subiendo los archivos. Verifica el tamano (maximo 100MB) y reintenta.'); setFase('form'); return
+    }
+
+    setFase('procesando')
+    try {
+      const res = await fetch('/api/presentaciones/upload', { method: 'POST', body: formData })
+      const text = await res.text()
+      if (!res.ok) {
+        try { setError(JSON.parse(text).error ?? 'Error durante la carga.') } catch { setError('Error durante la carga.') }
+        setFase('form'); return
+      }
+      const data = JSON.parse(text)
+      if (modo === 'crear' && modoVisibilidad === 'usuarios' && usuariosSeleccionados.length) {
+        await supabase.from('presentaciones_shares').insert(usuariosSeleccionados.map(userId => ({ presentacion_id: data.id, user_id: userId })))
+      }
+      setResultado({ url: data.url, slug: data.slug }); setFase('exito'); onDone(); router.refresh()
+    } catch {
+      setError('Error de conexion durante la carga. Podes reintentar.'); setFase('form')
+    }
   }
 
   return (
@@ -178,7 +187,7 @@ export default function NuevaPresentacionModal({
               <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div className="h-full bg-[#1B9BF0] transition-all" style={{ width: `${fase === 'procesando' ? 100 : progreso}%` }}/>
               </div>
-              <p className="text-xs text-gray-400 mt-2">{fase === 'subiendo' ? `${progreso}%` : ''}</p>
+              <p className="text-xs text-gray-400 mt-2">{fase === 'subiendo' && carpeta ? `${progreso}%` : ''}</p>
             </div>
           ) : (
             <div className="space-y-4">
