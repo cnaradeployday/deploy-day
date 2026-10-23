@@ -23,12 +23,22 @@ export default async function ResumenFacturasPage({
 
   const months = getMonthsOfYear(year)
 
-  const { data: facturas } = await supabase
-    .from('facturas_clientes')
-    .select('id, client_id, mes_servicio, importe, currency, estado, fecha_vencimiento, client:clients(id, name)')
-    .gte('mes_servicio', months[0])
-    .lte('mes_servicio', months[11])
-    .range(0, 9999) // evita el tope de 1000 filas por defecto
+  // PostgREST corta en 1000 filas por request (max_rows); sin paginar, las facturas
+  // más nuevas (clientes nuevos) quedaban afuera del resumen.
+  const PAGE = 1000
+  const facturas: any[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('facturas_clientes')
+      .select('id, client_id, mes_servicio, importe, currency, estado, fecha_vencimiento, client:clients(id, name)')
+      .gte('mes_servicio', months[0])
+      .lte('mes_servicio', months[11])
+      .order('id')
+      .range(from, from + PAGE - 1)
+    if (error || !data) break
+    facturas.push(...data)
+    if (data.length < PAGE) break
+  }
 
   // Años disponibles para el selector (siempre incluye el año en curso)
   const { data: mesesTodos } = await supabase.from('facturas_clientes').select('mes_servicio')
@@ -60,7 +70,7 @@ export default async function ResumenFacturasPage({
 
   return (
     <ResumenFacturasClient
-      facturas={facturas ?? []}
+      facturas={facturas}
       months={months}
       year={year}
       availableYears={availableYears}
