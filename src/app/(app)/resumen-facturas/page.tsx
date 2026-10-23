@@ -28,6 +28,7 @@ export default async function ResumenFacturasPage({
     .select('id, client_id, mes_servicio, importe, currency, estado, fecha_vencimiento, client:clients(id, name)')
     .gte('mes_servicio', months[0])
     .lte('mes_servicio', months[11])
+    .range(0, 9999) // evita el tope de 1000 filas por defecto
 
   // Años disponibles para el selector (siempre incluye el año en curso)
   const { data: mesesTodos } = await supabase.from('facturas_clientes').select('mes_servicio')
