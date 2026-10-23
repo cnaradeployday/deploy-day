@@ -330,7 +330,9 @@ export default function ResumenFacturasClient({
   const shownMonths = months.filter(m => visibleMonths.has(m))
 
   const { clientList, facturaMap } = useMemo(() => {
+    // Todos los clientes, tengan o no facturas en el año
     const clientMap: Record<string, string> = {}
+    clientesAll.forEach(c => { clientMap[c.id] = c.name })
     const fMap: Record<string, Record<string, any[]>> = {}
     facturas.forEach(f => {
       const cId = f.client_id
@@ -344,7 +346,7 @@ export default function ResumenFacturasClient({
       .sort((a, b) => a[1].localeCompare(b[1]))
       .map(([id, name]) => ({ id, name }))
     return { clientList, facturaMap: fMap }
-  }, [facturas])
+  }, [facturas, clientesAll])
 
   const shownClientList = clientList.filter(c => checkedClients.has(c.id))
 
