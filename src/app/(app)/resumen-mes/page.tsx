@@ -82,14 +82,13 @@ export default async function ResumenMesPage({ searchParams }: { searchParams: P
 
   const horasEstimadasPorProyecto: Record<string, number> = {}
   const tareasConDueEnMes = (todasTareas ?? []).filter(t =>
-    t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia &&
-    !['finalizado'].includes(t.status)
+    t.due_date && t.due_date >= primerDia && t.due_date <= ultimoDia
   )
   tareasConDueEnMes.forEach(t => {
     horasEstimadasPorProyecto[t.project_id] = (horasEstimadasPorProyecto[t.project_id] ?? 0) + (t.estimated_hours ?? 0)
   })
   // Sin fallback a segmentos - estimadas vienen SOLO de tareas con due_date en el mes,
-  // y se excluyen las ya presentadas/finalizadas (no tiene sentido "estimar" trabajo ya cerrado)
+  // en cualquier estado (incluidas finalizadas), igual que la pantalla de Tareas y que las horas usadas
 
   const taskToProject: Record<string, string> = {}
   ;(todasTareas ?? []).forEach(t => { taskToProject[t.id] = t.project_id })
