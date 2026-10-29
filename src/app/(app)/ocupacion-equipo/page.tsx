@@ -43,7 +43,6 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   const { data: tareasDirectas } = await adminSupabase
     .from('tasks')
     .select('id, title, status, due_date, direct_responsible_id, direct_hours, project:projects(name, client:clients(name))')
-    .not('status', 'in', '(finalizado)')
     .gte('due_date', primerDia).lte('due_date', ultimoDia)
     .not('direct_responsible_id', 'is', null)
 
@@ -98,7 +97,7 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
 
   const colabsFiltrados = (tareasColab ?? []).filter((c: any) => {
     const dd = c.task?.due_date
-    return dd && dd >= primerDia && dd <= ultimoDia && !['finalizado'].includes(c.task?.status)
+    return dd && dd >= primerDia && dd <= ultimoDia
   })
 
   colabsFiltrados.forEach((c: any) => {
@@ -120,6 +119,41 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
       es_colaborador: true,
     })
   })
+
+  // Tareas con horas cargadas en el mes cuyo vencimiento cae en otro mes: se listan en el detalle
+  // para que las realizadas cuadren con el total, pero no suman a las estimadas del mes.
+  const idsFaltantes = new Set<string>()
+  Object.entries(realizadasPorUserTask).forEach(([uid, tasks]) => {
+    Object.keys(tasks).forEach(tid => {
+      if (!tareasPorUser[uid]?.some((x: any) => x.id === tid)) idsFaltantes.add(tid)
+    })
+  })
+  if (idsFaltantes.size) {
+    const { data: tareasExtra } = await adminSupabase
+      .from('tasks')
+      .select('id, title, status, due_date, project:projects(name, client:clients(name))')
+      .in('id', [...idsFaltantes])
+    const extraPorId = new Map((tareasExtra ?? []).map((t: any) => [t.id, t]))
+    Object.entries(realizadasPorUserTask).forEach(([uid, tasks]) => {
+      Object.entries(tasks).forEach(([tid, horas]) => {
+        if (tareasPorUser[uid]?.some((x: any) => x.id === tid)) return
+        const t: any = extraPorId.get(tid)
+        if (!t) return
+        if (!tareasPorUser[uid]) tareasPorUser[uid] = []
+        tareasPorUser[uid].push({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          due_date: t.due_date,
+          project_name: t.project?.name ?? '—',
+          client_name: t.project?.client?.name ?? '—',
+          horas_estimadas: 0,
+          horas_realizadas: Math.round(horas * 10) / 10,
+          es_colaborador: false,
+        })
+      })
+    })
+  }
 
   const programadasPorUser: Record<string, number> = {}
   Object.entries(tareasPorUser).forEach(([uid, tareas]) => {
