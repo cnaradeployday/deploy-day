@@ -43,7 +43,6 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
   const { data: tareasDirectas } = await adminSupabase
     .from('tasks')
     .select('id, title, status, due_date, direct_responsible_id, direct_hours, project:projects(name, client:clients(name))')
-    .not('status', 'in', '(finalizado)')
     .gte('due_date', primerDia).lte('due_date', ultimoDia)
     .not('direct_responsible_id', 'is', null)
 
@@ -98,7 +97,7 @@ export default async function OcupacionEquipoPage({ searchParams }: { searchPara
 
   const colabsFiltrados = (tareasColab ?? []).filter((c: any) => {
     const dd = c.task?.due_date
-    return dd && dd >= primerDia && dd <= ultimoDia && !['finalizado'].includes(c.task?.status)
+    return dd && dd >= primerDia && dd <= ultimoDia
   })
 
   colabsFiltrados.forEach((c: any) => {
