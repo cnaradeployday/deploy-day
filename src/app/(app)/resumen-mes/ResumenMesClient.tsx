@@ -242,7 +242,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
     const arr = [...map.values()]
     arr.forEach(g => g.proyectos.sort((a, b) => a.nombre.localeCompare(b.nombre)))
     const dir = sort.dir === 'asc' ? 1 : -1
-    const pctOf = (g: { vendidas: number; usadas: number }) => g.vendidas > 0 ? g.usadas / g.vendidas : -1
+    const pctOf = (g: { estimadas: number; usadas: number }) => g.estimadas > 0 ? g.usadas / g.estimadas : -1
     arr.sort((a, b) => {
       switch (sort.key) {
         case 'vendidas': return dir * (a.vendidas - b.vendidas)
@@ -273,7 +273,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
       'Horas estimadas': f.horasEstimadas,
       'Horas usadas': f.horasConsumidas,
       'Diferencia': f.horasVendidas - f.horasEstimadas,
-      '% Usado/Vendido': f.horasVendidas > 0 ? Math.round((f.horasConsumidas / f.horasVendidas) * 100) + '%' : '—',
+      '% Usado/Estimado': f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) + '%' : '—',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
@@ -355,15 +355,15 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
             <SortHeader label="Vendidas" sortKey="vendidas" colSpan={2} activeSort={sort} onSort={onSort}/>
             <SortHeader label="Estimadas" sortKey="estimadas" colSpan={1} activeSort={sort} onSort={onSort}/>
             <SortHeader label="Usadas" sortKey="usadas" colSpan={1} activeSort={sort} onSort={onSort}/>
-            <SortHeader label="% U/V" sortKey="pct" colSpan={1} activeSort={sort} onSort={onSort}
-              title="% de horas usadas sobre las horas vendidas"/>
+            <SortHeader label="% U/E" sortKey="pct" colSpan={1} activeSort={sort} onSort={onSort}
+              title="% de horas usadas sobre las horas estimadas"/>
             <div className="col-span-3 flex justify-end">
               <EstadoFilterDropdown selected={estadoFilter} onChange={setEstadoFilter}/>
             </div>
           </div>
           {grupos.map(g => {
             const isOpen = expanded.has(g.clienteId)
-            const pctG = g.vendidas > 0 ? Math.round((g.usadas / g.vendidas) * 100) : null
+            const pctG = g.estimadas > 0 ? Math.round((g.usadas / g.estimadas) * 100) : null
             const overEstimadoG = g.estimadas > g.vendidas
             const pctColorG = pctG === null ? 'text-gray-300' : pctG >= 100 ? 'text-red-500 font-bold' : pctG >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
             return (
@@ -392,7 +392,7 @@ export default function ResumenMesClient({ filas, mes, mesActual, clientes, filt
                   </div>
                 </div>
                 {isOpen && g.proyectos.map(f => {
-                  const pct = f.horasVendidas > 0 ? Math.round((f.horasConsumidas / f.horasVendidas) * 100) : null
+                  const pct = f.horasEstimadas > 0 ? Math.round((f.horasConsumidas / f.horasEstimadas) * 100) : null
                   const overEstimado = f.horasEstimadas > f.horasVendidas
                   const pctColor = pct === null ? 'text-gray-300' : pct >= 100 ? 'text-red-500 font-bold' : pct >= 80 ? 'text-amber-500 font-semibold' : 'text-green-600'
                   return (
