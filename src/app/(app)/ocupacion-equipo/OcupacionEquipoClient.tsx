@@ -127,7 +127,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
           </thead>
           <tbody>
             {sorted.map(f => {
-              const pct = f.disponibilidad > 0 ? Math.min(100, Math.round((f.realizadas / f.disponibilidad) * 100)) : null
+              const pct = f.programadas > 0 ? Math.round((f.realizadas / f.programadas) * 100) : null
               const excedida = f.disponibilidad > 0 && f.programadas > f.disponibilidad
               const isOpen = expanded.has(f.id)
               const hasTareas = f.tareas?.length > 0
@@ -165,7 +165,7 @@ export default function OcupacionEquipoClient({ filas, mes, mesActual, mesesDisp
                           <div className="flex items-center gap-1">
                             <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div className={'h-full rounded-full ' + (pct > 90 ? 'bg-red-400' : pct > 70 ? 'bg-amber-400' : 'bg-[#1B9BF0]')}
-                                style={{ width: pct + '%' }}/>
+                                style={{ width: Math.min(100, pct) + '%' }}/>
                             </div>
                             <span className="text-xs text-gray-400">{pct}%</span>
                           </div>
