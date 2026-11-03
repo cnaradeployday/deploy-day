@@ -6,7 +6,7 @@ import { ArrowLeft, Plus, Percent, Trash2, Printer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { addDaysISO, currentMonthAR, todayISO } from '@/lib/utils/date'
 import {
-  MAX_LINEAS_LLC, fmtUSD, montoLinea, numeroFactura, periodoCorto, proximoCorrelativo,
+  MAX_LINEAS_LLC, fmtUSD, itemCalculado, montoLinea, numeroFactura, periodoCorto, proximoCorrelativo,
   renderFacturaLLCHtml, totalesLLC, type LineaLLC,
 } from '@/lib/facturas/llc'
 
@@ -201,7 +201,9 @@ export default function FacturaLLCForm() {
                     <div className="grid grid-cols-3 gap-2">
                       <input className={inputCls} placeholder="Unit" value={l.unidad} onChange={e => setLinea(i, { unidad: e.target.value })}/>
                       <input className={inputCls} placeholder="Rate" value={l.tarifa} onChange={e => setLinea(i, { tarifa: e.target.value })}/>
-                      <input className={inputCls} type="number" min="0" step="0.01" placeholder="Amount (USD)" value={l.monto || ''} onChange={e => setLinea(i, { monto: parseFloat(e.target.value) || 0 })}/>
+                      {itemCalculado(l) != null
+                        ? <input className={inputCls + ' bg-gray-50 text-gray-500'} readOnly title="Unit × Rate" value={itemCalculado(l)!.toFixed(2)}/>
+                        : <input className={inputCls} type="number" min="0" step="0.01" placeholder="Amount (USD)" value={l.monto || ''} onChange={e => setLinea(i, { monto: parseFloat(e.target.value) || 0 })}/>}
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 gap-2 items-center">
