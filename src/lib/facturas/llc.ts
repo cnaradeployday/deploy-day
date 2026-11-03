@@ -103,7 +103,7 @@ export function renderFacturaLLCHtml(f: FacturaLLC, logoSrc: string): string {
   const filas: string[] = []
   for (let i = 0; i < MAX_LINEAS_LLC; i++) {
     const l = f.lineas[i]
-    const banda = i >= 2 && i % 2 === 0 ? ' class="band"' : ''
+    const banda = i % 2 === 1 ? ' class="band"' : ''
     if (!l) { filas.push(`<tr${banda}><td>&nbsp;</td><td></td><td></td><td></td></tr>`); continue }
     const tarifa = l.tipo === 'pct' ? `${parseFloat(l.tarifa) || 0}%` : l.tarifa
     filas.push(`<tr${banda}><td>${esc(l.descripcion)}</td><td class="r">${esc(l.unidad)}</td><td class="r">${esc(tarifa)}</td><td class="r">${fmtUSD(montoLinea(f.lineas, i))}</td></tr>`)
