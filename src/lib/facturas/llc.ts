@@ -67,12 +67,25 @@ export function proximoCorrelativo(numeros: (string | null | undefined)[]): numb
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 
+// Numero estricto ("86", "16.5", "16,5"); texto como "N/A" no cuenta.
+export function numeroTexto(s: string): number | null {
+  const t = s.trim()
+  return /^-?\d+([.,]\d+)?$/.test(t) ? parseFloat(t.replace(',', '.')) : null
+}
+
+// Item con unit y rate numericos: amount = unit x rate. Con rate de texto (ej. "N/A") el amount es manual.
+export function itemCalculado(l: LineaLLC): number | null {
+  if (l.tipo !== 'item') return null
+  const u = numeroTexto(l.unidad), t = numeroTexto(l.tarifa)
+  return u != null && t != null ? r2(u * t) : null
+}
+
 export function montoLinea(lineas: LineaLLC[], i: number): number {
   const l = lineas[i]
-  if (l.tipo === 'item') return r2(Number(l.monto) || 0)
+  if (l.tipo === 'item') return itemCalculado(l) ?? r2(Number(l.monto) || 0)
   const base = l.baseIdx != null ? lineas[l.baseIdx] : null
   if (!base || base.tipo !== 'item') return 0
-  return r2((Number(base.monto) || 0) * (parseFloat(l.tarifa) || 0) / 100)
+  return r2(montoLinea(lineas, l.baseIdx!) * (parseFloat(l.tarifa) || 0) / 100)
 }
 
 export function totalesLLC(lineas: LineaLLC[]) {
@@ -90,7 +103,7 @@ export function renderFacturaLLCHtml(f: FacturaLLC, logoSrc: string): string {
   const filas: string[] = []
   for (let i = 0; i < MAX_LINEAS_LLC; i++) {
     const l = f.lineas[i]
-    const banda = i >= 2 && i % 2 === 0 ? ' class="band"' : ''
+    const banda = i % 2 === 1 ? ' class="band"' : ''
     if (!l) { filas.push(`<tr${banda}><td>&nbsp;</td><td></td><td></td><td></td></tr>`); continue }
     const tarifa = l.tipo === 'pct' ? `${parseFloat(l.tarifa) || 0}%` : l.tarifa
     filas.push(`<tr${banda}><td>${esc(l.descripcion)}</td><td class="r">${esc(l.unidad)}</td><td class="r">${esc(tarifa)}</td><td class="r">${fmtUSD(montoLinea(f.lineas, i))}</td></tr>`)
