@@ -11,6 +11,16 @@ const nextConfig: NextConfig = {
   // el trace de la funcion serverless no lo incluye y la captura de portada
   // automatica de Presentaciones falla con "Cannot find module .../browsers.json".
   outputFileTracingIncludes: {
+    '/api/facturas-clientes/llc': [
+      './node_modules/playwright-core/**/*',
+      './node_modules/@sparticuz/chromium/**/*',
+      './public/factura-llc-logo.png',
+    ],
+    '/api/facturas-clientes/llc/[id]/pdf': [
+      './node_modules/playwright-core/**/*',
+      './node_modules/@sparticuz/chromium/**/*',
+      './public/factura-llc-logo.png',
+    ],
     '/api/presentaciones/upload': [
       './node_modules/playwright-core/**/*',
       './node_modules/@sparticuz/chromium/**/*',

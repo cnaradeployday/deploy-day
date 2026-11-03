@@ -263,10 +263,16 @@ export default function FacturasClientesClient({
           <h1 className="text-xl font-semibold text-gray-900">Facturas a clientes</h1>
           {tipoCambio && <p className="text-xs text-gray-400 mt-0.5">TC: ${tipoCambio.toLocaleString('es-AR')} · todo convertido a USD</p>}
         </div>
-        <Link href="/facturas-clientes/nueva"
-          className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
-          <Plus size={15}/> Nueva factura
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/facturas-clientes/nueva"
+            className="flex items-center gap-2 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+            <Plus size={15}/> Nueva factura
+          </Link>
+          <Link href="/facturas-clientes/llc/nueva"
+            className="flex items-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+            <Plus size={15}/> Factura LLC
+          </Link>
+        </div>
       </div>
 
       {/* KPIs en USD */}

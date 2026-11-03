@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, FileText } from 'lucide-react'
 import FacturaClienteActions from './FacturaClienteActions'
 import { formatDateAR } from '@/lib/utils/date'
 
@@ -55,6 +55,12 @@ export default async function FacturaClienteDetailPage({ params }: { params: Pro
           ))}
         </div>
         {f.notas && <p className="text-sm text-gray-500 mb-6 bg-gray-50 rounded-xl px-4 py-3">{f.notas}</p>}
+        {f.factura_llc && (
+          <a href={'/api/facturas-clientes/llc/' + f.id + '/pdf'} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center gap-2 mb-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <FileText size={15}/> Ver / descargar PDF de la factura
+          </a>
+        )}
         <FacturaClienteActions facturaId={f.id} estado={f.estado} />
       </div>
     </div>
