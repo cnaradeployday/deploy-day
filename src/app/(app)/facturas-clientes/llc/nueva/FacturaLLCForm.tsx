@@ -85,10 +85,11 @@ export default function FacturaLLCForm({ editar }: { editar?: EdicionLLC }) {
   const periodo = periodoCorto(mesServicio)
   const { subtotal, total } = totalesLLC(lineas)
 
+  const nombreArchivo = nombreArchivoLLC(numero, clientes.find(c => c.id === clientId)?.name ?? '')
   const html = useMemo(() => renderFacturaLLCHtml(
-    { numero, fecha, periodo, para, cliente: bill, lineas, nombreArchivo: nombreArchivoLLC(numero, clientes.find(c => c.id === clientId)?.name ?? '') },
+    { numero, fecha, periodo, para, cliente: bill, lineas, nombreArchivo },
     '/factura-llc-logo.png',
-  ), [numero, fecha, periodo, para, bill, lineas, clientes, clientId])
+  ), [numero, fecha, periodo, para, bill, lineas, nombreArchivo])
 
   const setLinea = (i: number, patch: Partial<LineaLLC>) => setLineas(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l))
   const quitarLinea = (i: number) => setLineas(ls => ls.filter((_, j) => j !== i).map(l => {
@@ -100,9 +101,16 @@ export default function FacturaLLCForm({ editar }: { editar?: EdicionLLC }) {
     return [...ls, { tipo: 'pct', descripcion: 'IMP', unidad: '%', tarifa: '7.5', monto: 0, baseIdx: ultimoItem }]
   })
 
+  // Chrome sugiere como nombre del PDF el titulo de la pagina principal (no el del iframe),
+  // asi que se cambia mientras dura la impresion.
   function imprimir() {
+    const tituloOriginal = document.title
+    const restaurar = () => { document.title = tituloOriginal; window.removeEventListener('afterprint', restaurar) }
+    document.title = nombreArchivo
+    window.addEventListener('afterprint', restaurar)
     iframeRef.current?.contentWindow?.focus()
     iframeRef.current?.contentWindow?.print()
+    setTimeout(restaurar, 60_000)
   }
 
   async function guardar() {
