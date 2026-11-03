@@ -17,6 +17,7 @@ export type FacturaLLC = {
   para: string           // "FOR:"
   cliente: { nombre: string; direccion: string; idFiscalLabel: string; idFiscal: string }
   lineas: LineaLLC[]
+  nombreArchivo?: string  // nombre del PDF, ej. "260211-67 - Panther"
 }
 
 export const MAX_LINEAS_LLC = 12
@@ -36,6 +37,13 @@ export const EMISOR_LLC = {
 }
 
 const MESES_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+// "260211-67" + "PANTHER" -> "260211-67 - Panther" (nombre de cliente en mayusculas pasa a Titulo; el resto se respeta).
+export function nombreArchivoLLC(numero: string, cliente: string): string {
+  const limpio = cliente.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim()
+  const nombre = limpio === limpio.toUpperCase() ? limpio.toLowerCase().replace(/(^|\s)(\S)/g, (_, a, b) => a + b.toUpperCase()) : limpio
+  return nombre ? `${numero} - ${nombre}` : numero
+}
 
 export function periodoCorto(mes: string): string {
   const m = parseInt(mes.split('-')[1] ?? '', 10)
@@ -109,7 +117,7 @@ export function renderFacturaLLCHtml(f: FacturaLLC, logoSrc: string): string {
     filas.push(`<tr${banda}><td>${esc(l.descripcion)}</td><td class="r">${esc(l.unidad)}</td><td class="r">${esc(tarifa)}</td><td class="r">${fmtUSD(montoLinea(f.lineas, i))}</td></tr>`)
   }
   const c = f.cliente
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${esc(f.numero)}</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(f.nombreArchivo || f.numero)}</title><style>
 @page { size: A4; margin: 0 }
 * { box-sizing: border-box }
 body { margin: 0; font-family: Helvetica, Arial, sans-serif; color: #000; font-size: 9pt }

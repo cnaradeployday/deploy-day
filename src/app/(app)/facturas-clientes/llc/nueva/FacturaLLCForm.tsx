@@ -6,7 +6,7 @@ import { ArrowLeft, Plus, Percent, Trash2, Printer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { addDaysISO, currentMonthAR, todayISO } from '@/lib/utils/date'
 import {
-  MAX_LINEAS_LLC, fmtUSD, itemCalculado, montoLinea, numeroFactura, periodoCorto, proximoCorrelativo,
+  MAX_LINEAS_LLC, fmtUSD, itemCalculado, montoLinea, nombreArchivoLLC, numeroFactura, periodoCorto, proximoCorrelativo,
   renderFacturaLLCHtml, totalesLLC, type LineaLLC,
 } from '@/lib/facturas/llc'
 
@@ -80,9 +80,9 @@ export default function FacturaLLCForm() {
   const { subtotal, total } = totalesLLC(lineas)
 
   const html = useMemo(() => renderFacturaLLCHtml(
-    { numero, fecha, periodo, para, cliente: bill, lineas },
+    { numero, fecha, periodo, para, cliente: bill, lineas, nombreArchivo: nombreArchivoLLC(numero, clientes.find(c => c.id === clientId)?.name ?? '') },
     '/factura-llc-logo.png',
-  ), [numero, fecha, periodo, para, bill, lineas])
+  ), [numero, fecha, periodo, para, bill, lineas, clientes, clientId])
 
   const setLinea = (i: number, patch: Partial<LineaLLC>) => setLineas(ls => ls.map((l, j) => j === i ? { ...l, ...patch } : l))
   const quitarLinea = (i: number) => setLineas(ls => ls.filter((_, j) => j !== i).map(l => {

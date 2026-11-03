@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { htmlAPdf, logoDataUri } from '@/lib/facturas/llcPdf'
-import { renderFacturaLLCHtml, numeroFactura, proximoCorrelativo, totalesLLC, MAX_LINEAS_LLC, type FacturaLLC, type LineaLLC } from '@/lib/facturas/llc'
+import { renderFacturaLLCHtml, nombreArchivoLLC, numeroFactura, proximoCorrelativo, totalesLLC, MAX_LINEAS_LLC, type FacturaLLC, type LineaLLC } from '@/lib/facturas/llc'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -36,8 +36,11 @@ export async function POST(request: NextRequest) {
   const { data: previas } = await supabase.from('facturas_clientes').select('numero').eq('sociedad', 'LLC')
   const numero = numeroFactura(b.fecha, proximoCorrelativo((previas ?? []).map(p => p.numero)))
 
+  const { data: cli } = await supabase.from('clients').select('name').eq('id', b.client_id).single()
+
   const factura: FacturaLLC = {
     numero, fecha: b.fecha,
+    nombreArchivo: nombreArchivoLLC(numero, cli?.name ?? ''),
     periodo: String(b.periodo ?? '').toUpperCase(),
     para: String(b.para ?? ''),
     cliente: {
