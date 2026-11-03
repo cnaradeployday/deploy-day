@@ -27,7 +27,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { error } = await supabase.storage.from('documentos-ia').upload(archivoPath, buf, { contentType: 'application/pdf', upsert: true })
     if (!error) await supabase.from('facturas_clientes').update({ archivo_path: archivoPath }).eq('id', id)
   }
+  const nombre = (f.factura_llc as FacturaLLC).nombreArchivo || f.numero
   return new NextResponse(new Uint8Array(buf), {
-    headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="Invoice ${f.numero}.pdf"` },
+    headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${f.numero}.pdf"; filename*=UTF-8''${encodeURIComponent(nombre + '.pdf')}` },
   })
 }

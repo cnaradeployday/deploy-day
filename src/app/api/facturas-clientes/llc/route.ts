@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { htmlAPdf, logoDataUri } from '@/lib/facturas/llcPdf'
-import { renderFacturaLLCHtml, numeroFactura, proximoCorrelativo, totalesLLC, MAX_LINEAS_LLC, type FacturaLLC, type LineaLLC } from '@/lib/facturas/llc'
+import { renderFacturaLLCHtml, nombreArchivoLLC, numeroFactura, proximoCorrelativo, totalesLLC, sanearLineas, type FacturaLLC } from '@/lib/facturas/llc'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -16,28 +16,24 @@ export async function POST(request: NextRequest) {
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Sin permiso.' }, { status: 403 })
 
   const b = await request.json()
-  const lineas: LineaLLC[] = Array.isArray(b.lineas) ? b.lineas.slice(0, MAX_LINEAS_LLC).map((l: any) => ({
-    tipo: l.tipo === 'pct' ? 'pct' : 'item',
-    descripcion: String(l.descripcion ?? ''),
-    unidad: String(l.unidad ?? ''),
-    tarifa: String(l.tarifa ?? ''),
-    monto: Number(l.monto) || 0,
-    baseIdx: Number.isInteger(l.baseIdx) ? l.baseIdx : null,
-  })) : []
+  const lineas = sanearLineas(b.lineas)
   if (!b.client_id || !ISO.test(b.fecha ?? '') || !ISO.test(b.fecha_vencimiento ?? '') || !lineas.length)
     return NextResponse.json({ error: 'Faltan datos: cliente, fechas e ítems.' }, { status: 400 })
   const nombreCliente = String(b.cliente?.nombre ?? '').trim()
   if (!nombreCliente) return NextResponse.json({ error: 'Falta el nombre en BILL TO.' }, { status: 400 })
 
-  const { subtotal, total } = totalesLLC(lineas)
+  const { total } = totalesLLC(lineas)
   if (total <= 0) return NextResponse.json({ error: 'El total de la factura debe ser mayor a 0.' }, { status: 400 })
 
   // El correlativo se recalcula en el servidor para no pisar un numero emitido mientras el formulario estaba abierto.
   const { data: previas } = await supabase.from('facturas_clientes').select('numero').eq('sociedad', 'LLC')
   const numero = numeroFactura(b.fecha, proximoCorrelativo((previas ?? []).map(p => p.numero)))
 
+  const { data: cli } = await supabase.from('clients').select('name').eq('id', b.client_id).single()
+
   const factura: FacturaLLC = {
     numero, fecha: b.fecha,
+    nombreArchivo: nombreArchivoLLC(numero, cli?.name ?? ''),
     periodo: String(b.periodo ?? '').toUpperCase(),
     para: String(b.para ?? ''),
     cliente: {
@@ -56,7 +52,9 @@ export async function POST(request: NextRequest) {
     fecha_emision: b.fecha,
     fecha_vencimiento: b.fecha_vencimiento,
     importe: total,
-    importe_neto: subtotal,
+    importe_neto: null,
+    iva_pct: null,
+    importe_iva: null,
     currency: 'USD',
     mes_servicio: b.mes_servicio || null,
     sociedad: 'LLC',

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, FileText } from 'lucide-react'
 
 function generarMeses() {
   const meses: { value: string; label: string }[] = []
@@ -27,6 +27,7 @@ export default function EditarFacturaPage() {
   const id = params.id as string
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
+  const [esLLC, setEsLLC] = useState(false)
   const [clientes, setClientes] = useState<any[]>([])
   const [proyectos, setProyectos] = useState<any[]>([])
   const [form, setForm] = useState({
@@ -59,9 +60,10 @@ export default function EditarFacturaPage() {
           estado: f.estado ?? 'pendiente',
           sociedad: f.sociedad ?? 'MONO',
           cuit: f.cuit ?? '',
-          iva_pct: f.iva_pct != null ? String(f.iva_pct) : '21',
+          iva_pct: f.iva_pct != null ? String(f.iva_pct) : f.sociedad === 'LLC' ? '0' : '21',
           importe_neto: f.importe_neto != null ? String(f.importe_neto) : '',
         })
+        setEsLLC(!!f.factura_llc)
         setLoadingData(false)
       })
   }, [id])
@@ -240,6 +242,12 @@ export default function EditarFacturaPage() {
             {loading ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
+        {esLLC && (
+          <Link href={'/facturas-clientes/llc/' + id + '/editar'}
+            className="flex items-center justify-center gap-2 py-2.5 border border-gray-900 text-gray-900 rounded-xl text-sm font-semibold hover:bg-gray-50">
+            <FileText size={15}/> Abrir y modificar la factura LLC
+          </Link>
+        )}
       </form>
     </div>
   )
