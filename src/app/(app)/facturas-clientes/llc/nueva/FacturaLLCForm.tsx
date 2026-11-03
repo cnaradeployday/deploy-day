@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { addDaysISO, currentMonthAR, todayISO } from '@/lib/utils/date'
 import {
   MAX_LINEAS_LLC, fmtUSD, itemCalculado, montoLinea, nombreArchivoLLC, numeroFactura, periodoCorto, proximoCorrelativo,
-  renderFacturaLLCHtml, totalesLLC, type LineaLLC,
+  renderFacturaLLCHtml, totalesLLC, type FacturaLLC, type LineaLLC,
 } from '@/lib/facturas/llc'
 
 const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0] bg-white'
@@ -26,7 +26,9 @@ function generarMeses() {
   return out
 }
 
-export default function FacturaLLCForm() {
+export type EdicionLLC = { id: string; clientId: string; projectId: string; vencimiento: string; mesServicio: string; factura: FacturaLLC }
+
+export default function FacturaLLCForm({ editar }: { editar?: EdicionLLC }) {
   const router = useRouter()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const hojaRef = useRef<HTMLDivElement>(null)
@@ -38,15 +40,15 @@ export default function FacturaLLCForm() {
   const [numerosLLC, setNumerosLLC] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  const [clientId, setClientId] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [fecha, setFecha] = useState(todayISO())
-  const [vencimiento, setVencimiento] = useState(addDaysISO(todayISO(), 7))
-  const [vencEditado, setVencEditado] = useState(false)
-  const [mesServicio, setMesServicio] = useState(currentMonthAR())
-  const [para, setPara] = useState('')
-  const [bill, setBill] = useState({ nombre: '', direccion: '', idFiscalLabel: 'Ruc', idFiscal: '' })
-  const [lineas, setLineas] = useState<LineaLLC[]>([itemVacio()])
+  const [clientId, setClientId] = useState(editar?.clientId ?? '')
+  const [projectId, setProjectId] = useState(editar?.projectId ?? '')
+  const [fecha, setFecha] = useState(editar?.factura.fecha ?? todayISO())
+  const [vencimiento, setVencimiento] = useState(editar?.vencimiento ?? addDaysISO(todayISO(), 7))
+  const [vencEditado, setVencEditado] = useState(!!editar)
+  const [mesServicio, setMesServicio] = useState(editar?.mesServicio || currentMonthAR())
+  const [para, setPara] = useState(editar?.factura.para ?? '')
+  const [bill, setBill] = useState(editar?.factura.cliente ?? { nombre: '', direccion: '', idFiscalLabel: 'Ruc', idFiscal: '' })
+  const [lineas, setLineas] = useState<LineaLLC[]>(editar?.factura.lineas ?? [itemVacio()])
 
   useEffect(() => {
     const sb = createClient()
@@ -56,13 +58,17 @@ export default function FacturaLLCForm() {
 
   // Al elegir cliente aparecen sus datos de BILL TO (los que falten se completan a mano y quedan guardados en la ficha).
   useEffect(() => {
-    setProjectId('')
+    if (!editar) setProjectId('')
     const c = clientes.find(x => x.id === clientId)
     if (!c) { setProyectos([]); return }
+    if (editar) {
+      createClient().from('projects').select('id, name').eq('client_id', clientId).order('name').then(({ data }) => setProyectos(data ?? []))
+      return
+    }
     setBill({ nombre: c.razon_social || c.name, direccion: c.direccion_facturacion ?? '', idFiscalLabel: c.id_fiscal_label || 'Ruc', idFiscal: c.id_fiscal ?? '' })
     setPara(c.name.toUpperCase())
     createClient().from('projects').select('id, name').eq('client_id', clientId).order('name').then(({ data }) => setProyectos(data ?? []))
-  }, [clientId, clientes])
+  }, [clientId, clientes, editar])
 
   // La hoja A4 (210mm ~ 794px) se escala al ancho disponible; el iframe sigue imprimiendo a tamaño real.
   useEffect(() => {
@@ -75,7 +81,7 @@ export default function FacturaLLCForm() {
 
   useEffect(() => { if (!vencEditado) setVencimiento(addDaysISO(fecha, 7)) }, [fecha, vencEditado])
 
-  const numero = numeroFactura(fecha, proximoCorrelativo(numerosLLC))
+  const numero = editar ? editar.factura.numero : numeroFactura(fecha, proximoCorrelativo(numerosLLC))
   const periodo = periodoCorto(mesServicio)
   const { subtotal, total } = totalesLLC(lineas)
 
@@ -106,8 +112,8 @@ export default function FacturaLLCForm() {
     if (lineas.some(l => !l.descripcion.trim())) { alert('Todos los renglones necesitan descripción'); return }
     setSaving(true)
     try {
-      const res = await fetch('/api/facturas-clientes/llc', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/facturas-clientes/llc' + (editar ? '/' + editar.id : ''), {
+        method: editar ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_id: clientId, project_id: projectId || null, fecha, fecha_vencimiento: vencimiento,
           mes_servicio: mesServicio, periodo, para, cliente: bill, lineas,
@@ -128,13 +134,13 @@ export default function FacturaLLCForm() {
       <Link href="/facturas-clientes" className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 mb-4">
         <ArrowLeft size={15}/> Volver
       </Link>
-      <h1 className="text-xl font-semibold text-gray-900 mb-5">Factura LLC <span className="text-gray-400 font-normal">· {numero}</span></h1>
+      <h1 className="text-xl font-semibold text-gray-900 mb-5">{editar ? 'Editar factura LLC' : 'Factura LLC'} <span className="text-gray-400 font-normal">· {numero}</span></h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 items-start">
         <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
           <div>
             <label className={labelCls}>Cliente *</label>
-            <select value={clientId} onChange={e => setClientId(e.target.value)} className={inputCls}>
+            <select value={clientId} onChange={e => setClientId(e.target.value)} disabled={!!editar} className={inputCls + (editar ? ' bg-gray-50 text-gray-500' : '')}>
               <option value="">Seleccionar cliente</option>
               {clientes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -238,7 +244,7 @@ export default function FacturaLLCForm() {
             </button>
             <button type="button" onClick={guardar} disabled={saving}
               className="flex-1 bg-[#1B9BF0] hover:bg-[#0F7ACC] text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all">
-              {saving ? 'Guardando…' : 'Guardar factura'}
+              {saving ? 'Guardando…' : editar ? 'Guardar cambios' : 'Guardar factura'}
             </button>
           </div>
         </div>

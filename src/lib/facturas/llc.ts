@@ -88,6 +88,19 @@ export function itemCalculado(l: LineaLLC): number | null {
   return u != null && t != null ? r2(u * t) : null
 }
 
+// Normaliza las lineas que llegan del cliente (JSON sin confiar en tipos).
+export function sanearLineas(raw: unknown): LineaLLC[] {
+  if (!Array.isArray(raw)) return []
+  return raw.slice(0, MAX_LINEAS_LLC).map((l: Record<string, unknown>) => ({
+    tipo: l.tipo === 'pct' ? 'pct' as const : 'item' as const,
+    descripcion: String(l.descripcion ?? ''),
+    unidad: String(l.unidad ?? ''),
+    tarifa: String(l.tarifa ?? ''),
+    monto: Number(l.monto) || 0,
+    baseIdx: Number.isInteger(l.baseIdx) ? (l.baseIdx as number) : null,
+  }))
+}
+
 export function montoLinea(lineas: LineaLLC[], i: number): number {
   const l = lineas[i]
   if (l.tipo === 'item') return itemCalculado(l) ?? r2(Number(l.monto) || 0)

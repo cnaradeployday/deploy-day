@@ -58,7 +58,8 @@ export default function NuevaFacturaClientePage() {
     if (!form.client_id) return
     const cliente = clientes.find(c => c.id === form.client_id)
     if (!cliente) return
-    setForm(f => ({ ...f, sociedad: empresaCobraToSociedad(cliente.empresa_cobra), cuit: cliente.cuit ?? '' }))
+    const sociedad = empresaCobraToSociedad(cliente.empresa_cobra)
+    setForm(f => ({ ...f, sociedad, cuit: cliente.cuit ?? '', ...(sociedad === 'LLC' ? { iva_pct: '0', currency: 'USD' as Currency } : {}) }))
   }, [form.client_id, clientes])
 
   const esSAS = form.sociedad === 'SAS'
