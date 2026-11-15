@@ -76,9 +76,17 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
   const out: Record<string, number> = {}
 
   {
-    const { data } = await sb.from('conciliacion_bancaria').select('saldo, fecha, created_at')
-      .lte('fecha', fin).order('fecha', { ascending: false }).order('created_at', { ascending: false }).limit(1)
-    out['Banco Cuenta Corriente - Galicia'] = data?.[0] ? Number(data[0].saldo) : 0
+    // Saldo del último movimiento del extracto. Los movimientos de un mismo día se cargan con la misma hora, así que el
+    // orden real se reconstruye por el saldo: el último es el que ningún otro movimiento del día tiene como antecesor
+    // (saldo anterior = saldo − importe).
+    const { data: ult } = await sb.from('conciliacion_bancaria').select('fecha').lte('fecha', fin).order('fecha', { ascending: false }).limit(1)
+    const { data: dia } = ult?.[0]
+      ? await sb.from('conciliacion_bancaria').select('saldo, credito_debito, created_at').eq('fecha', ult[0].fecha).order('created_at', { ascending: true })
+      : { data: [] as any[] }
+    const filas = dia ?? []
+    const ultima = filas.find((r: any) => !filas.some((o: any) => o !== r && Math.abs((Number(o.saldo) - Number(o.credito_debito)) - Number(r.saldo)) < 0.01))
+      ?? filas[filas.length - 1]
+    out['Banco Cuenta Corriente - Galicia'] = ultima ? Number(ultima.saldo) : 0
   }
 
   {
