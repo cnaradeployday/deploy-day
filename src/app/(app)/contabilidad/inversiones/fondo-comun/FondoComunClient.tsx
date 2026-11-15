@@ -239,19 +239,25 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
     if (sortKey !== k) return <ChevronUp size={11} className="opacity-20"/>
     return sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>
   }
-  const sortedMovimientos = useMemo(() => [...movimientos].sort((a, b) => {
+  // Filtro por fecha: afecta solo a la tabla y al Excel; los indicadores de cartera usan todos los movimientos.
+  const [fDesde, setFDesde] = useState('')
+  const [fHasta, setFHasta] = useState('')
+  const movimientosFiltrados = useMemo(() => movimientos.filter(m =>
+    (!fDesde || m.fecha >= fDesde) && (!fHasta || m.fecha <= fHasta)), [movimientos, fDesde, fHasta])
+
+  const sortedMovimientos = useMemo(() => [...movimientosFiltrados].sort((a, b) => {
     const va = a[sortKey], vb = b[sortKey]
     const cmp = typeof va === 'number' ? va - (vb as number) : String(va).localeCompare(String(vb))
     return sortDir === 'asc' ? cmp : -cmp
-  }), [movimientos, sortKey, sortDir])
+  }), [movimientosFiltrados, sortKey, sortDir])
 
-  const exportData = useMemo(() => movimientos.map(m => ({
+  const exportData = useMemo(() => movimientosFiltrados.map(m => ({
     Fecha: fechaAr(m.fecha),
     Operacion: m.operacion,
     'Cantidad de cuotas': Number(m.cantidad_cuotas),
     'TC FONDO': Number(m.tc_fondo),
     Monto: Number(m.monto),
-  })), [movimientos])
+  })), [movimientosFiltrados])
 
   return (
     <div className="p-6 w-full">
@@ -434,13 +440,27 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
         <div className="flex-1 min-w-0 w-full">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-gray-900">Movimientos</p>
-            <span className="text-xs text-gray-400">{movimientos.length} movimiento{movimientos.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-gray-400">{movimientosFiltrados.length} movimiento{movimientosFiltrados.length !== 1 ? 's' : ''}</span>
           </div>
 
-          {!movimientos.length ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-3 mb-3 flex flex-wrap items-end gap-3">
+            <div className="w-40">
+              <label className="block text-xs text-gray-400 mb-1.5">Fecha desde</label>
+              <input type="date" value={fDesde} onChange={e => setFDesde(e.target.value)} className={filterInputClass}/>
+            </div>
+            <div className="w-40">
+              <label className="block text-xs text-gray-400 mb-1.5">Fecha hasta</label>
+              <input type="date" value={fHasta} onChange={e => setFHasta(e.target.value)} className={filterInputClass}/>
+            </div>
+            {(fDesde || fHasta) && (
+              <button onClick={() => { setFDesde(''); setFHasta('') }} className="text-xs text-[#1B9BF0] hover:underline pb-2.5">Limpiar</button>
+            )}
+          </div>
+
+          {!movimientosFiltrados.length ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
               <LineChart size={32} className="mx-auto mb-3 opacity-20"/>
-              <p className="text-sm">Sin movimientos cargados</p>
+              <p className="text-sm">{movimientos.length ? 'Sin movimientos en el rango de fechas elegido' : 'Sin movimientos cargados'}</p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
