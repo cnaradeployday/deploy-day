@@ -197,14 +197,15 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
   const [fDolaresMax, setFDolaresMax] = useState('')
   const [fComprobantes, setFComprobantes] = useState<string[]>([])
   const [fSolapas, setFSolapas] = useState<string[]>([])
+  const [fCierres, setFCierres] = useState<string[]>([]) // fechas de cierre (YYYY-MM-DD); '' = sin fecha de cierre
 
   function clearFilters() {
     setFFechaDesde(''); setFFechaHasta(''); setFProveedor(''); setFCuota('')
     setFClasificaciones([]); setFPesosMin(''); setFPesosMax('')
-    setFDolaresMin(''); setFDolaresMax(''); setFComprobantes([]); setFSolapas([])
+    setFDolaresMin(''); setFDolaresMax(''); setFComprobantes([]); setFSolapas([]); setFCierres([])
   }
   const hasFilters = !!(fFechaDesde || fFechaHasta || fProveedor || fCuota || fClasificaciones.length ||
-    fPesosMin || fPesosMax || fDolaresMin || fDolaresMax || fComprobantes.length || fSolapas.length)
+    fPesosMin || fPesosMax || fDolaresMin || fDolaresMax || fComprobantes.length || fSolapas.length || fCierres.length)
 
   const clasificacionOptions = useMemo(() => {
     const uniq = [...new Set(movimientos.map(m => m.clasificacion).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b))
@@ -221,6 +222,13 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
     return uniq.map(c => ({ value: c, label: c }))
   }, [movimientos])
 
+  const cierreOptions = useMemo(() => {
+    const fechas = [...new Set(movimientos.map(m => m.fecha_cierre).filter((c): c is string => !!c))].sort((a, b) => b.localeCompare(a))
+    const opts = fechas.map(c => ({ value: c, label: formatDateAR(c) }))
+    if (movimientos.some(m => !m.fecha_cierre)) opts.push({ value: '', label: 'Sin fecha de cierre' })
+    return opts
+  }, [movimientos])
+
   const filtered = useMemo(() => {
     return movimientos.filter(m => {
       if (fFechaDesde && m.fecha < fFechaDesde) return false
@@ -234,9 +242,10 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
       if (fDolaresMax && Number(m.dolares ?? 0) > parseFloat(fDolaresMax)) return false
       if (fComprobantes.length && !fComprobantes.includes(m.comprobante ?? '')) return false
       if (fSolapas.length && !fSolapas.includes(m.solapa ?? '')) return false
+      if (fCierres.length && !fCierres.includes(m.fecha_cierre ?? '')) return false
       return true
     })
-  }, [movimientos, fFechaDesde, fFechaHasta, fProveedor, fCuota, fClasificaciones, fPesosMin, fPesosMax, fDolaresMin, fDolaresMax, fComprobantes, fSolapas])
+  }, [movimientos, fFechaDesde, fFechaHasta, fProveedor, fCuota, fClasificaciones, fPesosMin, fPesosMax, fDolaresMin, fDolaresMax, fComprobantes, fSolapas, fCierres])
 
   const [sortKey, setSortKey] = useState<SortKey>('fecha')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -503,6 +512,7 @@ export default function TarjetaCreditoClient({ movimientos, tipos, documentos }:
           </div>
           <MultiSelectFilter label="Comprobante" options={comprobanteOptions} selected={fComprobantes} onChange={setFComprobantes}/>
           <MultiSelectFilter label="Solapa" options={solapaOptions} selected={fSolapas} onChange={setFSolapas}/>
+          <MultiSelectFilter label="Fecha de cierre" options={cierreOptions} selected={fCierres} onChange={setFCierres}/>
         </div>
         <div className="flex items-center justify-between">
           {hasFilters ? (
