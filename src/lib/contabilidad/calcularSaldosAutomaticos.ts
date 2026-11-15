@@ -12,6 +12,16 @@ const MAPEO_TIPO_GASTO: Record<string, string> = {
 // Ingresos Brutos: 3% de la facturación neta del mes (misma base que "Ventas a clientes").
 const ALICUOTA_IIBB = 0.03
 
+// Impuesto al débito y crédito: el 33% se computa como pago a cuenta de Ganancias (activo); el resto es gasto.
+const PORC_DEB_CRED_COMPUTABLE = 0.33
+
+// Cargos de tarjeta que son gasto directo (sin factura propia). Las solapas "Proveedores" y "Proveedores - Cuotas"
+// son pagos de facturas de compra ya contadas, e IIBB/IIGG/IVA son créditos fiscales: no se vuelven a gastar.
+const SOLAPAS_GASTO_TARJETA = ['Ctas de gastos', 'PL']
+
+// Un comprobante numérico (ej. "715687") es el número de una factura de compra ya cargada: el cargo de tarjeta es su pago.
+const esPagoDeFactura = (comprobante: string | null) => /^\s*\d[\d\s-]*$/.test(comprobante ?? '')
+
 function inicioDeMes(periodo: string) {
   return `${periodo}-01`
 }
@@ -130,6 +140,7 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   const fin = finDeMes(periodo)
   const tc = await obtenerTC(sb, fin)
   const out: Record<string, number> = {}
+  let comisionesTarjeta = 0
 
   {
     const { data } = await sb.from('facturas_clientes').select('importe, importe_neto, currency').eq('sociedad', 'SAS').eq('mes_servicio', periodo)
@@ -143,17 +154,41 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
 
   {
     const [{ data: tipos }, { data: fc }, { data: tj }] = await Promise.all([
-      sb.from('tipos_gasto').select('id, nombre'),
-      sb.from('facturas_compra').select('tipo_gasto_id, monto_neto').not('tipo_gasto_id', 'is', null).gte('fecha_factura', inicio).lte('fecha_factura', fin),
-      sb.from('tarjeta_credito').select('tipo_gasto_id, pesos, dolares').not('tipo_gasto_id', 'is', null).gte('fecha', inicio).lte('fecha', fin),
+      sb.from('tipos_gasto').select('id, nombre, fuente, incluye_otros_impuestos'),
+      // Facturas: se imputan al mes de servicio; si no lo tienen, al mes de la fecha de la factura.
+      sb.from('facturas_compra').select('tipo_gasto_id, monto_neto, otros_impuestos').not('tipo_gasto_id', 'is', null)
+        .or(`mes_servicio.eq.${periodo},and(mes_servicio.is.null,fecha_factura.gte.${inicio},fecha_factura.lte.${fin})`),
+      sb.from('tarjeta_credito').select('tipo_gasto_id, pesos, dolares, tipo_cambio, solapa, comprobante').not('tipo_gasto_id', 'is', null).gte('fecha', inicio).lte('fecha', fin),
     ])
+    // De dónde sale el gasto de cada rubro: facturas de compra, cargos de tarjeta, o ambos (Tipos de gasto > Fuente).
+    const fuentePorTipo = new Map<string, string>((tipos ?? []).map((t: any) => [t.id, t.fuente ?? 'facturas']))
     const porTipo = new Map<string, number>()
+    const sumar = (id: string, monto: number) => porTipo.set(id, (porTipo.get(id) ?? 0) + monto)
+
     // El gasto del P&L es el neto: el IVA es crédito fiscal y las percepciones/otros impuestos no son gasto de la factura.
-    for (const f of fc ?? []) porTipo.set(f.tipo_gasto_id, (porTipo.get(f.tipo_gasto_id) ?? 0) + Number(f.monto_neto))
-    for (const t of tj ?? []) porTipo.set(t.tipo_gasto_id, (porTipo.get(t.tipo_gasto_id) ?? 0) + (Number(t.pesos) || 0) + (Number(t.dolares) || 0) * tc)
+    // Excepción: rubros como Combustible incluyen los impuestos no recuperables de la factura (ej. impuesto a los combustibles).
+    const conOtrosImpuestos = new Set<string>((tipos ?? []).filter((t: any) => t.incluye_otros_impuestos).map((t: any) => t.id))
+    for (const f of fc ?? []) {
+      if (fuentePorTipo.get(f.tipo_gasto_id) === 'tarjeta') continue
+      sumar(f.tipo_gasto_id, Number(f.monto_neto) + (conOtrosImpuestos.has(f.tipo_gasto_id) ? Number(f.otros_impuestos) || 0 : 0))
+    }
+
+    // Tarjeta: dólares al tipo de cambio de cada cargo (el del resumen); si no lo tiene, al del cierre del mes.
+    const montoTarjeta = (t: any) => (Number(t.pesos) || 0) + (Number(t.dolares) || 0) * (Number(t.tipo_cambio) || tc)
+    const tarjetaGasto = (tj ?? []).filter((t: any) => SOLAPAS_GASTO_TARJETA.includes(t.solapa ?? 'Ctas de gastos'))
+    for (const t of tarjetaGasto) {
+      const fuente = fuentePorTipo.get(t.tipo_gasto_id)
+      if (fuente === 'facturas') continue
+      // En rubros con facturas y tarjeta, un cargo con número de factura ya está en las facturas: no se cuenta dos veces.
+      if (fuente === 'ambas' && esPagoDeFactura(t.comprobante)) continue
+      sumar(t.tipo_gasto_id, montoTarjeta(t))
+    }
+
+    const tipoComisiones = (tipos ?? []).find((t: any) => t.nombre === 'Comisiones bancarias')
+    if (tipoComisiones) comisionesTarjeta = tarjetaGasto.filter((t: any) => t.tipo_gasto_id === tipoComisiones.id).reduce((s: number, t: any) => s + montoTarjeta(t), 0)
 
     for (const cuenta of cuentasGastos) {
-      // IIBB se calcula sobre ventas (arriba), no desde facturas/tarjeta: se saltea para no duplicarlo.
+      // IIBB se calcula sobre ventas (arriba) y las comisiones se arman abajo con banco + tarjeta.
       if (cuenta.nombre === 'Comisiones bancarias' || cuenta.nombre === 'Ingresos Brutos') continue
       const nombreBuscado = MAPEO_TIPO_GASTO[cuenta.nombre] ?? cuenta.nombre
       const tipo = (tipos ?? []).find((t: any) => t.nombre === nombreBuscado)
@@ -163,8 +198,14 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   }
 
   {
+    const { data } = await sb.from('conciliacion_bancaria').select('credito_debito').eq('clasificacion', 'Imp Deb y Cred').gte('fecha', inicio).lte('fecha', fin)
+    const total = (data ?? []).reduce((s: number, r: any) => s + Math.abs(Number(r.credito_debito)), 0)
+    out['Impuesto Deb y Cred (perdida)'] = -1 * Math.round(total * (1 - PORC_DEB_CRED_COMPUTABLE) * 100) / 100
+  }
+
+  {
     const { data } = await sb.from('conciliacion_bancaria').select('credito_debito').eq('clasificacion', 'Comision bancaria').gte('fecha', inicio).lte('fecha', fin)
-    out['Comisiones bancarias'] = -1 * (data ?? []).reduce((s: number, r: any) => s + Math.abs(Number(r.credito_debito)), 0)
+    out['Comisiones bancarias'] = -1 * ((data ?? []).reduce((s: number, r: any) => s + Math.abs(Number(r.credito_debito)), 0) + comisionesTarjeta)
   }
 
   {
@@ -178,17 +219,25 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   }
 
   {
-    const anterior = mesAnterior(periodo)
-    const [cuotasInicio, tcActual, tcAnterior] = await Promise.all([
-      cuotasFciAlCierre(sb, finDeMes(anterior)),
-      tcFondoAlCierre(sb, fin),
-      tcFondoAlCierre(sb, finDeMes(anterior)),
+    // Intereses ganados del FCI, por fondo: valor de la cartera al cierre − valor al cierre anterior − aportes netos del mes
+    // (suscripciones − rescates). Sumado mes a mes da: valor final − neto invertido.
+    const finAnt = finDeMes(mesAnterior(periodo))
+    const [cuotasFin, cuotasIni, tcFin, tcIni, { data: movsMes }] = await Promise.all([
+      cuotasFciAlCierre(sb, fin), cuotasFciAlCierre(sb, finAnt), tcFondoAlCierre(sb, fin), tcFondoAlCierre(sb, finAnt),
+      sb.from('inversiones_fci_movimientos').select('fondo, operacion, monto').gte('fecha', inicio).lte('fecha', fin),
     ])
-    // Por fondo: cuotas al inicio del mes × variación del valor de la cuota de ese fondo.
-    const porFondo = FONDOS_FCI.filter(f => tcActual[f] && tcAnterior[f])
-    if (porFondo.length) {
-      out['Intereses Ganados FCI'] = porFondo.reduce((s, f) => s + (cuotasInicio[f] ?? 0) * (tcActual[f] - tcAnterior[f]), 0)
+    let ganancia = 0
+    let hayDatos = false
+    for (const fondo of FONDOS_FCI) {
+      const cf = cuotasFin[fondo] ?? 0, ci = cuotasIni[fondo] ?? 0
+      // Sin TC no se puede valuar la cartera: se saltea ese fondo ese mes en vez de contar una pérdida falsa.
+      if ((cf !== 0 && !tcFin[fondo]) || (ci !== 0 && !tcIni[fondo])) continue
+      const aportes = (movsMes ?? []).filter((m: any) => m.fondo === fondo)
+        .reduce((s: number, m: any) => s + (m.operacion === 'SUSCRIPCION' ? Number(m.monto) : -Number(m.monto)), 0)
+      ganancia += cf * (tcFin[fondo] ?? 0) - ci * (tcIni[fondo] ?? 0) - aportes
+      hayDatos = true
     }
+    if (hayDatos) out['Intereses Ganados FCI'] = ganancia
   }
 
   return out

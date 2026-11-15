@@ -23,7 +23,7 @@ export default function NuevaFacturaCompraPage() {
   const [form, setForm] = useState({
     cuit: '', numero_factura: '',
     fecha_factura: todayISO(),
-    razon_social_proveedor: '', fecha_pago: '',
+    razon_social_proveedor: '', fecha_pago: '', mes_servicio: '',
     monto_neto: '0', iva: '0', iibb: '0', otros_impuestos: '0',
     tipo_gasto_id: '', estado: 'pendiente', notas: '',
   })
@@ -92,6 +92,7 @@ export default function NuevaFacturaCompraPage() {
       fecha_factura: form.fecha_factura,
       razon_social_proveedor: form.razon_social_proveedor,
       fecha_pago: form.fecha_pago || null,
+      mes_servicio: form.mes_servicio || null,
       monto_neto: parseFloat(form.monto_neto) || 0,
       iva: parseFloat(form.iva) || 0,
       iibb: parseFloat(form.iibb) || 0,
@@ -164,6 +165,12 @@ export default function NuevaFacturaCompraPage() {
             <input type="date" value={form.fecha_pago} onChange={e => set('fecha_pago', e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Mes de servicio (P&amp;L)</label>
+          <input type="month" value={form.mes_servicio} onChange={e => set('mes_servicio', e.target.value)}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
+          <p className="text-[11px] text-gray-400 mt-1">Mes en que se imputa el gasto. Vacío = el de la fecha de la factura (útil si llega en el mes siguiente al servicio).</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
