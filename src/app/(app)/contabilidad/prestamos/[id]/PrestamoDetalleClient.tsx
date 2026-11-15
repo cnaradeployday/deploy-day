@@ -17,7 +17,7 @@ type Prestamo = {
   notas: string | null
 }
 
-type Devengamiento = { id: string; mes: string; monto: number }
+type Devengamiento = { id: string | null; mes: string; monto: number; automatico: boolean }
 
 const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
@@ -82,18 +82,22 @@ export default function PrestamoDetalleClient({ prestamo, devengamientos }: { pr
   }
 
   // Edición inline de devengamientos
-  const [editingDevId, setEditingDevId] = useState<string | null>(null)
+  const [editingDevId, setEditingDevId] = useState<string | null>(null) // id del registro, o el mes si es automático
   const [editingDevMonto, setEditingDevMonto] = useState('')
 
   function openEditDev(d: Devengamiento) {
-    setEditingDevId(d.id)
+    setEditingDevId(d.id ?? d.mes)
     setEditingDevMonto(String(d.monto))
   }
 
-  async function handleSaveDev(id: string) {
+  async function handleSaveDev(d: Devengamiento) {
     const monto = parseFloat(editingDevMonto)
     if (isNaN(monto)) { setEditingDevId(null); return }
-    const { error } = await createClient().from('prestamo_devengamientos').update({ monto }).eq('id', id)
+    // Un mes automático se "fija" a mano al editarlo: se guarda como registro propio con el monto corregido.
+    const sb = createClient()
+    const { error } = d.id
+      ? await sb.from('prestamo_devengamientos').update({ monto }).eq('id', d.id)
+      : await sb.from('prestamo_devengamientos').insert({ prestamo_id: prestamo.id, mes: d.mes, monto })
     if (error) { alert('Error: ' + error.message); return }
     setEditingDevId(null)
     router.refresh()
@@ -287,20 +291,20 @@ export default function PrestamoDetalleClient({ prestamo, devengamientos }: { pr
             </thead>
             <tbody>
               {devengamientos.map(d => (
-                <tr key={d.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{mesCorto(d.mes)}</td>
+                <tr key={d.id ?? d.mes} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{mesCorto(d.mes)}{d.automatico && <span className="ml-2 text-[10px] text-gray-400 font-normal">automático</span>}</td>
                   <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">
-                    {editingDevId === d.id ? (
+                    {editingDevId === (d.id ?? d.mes) ? (
                       <input type="number" step="0.01" autoFocus value={editingDevMonto}
                         onChange={e => setEditingDevMonto(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSaveDev(d.id); if (e.key === 'Escape') setEditingDevId(null) }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveDev(d); if (e.key === 'Escape') setEditingDevId(null) }}
                         className="w-28 px-2 py-1 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
                     ) : fmt(Number(d.monto))}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {editingDevId === d.id ? (
+                    {editingDevId === (d.id ?? d.mes) ? (
                       <>
-                        <button onClick={() => handleSaveDev(d.id)}
+                        <button onClick={() => handleSaveDev(d)}
                           className="p-1.5 rounded-lg text-gray-300 hover:text-green-600 hover:bg-green-50 transition-all">
                           <Check size={13}/>
                         </button>
@@ -315,10 +319,12 @@ export default function PrestamoDetalleClient({ prestamo, devengamientos }: { pr
                           className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                           <Pencil size={13}/>
                         </button>
-                        <button onClick={() => handleDeleteDevengamiento(d.id)} disabled={deletingId === d.id}
-                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
-                          <Trash2 size={13}/>
-                        </button>
+                        {d.id && (
+                          <button onClick={() => handleDeleteDevengamiento(d.id!)} disabled={deletingId === d.id}
+                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-40">
+                            <Trash2 size={13}/>
+                          </button>
+                        )}
                       </>
                     )}
                   </td>

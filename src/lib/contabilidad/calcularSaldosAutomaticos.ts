@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { lastDayOfMonth, ymd } from '@/lib/utils/date'
+import { devengamientosPrestamosHasta } from '@/lib/contabilidad/prestamos'
 
 // Cuentas de "Gastos operativos" cuyo nombre en el Plan de cuentas no coincide 1:1
 // con el nombre cargado en Tipos de gasto (ej: typo histórico en la base).
@@ -84,8 +85,8 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
   }
 
   {
-    const { data } = await sb.from('prestamo_devengamientos').select('monto').lte('mes', inicioDeMes(periodo))
-    out['Prestamo socio a pagar - Intereses'] = -1 * (data ?? []).reduce((s: number, d: any) => s + Number(d.monto), 0)
+    const devengados = await devengamientosPrestamosHasta(sb, periodo)
+    out['Prestamo socio a pagar - Intereses'] = -1 * devengados.reduce((s, d) => s + d.monto, 0)
   }
 
   {
@@ -155,8 +156,8 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   }
 
   {
-    const { data } = await sb.from('prestamo_devengamientos').select('monto').eq('mes', inicio)
-    out['Intereses prestamo'] = -1 * (data ?? []).reduce((s: number, d: any) => s + Number(d.monto), 0)
+    const devengados = await devengamientosPrestamosHasta(sb, periodo)
+    out['Intereses prestamo'] = -1 * devengados.filter(d => d.mes === inicio).reduce((s, d) => s + d.monto, 0)
   }
 
   {
