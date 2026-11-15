@@ -8,6 +8,9 @@ const MAPEO_TIPO_GASTO: Record<string, string> = {
   'Contractors - Servicios profesionales': 'Contrators - Servicios profesionales',
 }
 
+// Ingresos Brutos: 3% de la facturación neta del mes (misma base que "Ventas a clientes").
+const ALICUOTA_IIBB = 0.03
+
 function inicioDeMes(periodo: string) {
   return `${periodo}-01`
 }
@@ -119,10 +122,12 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
 
   {
     const { data } = await sb.from('facturas_clientes').select('importe, importe_neto, currency').eq('sociedad', 'SAS').eq('mes_servicio', periodo)
-    out['Ventas a clientes'] = (data ?? []).reduce((s: number, f: any) => {
+    const ventas = (data ?? []).reduce((s: number, f: any) => {
       const monto = f.importe_neto != null ? Number(f.importe_neto) : Number(f.importe)
       return s + (f.currency === 'USD' ? monto * tc : monto)
     }, 0)
+    out['Ventas a clientes'] = ventas
+    out['Ingresos Brutos'] = -1 * Math.round(ventas * ALICUOTA_IIBB * 100) / 100
   }
 
   {
@@ -137,7 +142,8 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
     for (const t of tj ?? []) porTipo.set(t.tipo_gasto_id, (porTipo.get(t.tipo_gasto_id) ?? 0) + (Number(t.pesos) || 0) + (Number(t.dolares) || 0) * tc)
 
     for (const cuenta of cuentasGastos) {
-      if (cuenta.nombre === 'Comisiones bancarias') continue
+      // IIBB se calcula sobre ventas (arriba), no desde facturas/tarjeta: se saltea para no duplicarlo.
+      if (cuenta.nombre === 'Comisiones bancarias' || cuenta.nombre === 'Ingresos Brutos') continue
       const nombreBuscado = MAPEO_TIPO_GASTO[cuenta.nombre] ?? cuenta.nombre
       const tipo = (tipos ?? []).find((t: any) => t.nombre === nombreBuscado)
       if (!tipo) continue
