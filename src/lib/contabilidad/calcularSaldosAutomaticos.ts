@@ -92,14 +92,26 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
     out['Clientes a cobrar'] = pendientes.reduce((s: number, f: any) => s + (f.currency === 'USD' ? Number(f.importe) * tc : Number(f.importe)), 0)
   }
 
+  {
+    // El 33% del impuesto al débito y crédito se computa como pago a cuenta de Ganancias (activo).
+    const { data } = await sb.from('conciliacion_bancaria').select('credito_debito').eq('clasificacion', 'Imp Deb y Cred').lte('fecha', fin)
+    out['Imp deb y credito - Computable IIGG'] = Math.round((data ?? []).reduce((s: number, r: any) => s + Math.abs(Number(r.credito_debito)), 0) * PORC_DEB_CRED_COMPUTABLE * 100) / 100
+  }
+
   for (const [nombre, clasificacion] of [['PERCEP / RET IVA', 'Percepcion IVA'], ['PERCEP / RET IIBB', 'Percepcion IIBB']] as const) {
     const { data } = await sb.from('conciliacion_bancaria').select('credito_debito').eq('clasificacion', clasificacion).lte('fecha', fin)
     out[nombre] = (data ?? []).reduce((s: number, r: any) => s + Math.abs(Number(r.credito_debito)), 0)
   }
 
   {
-    const { data } = await sb.from('facturas_compra').select('monto_total, fecha_factura, fecha_pago').lte('fecha_factura', fin)
-    const pendientes = (data ?? []).filter((f: any) => !f.fecha_pago || f.fecha_pago > fin)
+    // Facturas devengadas hasta el mes (por mes de servicio) y no pagadas a esa fecha. Una factura "pagada" sin
+    // fecha de pago se considera paga: el estado manda cuando falta la fecha.
+    const { data } = await sb.from('facturas_compra').select('monto_total, fecha_factura, mes_servicio, estado, fecha_pago')
+    const pendientes = (data ?? []).filter((f: any) => {
+      if ((f.mes_servicio ?? f.fecha_factura.slice(0, 7)) > periodo) return false
+      const pagada = f.fecha_pago ? f.fecha_pago <= fin : f.estado === 'pagado'
+      return !pagada
+    })
     out['Proveedores a pagar'] = -1 * pendientes.reduce((s: number, f: any) => s + Number(f.monto_total), 0)
   }
 
