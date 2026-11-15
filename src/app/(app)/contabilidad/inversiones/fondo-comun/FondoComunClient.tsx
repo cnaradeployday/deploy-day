@@ -8,20 +8,22 @@ import ExportExcelButton from '@/components/shared/ExportExcelButton'
 import DocumentosImportadosButton, { DocumentoImportado } from '@/components/contabilidad/DocumentosImportadosButton'
 import { registrarDocumentoIA } from '@/lib/supabase/registrarDocumentoIA'
 import { todayISO } from '@/lib/utils/date'
+import { FONDOS_FCI, fondoSugeridoPorTc, tcMasReciente } from '@/lib/contabilidad/fondos'
 
 type Movimiento = {
   id: string
   fecha: string
+  fondo: string
   operacion: 'SUSCRIPCION' | 'RESCATE'
   cantidad_cuotas: number
   tc_fondo: number
   monto: number
 }
-type Cierre = { id: string; mes: string; tc_fondo: number }
+type Cierre = { id: string; mes: string; tc_fondo: number; fondo: string }
 type ImportRow = {
-  fecha: string; operacion: 'SUSCRIPCION' | 'RESCATE'; cantidad_cuotas: number; tc_fondo: number; monto: number; selected: boolean
+  fecha: string; fondo: string; operacion: 'SUSCRIPCION' | 'RESCATE'; cantidad_cuotas: number; tc_fondo: number; monto: number; selected: boolean
 }
-type SortKey = 'fecha' | 'operacion' | 'cantidad_cuotas' | 'tc_fondo' | 'monto'
+type SortKey = 'fecha' | 'fondo' | 'operacion' | 'cantidad_cuotas' | 'tc_fondo' | 'monto'
 
 const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const fmtMoney = (n: number) => n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
@@ -44,14 +46,14 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
   const [montoTouched, setMontoTouched] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
-    fecha: todayISO(), operacion: 'SUSCRIPCION' as 'SUSCRIPCION' | 'RESCATE',
+    fecha: todayISO(), fondo: FONDOS_FCI[0] as string, operacion: 'SUSCRIPCION' as 'SUSCRIPCION' | 'RESCATE',
     cantidad_cuotas: '', tc_fondo: '', monto: '',
   })
 
   function openNew() {
     setEditingId(null)
     setMontoTouched(false)
-    setForm({ fecha: todayISO(), operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
+    setForm({ fecha: todayISO(), fondo: FONDOS_FCI[0], operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
     setShowForm(true)
   }
 
@@ -59,7 +61,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
     setEditingId(m.id)
     setMontoTouched(true)
     setForm({
-      fecha: m.fecha, operacion: m.operacion,
+      fecha: m.fecha, fondo: m.fondo, operacion: m.operacion,
       cantidad_cuotas: String(m.cantidad_cuotas), tc_fondo: String(m.tc_fondo), monto: String(m.monto),
     })
     setShowForm(true)
@@ -83,6 +85,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
     const sb = createClient()
     const payload = {
       fecha: form.fecha,
+      fondo: form.fondo,
       operacion: form.operacion,
       cantidad_cuotas: parseFloat(form.cantidad_cuotas) || 0,
       tc_fondo: parseFloat(form.tc_fondo) || 0,
@@ -93,7 +96,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
       : await sb.from('inversiones_fci_movimientos').insert({ ...payload, created_by: (await sb.auth.getUser()).data.user?.id })
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
-    setForm({ fecha: todayISO(), operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
+    setForm({ fecha: todayISO(), fondo: FONDOS_FCI[0], operacion: 'SUSCRIPCION', cantidad_cuotas: '', tc_fondo: '', monto: '' })
     setMontoTouched(false)
     setEditingId(null)
     setShowForm(false)
@@ -134,6 +137,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar el documento')
       const rows: ImportRow[] = (data.movimientos ?? []).map((m: any) => ({
         fecha: m.fecha || todayISO(),
+        fondo: fondoSugeridoPorTc(m.tc_fondo || 0),
         operacion: m.operacion === 'RESCATE' ? 'RESCATE' : 'SUSCRIPCION',
         cantidad_cuotas: m.cantidad_cuotas || 0,
         tc_fondo: m.tc_fondo || 0,
@@ -161,6 +165,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
     const { data: { user } } = await sb.auth.getUser()
     const { error } = await sb.from('inversiones_fci_movimientos').insert(rows.map(r => ({
       fecha: r.fecha,
+      fondo: r.fondo,
       operacion: r.operacion,
       cantidad_cuotas: r.cantidad_cuotas,
       tc_fondo: r.tc_fondo,
@@ -175,7 +180,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
   }
 
   // Cierres mensuales
-  const [cierreForm, setCierreForm] = useState({ mes: '', tc_fondo: '' })
+  const [cierreForm, setCierreForm] = useState({ mes: '', fondo: FONDOS_FCI[0] as string, tc_fondo: '' })
   const [cierreLoading, setCierreLoading] = useState(false)
   const [deletingCierreId, setDeletingCierreId] = useState<string | null>(null)
   const [editingCierreId, setEditingCierreId] = useState<string | null>(null)
@@ -203,12 +208,13 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
     const { data: { user } } = await sb.auth.getUser()
     const { error } = await sb.from('inversiones_fci_cierres_mensuales').insert({
       mes: `${cierreForm.mes}-01`,
+      fondo: cierreForm.fondo,
       tc_fondo: parseFloat(cierreForm.tc_fondo) || 0,
       created_by: user?.id,
     })
     setCierreLoading(false)
-    if (error) { alert(error.message.includes('duplicate') ? 'Ese mes ya tiene una TC de cierre cargada' : 'Error: ' + error.message); return }
-    setCierreForm({ mes: '', tc_fondo: '' })
+    if (error) { alert(error.message.includes('duplicate') ? 'Ese mes ya tiene una TC de cierre cargada para ese fondo' : 'Error: ' + error.message); return }
+    setCierreForm(f => ({ ...f, mes: '', tc_fondo: '' }))
     router.refresh()
   }
 
@@ -221,13 +227,17 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
     router.refresh()
   }
 
-  const cuotasSuscriptas = movimientos.filter(m => m.operacion === 'SUSCRIPCION').reduce((s, m) => s + Number(m.cantidad_cuotas), 0)
-  const cuotasRescatadas = movimientos.filter(m => m.operacion === 'RESCATE').reduce((s, m) => s + Number(m.cantidad_cuotas), 0)
-  const cuotasEnCartera = cuotasSuscriptas - cuotasRescatadas
-  const ultimoTc = cierres.length
-    ? Number(cierres[0].tc_fondo)
-    : movimientos.length ? Number(movimientos[movimientos.length - 1].tc_fondo) : 0
-  const valorEstimado = cuotasEnCartera * ultimoTc
+  // Cartera por fondo: cada fondo tiene su propio valor de cuota, así que no se pueden sumar cuotas de fondos distintos.
+  const resumenFondos = FONDOS_FCI.map(fondo => {
+    const movs = movimientos.filter(m => m.fondo === fondo)
+    const cuotas = movs.reduce((s, m) => s + (m.operacion === 'SUSCRIPCION' ? Number(m.cantidad_cuotas) : -Number(m.cantidad_cuotas)), 0)
+    const neto = movs.reduce((s, m) => s + (m.operacion === 'SUSCRIPCION' ? Number(m.monto) : -Number(m.monto)), 0)
+    const vigente = tcMasReciente(cierres.find(c => c.fondo === fondo), movs[movs.length - 1])
+    const valor = cuotas * (vigente?.tc ?? 0)
+    return { fondo, cuotas, neto, tc: vigente?.tc ?? 0, tcFecha: vigente?.fecha ?? null, valor, resultado: valor - neto }
+  })
+  const valorEstimado = resumenFondos.reduce((s, f) => s + f.valor, 0)
+  const netoInvertido = resumenFondos.reduce((s, f) => s + f.neto, 0)
 
   const [sortKey, setSortKey] = useState<SortKey>('fecha')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -242,8 +252,9 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
   // Filtro por fecha: afecta solo a la tabla y al Excel; los indicadores de cartera usan todos los movimientos.
   const [fDesde, setFDesde] = useState('')
   const [fHasta, setFHasta] = useState('')
+  const [fFondo, setFFondo] = useState('')
   const movimientosFiltrados = useMemo(() => movimientos.filter(m =>
-    (!fDesde || m.fecha >= fDesde) && (!fHasta || m.fecha <= fHasta)), [movimientos, fDesde, fHasta])
+    (!fDesde || m.fecha >= fDesde) && (!fHasta || m.fecha <= fHasta) && (!fFondo || m.fondo === fFondo)), [movimientos, fDesde, fHasta, fFondo])
 
   const sortedMovimientos = useMemo(() => [...movimientosFiltrados].sort((a, b) => {
     const va = a[sortKey], vb = b[sortKey]
@@ -253,6 +264,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
 
   const exportData = useMemo(() => movimientosFiltrados.map(m => ({
     Fecha: fechaAr(m.fecha),
+    Fondo: m.fondo,
     Operacion: m.operacion,
     'Cantidad de cuotas': Number(m.cantidad_cuotas),
     'TC FONDO': Number(m.tc_fondo),
@@ -273,6 +285,13 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
                 <label className="block text-xs text-gray-400 mb-1.5">Fecha</label>
                 <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} required
                   className={filterInputClass}/>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Fondo</label>
+                <select value={form.fondo} onChange={e => setForm(f => ({ ...f, fondo: e.target.value }))}
+                  className={filterInputClass + ' bg-white'}>
+                  {FONDOS_FCI.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1.5">Operación</label>
@@ -350,6 +369,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
                       <tr className="border-b border-gray-50 bg-gray-50">
                         <th className="px-2 py-2"/>
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-400">Fecha</th>
+                        <th className="px-2 py-2 text-left text-xs font-medium text-gray-400">Fondo</th>
                         <th className="px-2 py-2 text-left text-xs font-medium text-gray-400">Operación</th>
                         <th className="px-2 py-2 text-right text-xs font-medium text-gray-400">Cantidad de cuotas</th>
                         <th className="px-2 py-2 text-right text-xs font-medium text-gray-400">TC FONDO</th>
@@ -364,6 +384,11 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
                               className="rounded border-gray-300 text-[#1B9BF0] focus:ring-[#1B9BF0]"/>
                           </td>
                           <td className="px-2 py-1.5"><input type="date" value={r.fecha} onChange={e => updateImportRow(i, { fecha: e.target.value })} className={cellInputClass}/></td>
+                          <td className="px-2 py-1.5 min-w-[150px]">
+                            <select value={r.fondo} onChange={e => updateImportRow(i, { fondo: e.target.value })} className={cellInputClass + ' bg-white'}>
+                              {FONDOS_FCI.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                          </td>
                           <td className="px-2 py-1.5 min-w-[130px]">
                             <select value={r.operacion} onChange={e => updateImportRow(i, { operacion: e.target.value as 'SUSCRIPCION' | 'RESCATE' })} className={cellInputClass + ' bg-white'}>
                               <option value="SUSCRIPCION">Suscripción</option>
@@ -415,25 +440,45 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-xs text-gray-400 mb-1">Cuotas en cartera</p>
-          <p className="text-sm font-semibold text-gray-900">{fmtNum(cuotasEnCartera)}</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-xs text-gray-400 mb-1">Último TC cargado</p>
-          <p className="text-sm font-semibold text-gray-900">{ultimoTc ? fmtMoney(ultimoTc) : '—'}</p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-xs text-gray-400 mb-1">Valor estimado cartera</p>
           <p className="text-sm font-semibold text-gray-900">{fmtMoney(valorEstimado)}</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-xs text-gray-400 mb-1">Neto invertido histórico</p>
-          <p className="text-sm font-semibold text-gray-900">
-            {fmtMoney(movimientos.reduce((s, m) => s + (m.operacion === 'SUSCRIPCION' ? Number(m.monto) : -Number(m.monto)), 0))}
-          </p>
+          <p className="text-sm font-semibold text-gray-900">{fmtMoney(netoInvertido)}</p>
         </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-4">
+          <p className="text-xs text-gray-400 mb-1">Resultado (valor − neto invertido)</p>
+          <p className={'text-sm font-semibold ' + (valorEstimado - netoInvertido >= 0 ? 'text-green-600' : 'text-red-500')}>{fmtMoney(valorEstimado - netoInvertido)}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto mb-6">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-50">
+              {['Fondo', 'Cuotas en cartera', 'Último TC', 'Valor estimado', 'Neto invertido', 'Resultado'].map((h, i) => (
+                <th key={h} className={`px-4 py-3 text-xs font-medium text-gray-400 whitespace-nowrap ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {resumenFondos.map(f => (
+              <tr key={f.fondo} className="border-b border-gray-50 last:border-0">
+                <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{f.fondo}</td>
+                <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmtNum(f.cuotas)}</td>
+                <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">
+                  {f.tc ? fmtMoney(f.tc) : '—'}{f.tcFecha && <span className="block text-[10px] text-gray-400">al {fechaAr(f.tcFecha)}</span>}
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right whitespace-nowrap">{fmtMoney(f.valor)}</td>
+                <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{fmtMoney(f.neto)}</td>
+                <td className={'px-4 py-3 text-sm font-medium text-right whitespace-nowrap ' + (f.resultado >= 0 ? 'text-green-600' : 'text-red-500')}>{fmtMoney(f.resultado)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -452,15 +497,22 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
               <label className="block text-xs text-gray-400 mb-1.5">Fecha hasta</label>
               <input type="date" value={fHasta} onChange={e => setFHasta(e.target.value)} className={filterInputClass}/>
             </div>
-            {(fDesde || fHasta) && (
-              <button onClick={() => { setFDesde(''); setFHasta('') }} className="text-xs text-[#1B9BF0] hover:underline pb-2.5">Limpiar</button>
+            <div className="w-44">
+              <label className="block text-xs text-gray-400 mb-1.5">Fondo</label>
+              <select value={fFondo} onChange={e => setFFondo(e.target.value)} className={filterInputClass + ' bg-white'}>
+                <option value="">Todos</option>
+                {FONDOS_FCI.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            {(fDesde || fHasta || fFondo) && (
+              <button onClick={() => { setFDesde(''); setFHasta(''); setFFondo('') }} className="text-xs text-[#1B9BF0] hover:underline pb-2.5">Limpiar</button>
             )}
           </div>
 
           {!movimientosFiltrados.length ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
               <LineChart size={32} className="mx-auto mb-3 opacity-20"/>
-              <p className="text-sm">{movimientos.length ? 'Sin movimientos en el rango de fechas elegido' : 'Sin movimientos cargados'}</p>
+              <p className="text-sm">{movimientos.length ? 'Sin movimientos con los filtros elegidos' : 'Sin movimientos cargados'}</p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 overflow-x-auto">
@@ -468,7 +520,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
                 <thead>
                   <tr className="border-b border-gray-50">
                     {([
-                      ['fecha', 'Fecha', 'left'], ['operacion', 'Operación', 'left'], ['cantidad_cuotas', 'Cantidad de cuotas', 'right'],
+                      ['fecha', 'Fecha', 'left'], ['fondo', 'Fondo', 'left'], ['operacion', 'Operación', 'left'], ['cantidad_cuotas', 'Cantidad de cuotas', 'right'],
                       ['tc_fondo', 'TC FONDO', 'right'], ['monto', 'Monto', 'right'],
                     ] as [SortKey, string, 'left' | 'right'][]).map(([key, label, align]) => (
                       <th key={key} onClick={() => toggleSort(key)}
@@ -483,6 +535,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
                   {sortedMovimientos.map(m => (
                     <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{fechaAr(m.fecha)}</td>
+                      <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">{m.fondo}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={'text-xs px-2 py-0.5 rounded-full ' + (m.operacion === 'SUSCRIPCION' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500')}>
                           {m.operacion === 'SUSCRIPCION' ? 'Suscripción' : 'Rescate'}
@@ -513,7 +566,11 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
           <div className="bg-white rounded-2xl border border-gray-100 p-4">
             <p className="text-sm font-semibold text-gray-900 mb-1">TC de cierre de mes</p>
             <p className="text-xs text-gray-400 mb-3">Sirve para calcular la rentabilidad mensual del fondo.</p>
-            <form onSubmit={handleAddCierre} className="flex gap-2 mb-4">
+            <form onSubmit={handleAddCierre} className="flex flex-wrap gap-2 mb-4">
+              <select value={cierreForm.fondo} onChange={e => setCierreForm(f => ({ ...f, fondo: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]">
+                {FONDOS_FCI.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
               <input type="month" value={cierreForm.mes} onChange={e => setCierreForm(f => ({ ...f, mes: e.target.value }))} required
                 className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
               <input type="number" step="0.01" placeholder="TC" value={cierreForm.tc_fondo} onChange={e => setCierreForm(f => ({ ...f, tc_fondo: e.target.value }))} required
@@ -529,7 +586,7 @@ export default function FondoComunClient({ movimientos, cierres, documentos }: {
               <div className="space-y-1">
                 {cierres.map(c => (
                   <div key={c.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50">
-                    <span className="text-sm text-gray-700">{mesCorto(c.mes)}</span>
+                    <span className="text-sm text-gray-700">{mesCorto(c.mes)}<span className="ml-1.5 text-[10px] text-gray-400">{c.fondo}</span></span>
                     {editingCierreId === c.id ? (
                       <div className="flex items-center gap-1.5">
                         <input type="number" step="0.01" autoFocus value={editingCierreValue}

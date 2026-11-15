@@ -5,27 +5,33 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Plus, Pencil, Trash2, ListTree } from 'lucide-react'
 
-type TipoGasto = { id: string; numero: string; nombre: string; descripcion: string | null }
+type Fuente = 'facturas' | 'tarjeta' | 'ambas'
+type TipoGasto = { id: string; numero: string; nombre: string; descripcion: string | null; fuente: Fuente; incluye_otros_impuestos: boolean }
+const FUENTES: { value: Fuente; label: string }[] = [
+  { value: 'facturas', label: 'Facturas de compra' },
+  { value: 'tarjeta', label: 'Tarjeta de crédito' },
+  { value: 'ambas', label: 'Facturas y tarjeta' },
+]
 
 export default function TiposGastoClient({ tipos }: { tipos: TipoGasto[] }) {
   const router = useRouter()
   const [editing, setEditing] = useState<TipoGasto | null>(null)
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ numero: '', nombre: '', descripcion: '' })
+  const [form, setForm] = useState({ numero: '', nombre: '', descripcion: '', fuente: 'facturas' as Fuente, incluye_otros_impuestos: false })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   function openNew() {
     setEditing(null)
-    setForm({ numero: '', nombre: '', descripcion: '' })
+    setForm({ numero: '', nombre: '', descripcion: '', fuente: 'facturas', incluye_otros_impuestos: false })
     setError(null)
     setShowModal(true)
   }
 
   function openEdit(t: TipoGasto) {
     setEditing(t)
-    setForm({ numero: t.numero, nombre: t.nombre, descripcion: t.descripcion ?? '' })
+    setForm({ numero: t.numero, nombre: t.nombre, descripcion: t.descripcion ?? '', fuente: t.fuente ?? 'facturas', incluye_otros_impuestos: !!t.incluye_otros_impuestos })
     setError(null)
     setShowModal(true)
   }
@@ -35,7 +41,7 @@ export default function TiposGastoClient({ tipos }: { tipos: TipoGasto[] }) {
     setLoading(true)
     setError(null)
     const sb = createClient()
-    const payload = { numero: form.numero.trim(), nombre: form.nombre.trim(), descripcion: form.descripcion.trim() || null }
+    const payload = { numero: form.numero.trim(), nombre: form.nombre.trim(), descripcion: form.descripcion.trim() || null, fuente: form.fuente, incluye_otros_impuestos: form.incluye_otros_impuestos }
     const { error } = editing
       ? await sb.from('tipos_gasto').update(payload).eq('id', editing.id)
       : await sb.from('tipos_gasto').insert(payload)
@@ -73,16 +79,17 @@ export default function TiposGastoClient({ tipos }: { tipos: TipoGasto[] }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="grid grid-cols-[80px_1fr_1fr_auto] px-5 py-2.5 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
-          <span>N°</span><span>Nombre</span><span>Descripción</span><span/>
+        <div className="grid grid-cols-[80px_1fr_1fr_160px_auto] px-5 py-2.5 text-xs font-medium text-gray-400 border-b border-gray-50 bg-gray-50">
+          <span>N°</span><span>Nombre</span><span>Descripción</span><span title="De dónde sale el gasto de este rubro en el P&L">Fuente en el P&L</span><span/>
         </div>
         {!tipos.length ? (
           <p className="text-sm text-gray-400 text-center py-8">Sin tipos de gasto cargados</p>
         ) : tipos.map(t => (
-          <div key={t.id} className="grid grid-cols-[80px_1fr_1fr_auto] px-5 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
+          <div key={t.id} className="grid grid-cols-[80px_1fr_1fr_160px_auto] px-5 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 items-center">
             <span className="text-sm text-gray-500">{t.numero}</span>
             <span className="text-sm text-gray-900">{t.nombre}</span>
             <span className="text-xs text-gray-400">{t.descripcion ?? '—'}</span>
+            <span className="text-xs text-gray-600">{FUENTES.find(f => f.value === t.fuente)?.label ?? 'Facturas de compra'}</span>
             <div className="flex items-center gap-1">
               <button onClick={() => openEdit(t)} className="p-1.5 rounded-lg text-gray-300 hover:text-[#1B9BF0] hover:bg-blue-50 transition-all">
                 <Pencil size={13}/>
@@ -119,6 +126,18 @@ export default function TiposGastoClient({ tipos }: { tipos: TipoGasto[] }) {
                   placeholder="Descripción opcional"
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]"/>
               </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Fuente del gasto en el P&amp;L</label>
+                <select value={form.fuente} onChange={e => setForm(f => ({ ...f, fuente: e.target.value as Fuente }))}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1B9BF0]">
+                  {FUENTES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+                <p className="text-[11px] text-gray-400 mt-1">Con tarjeta cuentan solo los cargos de las solapas Ctas de gastos y PL; las facturas, por su mes de servicio.</p>
+              </div>
+              <label className="flex items-start gap-2 text-xs text-gray-600">
+                <input type="checkbox" checked={form.incluye_otros_impuestos} onChange={e => setForm(f => ({ ...f, incluye_otros_impuestos: e.target.checked }))} className="mt-0.5 rounded border-gray-300"/>
+                <span>Las facturas incluyen impuestos no recuperables en el gasto (ej. impuesto a los combustibles)</span>
+              </label>
               {error && <p className="text-xs text-red-500">{error}</p>}
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setShowModal(false)}
