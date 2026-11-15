@@ -127,11 +127,12 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
   {
     const [{ data: tipos }, { data: fc }, { data: tj }] = await Promise.all([
       sb.from('tipos_gasto').select('id, nombre'),
-      sb.from('facturas_compra').select('tipo_gasto_id, monto_total').not('tipo_gasto_id', 'is', null).gte('fecha_factura', inicio).lte('fecha_factura', fin),
+      sb.from('facturas_compra').select('tipo_gasto_id, monto_neto').not('tipo_gasto_id', 'is', null).gte('fecha_factura', inicio).lte('fecha_factura', fin),
       sb.from('tarjeta_credito').select('tipo_gasto_id, pesos, dolares').not('tipo_gasto_id', 'is', null).gte('fecha', inicio).lte('fecha', fin),
     ])
     const porTipo = new Map<string, number>()
-    for (const f of fc ?? []) porTipo.set(f.tipo_gasto_id, (porTipo.get(f.tipo_gasto_id) ?? 0) + Number(f.monto_total))
+    // El gasto del P&L es el neto: el IVA es crédito fiscal y las percepciones/otros impuestos no son gasto de la factura.
+    for (const f of fc ?? []) porTipo.set(f.tipo_gasto_id, (porTipo.get(f.tipo_gasto_id) ?? 0) + Number(f.monto_neto))
     for (const t of tj ?? []) porTipo.set(t.tipo_gasto_id, (porTipo.get(t.tipo_gasto_id) ?? 0) + (Number(t.pesos) || 0) + (Number(t.dolares) || 0) * tc)
 
     for (const cuenta of cuentasGastos) {
