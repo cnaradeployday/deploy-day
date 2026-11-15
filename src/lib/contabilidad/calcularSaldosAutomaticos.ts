@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { lastDayOfMonth, ymd } from '@/lib/utils/date'
 import { devengamientosPrestamosHasta } from '@/lib/contabilidad/prestamos'
+import { FONDOS_FCI, tcMasReciente } from '@/lib/contabilidad/fondos'
 
 // Cuentas de "Gastos operativos" cuyo nombre en el Plan de cuentas no coincide 1:1
 // con el nombre cargado en Tipos de gasto (ej: typo histórico en la base).
@@ -31,21 +32,31 @@ async function obtenerTC(sb: SupabaseClient, fecha: string): Promise<number> {
   return cualquiera?.[0] ? Number(cualquiera[0].usd_ars) : 0
 }
 
-async function cuotasFciAlCierre(sb: SupabaseClient, fecha: string): Promise<number> {
-  const { data } = await sb.from('inversiones_fci_movimientos').select('operacion, cantidad_cuotas').lte('fecha', fecha)
-  return (data ?? []).reduce((s: number, m: any) => s + (m.operacion === 'SUSCRIPCION' ? Number(m.cantidad_cuotas) : -Number(m.cantidad_cuotas)), 0)
+type PorFondo = Record<string, number>
+
+// Cuotas en cartera a una fecha, por fondo (cada fondo tiene su propio valor de cuota).
+async function cuotasFciAlCierre(sb: SupabaseClient, fecha: string): Promise<PorFondo> {
+  const { data } = await sb.from('inversiones_fci_movimientos').select('fondo, operacion, cantidad_cuotas').lte('fecha', fecha)
+  const out: PorFondo = {}
+  for (const m of data ?? []) {
+    out[m.fondo] = (out[m.fondo] ?? 0) + (m.operacion === 'SUSCRIPCION' ? Number(m.cantidad_cuotas) : -Number(m.cantidad_cuotas))
+  }
+  return out
 }
 
-// TC del fondo a una fecha: prioriza la "TC de cierre de mes" cargada a mano en Inversiones > Fondo
-// Común; si no hay ninguna cargada (como suele pasar), cae al tc_fondo del último movimiento
-// registrado en el propio módulo, que es lo mismo que usa esa pantalla para "Valor estimado cartera".
-async function tcFondoAlCierre(sb: SupabaseClient, fecha: string): Promise<number> {
-  const { data: cierres } = await sb.from('inversiones_fci_cierres_mensuales').select('tc_fondo')
-    .lte('mes', fecha).order('mes', { ascending: false }).limit(1)
-  if (cierres?.[0]) return Number(cierres[0].tc_fondo)
-  const { data: movs } = await sb.from('inversiones_fci_movimientos').select('tc_fondo')
-    .lte('fecha', fecha).order('fecha', { ascending: false }).limit(1)
-  return movs?.[0] ? Number(movs[0].tc_fondo) : 0
+// TC de cada fondo a una fecha: el más reciente entre la "TC de cierre de mes" cargada a mano en Inversiones >
+// Fondo Común y el último movimiento registrado del propio fondo (lo mismo que usa esa pantalla).
+async function tcFondoAlCierre(sb: SupabaseClient, fecha: string): Promise<PorFondo> {
+  const [{ data: cierres }, { data: movs }] = await Promise.all([
+    sb.from('inversiones_fci_cierres_mensuales').select('fondo, mes, tc_fondo').lte('mes', fecha).order('mes', { ascending: false }),
+    sb.from('inversiones_fci_movimientos').select('fondo, fecha, tc_fondo').lte('fecha', fecha).order('fecha', { ascending: false }).order('created_at', { ascending: false }),
+  ])
+  const out: PorFondo = {}
+  for (const fondo of FONDOS_FCI) {
+    const vigente = tcMasReciente((cierres ?? []).find((c: any) => c.fondo === fondo), (movs ?? []).find((m: any) => m.fondo === fondo))
+    if (vigente) out[fondo] = vigente.tc
+  }
+  return out
 }
 
 // Saldos "as of" fin de mes para las cuentas automáticas de Activo/Pasivo (Balance Sheet).
@@ -62,7 +73,7 @@ export async function calcularSaldosBalanceAuto(sb: SupabaseClient, periodo: str
 
   {
     const [cuotas, tcFondo] = await Promise.all([cuotasFciAlCierre(sb, fin), tcFondoAlCierre(sb, fin)])
-    out['Fondo Comun de Inversion (FIMA)'] = cuotas * tcFondo
+    out['Fondo Comun de Inversion (FIMA)'] = FONDOS_FCI.reduce((s, f) => s + (cuotas[f] ?? 0) * (tcFondo[f] ?? 0), 0)
   }
 
   {
@@ -173,8 +184,10 @@ export async function calcularSaldosResultadoAuto(sb: SupabaseClient, periodo: s
       tcFondoAlCierre(sb, fin),
       tcFondoAlCierre(sb, finDeMes(anterior)),
     ])
-    if (tcActual && tcAnterior) {
-      out['Intereses Ganados FCI'] = cuotasInicio * (tcActual - tcAnterior)
+    // Por fondo: cuotas al inicio del mes × variación del valor de la cuota de ese fondo.
+    const porFondo = FONDOS_FCI.filter(f => tcActual[f] && tcAnterior[f])
+    if (porFondo.length) {
+      out['Intereses Ganados FCI'] = porFondo.reduce((s, f) => s + (cuotasInicio[f] ?? 0) * (tcActual[f] - tcAnterior[f]), 0)
     }
   }
 
