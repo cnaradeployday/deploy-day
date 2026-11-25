@@ -6,6 +6,7 @@ import { createNotification, enqueueWhatsapp } from '@/app/(app)/novedades/actio
 import { Loader2, UserCheck, Clock, AlertTriangle } from 'lucide-react'
 import { logActivity } from '@/lib/logActivity'
 import { todayISO } from '@/lib/utils/date'
+import { avisarHorasCambiaron } from '@/lib/utils/horasSync'
 
 export default function TaskActions({
   task, userId, userRole, timeEntries, isDirectResponsible, isCollaborator, canCargarHorasOtros = false,
@@ -155,6 +156,7 @@ export default function TaskActions({
       if (!timeError) {
         localStorage.removeItem(timerKey)
         setTimerSecs(0)
+        avisarHorasCambiaron()
       }
     }
 
@@ -219,6 +221,7 @@ export default function TaskActions({
     })
 
     setHours(''); setNotes('')
+    avisarHorasCambiaron()
     router.refresh()
     setLoading(false)
   }
