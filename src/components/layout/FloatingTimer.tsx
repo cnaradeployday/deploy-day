@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Square, GripHorizontal, ChevronUp, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { todayISO } from '@/lib/utils/date'
+import { avisarHorasCambiaron, escucharHorasCambiaron } from '@/lib/utils/horasSync'
 
 interface TimerEntry {
   taskId: string
@@ -38,6 +39,9 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   const presenceChannelRef = useRef<any>(null)
   const stoppingRef = useRef<Set<string>>(new Set())
   const router = useRouter()
+  const pathname = usePathname()
+  const pathnameRef = useRef(pathname)
+  pathnameRef.current = pathname
 
   function readTimers(): TimerEntry[] {
     const results: TimerEntry[] = []
@@ -101,6 +105,28 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
 
+  // Mantiene al día las horas que muestra la pantalla: se refresca cuando otra pestaña (o la burbuja) guarda horas y,
+  // en el detalle de una tarea, al volver a la pestaña (con un mínimo de 15 s entre refrescos para no recargar de más).
+  useEffect(() => {
+    let ultimo = 0
+    function alVolver() {
+      if (document.visibilityState !== 'visible') return
+      if (!pathnameRef.current?.startsWith('/tareas/')) return
+      const ahora = Date.now()
+      if (ahora - ultimo < 15000) return
+      ultimo = ahora
+      router.refresh()
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    window.addEventListener('focus', alVolver)
+    const dejarDeEscuchar = escucharHorasCambiaron(() => router.refresh())
+    return () => {
+      document.removeEventListener('visibilitychange', alVolver)
+      window.removeEventListener('focus', alVolver)
+      dejarDeEscuchar()
+    }
+  }, [router])
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem('timer_bubble_pos')
@@ -161,18 +187,25 @@ export default function FloatingTimer({ userId, userName }: { userId: string; us
     if (!entry) { stoppingRef.current.delete(taskId); return }
     const secs = calcSeconds(entry)
     const hours = Math.round((secs / 3600) * 100) / 100
-    localStorage.removeItem(`timer_${taskId}_${userId}`)
-    const updated = timers.filter(t => t.taskId !== taskId)
-    setTimers(updated)
-    sendBroadcast(presenceChannelRef.current, updated)
+    // Primero se guarda; el cronómetro se borra solo si el guardado salió bien, para no perder el tiempo si falla.
     if (hours > 0) {
-      await createClient().from('time_entries').insert({
+      const { error } = await createClient().from('time_entries').insert({
         task_id: taskId, user_id: userId,
         hours_logged: hours,
         entry_date: todayISO(),
         notes: 'Registrado con cronómetro',
       })
+      if (error) {
+        alert('No se pudo guardar el tiempo (' + error.message + '). El cronómetro sigue activo: probá detenerlo de nuevo.')
+        stoppingRef.current.delete(taskId)
+        return
+      }
     }
+    localStorage.removeItem(`timer_${taskId}_${userId}`)
+    const updated = timers.filter(t => t.taskId !== taskId)
+    setTimers(updated)
+    sendBroadcast(presenceChannelRef.current, updated)
+    avisarHorasCambiaron()
     stoppingRef.current.delete(taskId)
     router.refresh()
   }

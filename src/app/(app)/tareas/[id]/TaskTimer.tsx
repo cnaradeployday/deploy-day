@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Play, Square, Clock } from 'lucide-react'
 import { todayISO } from '@/lib/utils/date'
+import { avisarHorasCambiaron } from '@/lib/utils/horasSync'
 
 export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { taskId: string; userId: string; taskTitle?: string; taskStatus?: string }) {
   const [running, setRunning] = useState(false)
@@ -131,6 +132,7 @@ export default function TaskTimer({ taskId, userId, taskTitle, taskStatus }: { t
     setAccumulatedSeconds(0)
     setStartTime(null)
     localStorage.removeItem(storageKey)
+    avisarHorasCambiaron()
     router.refresh()
     setLoading(false)
     savingRef.current = false

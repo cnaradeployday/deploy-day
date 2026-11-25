@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
 import { formatDateAR } from '@/lib/utils/date'
+import { avisarHorasCambiaron } from '@/lib/utils/horasSync'
 
 interface Entry {
   id: string
@@ -57,6 +58,7 @@ export default function TimeEntriesList({
     setLoading(false)
     if (error) { alert('Error: ' + error.message); return }
     setEditId(null)
+    avisarHorasCambiaron()
     router.refresh()
   }
 
@@ -65,6 +67,7 @@ export default function TimeEntriesList({
     setLoading(true)
     await createClient().from('time_entries').delete().eq('id', id)
     setLoading(false)
+    avisarHorasCambiaron()
     router.refresh()
   }
 
